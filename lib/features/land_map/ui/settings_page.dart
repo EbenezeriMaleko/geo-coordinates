@@ -18,7 +18,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final selectedFormat = ref.watch(coordinateFormatProvider);
+    final selectedUnit = ref.watch(distanceUnitProvider);
     final theme = Theme.of(context);
+    final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
@@ -96,18 +98,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _sectionHeader('Units', theme),
         _item(
           title: 'Altitude units',
-          subtitle: 'Feet',
-          onTap: _comingSoon('Altitude units'),
+          subtitle: unitLabel,
+          onTap: _showDistanceUnitSelector,
         ),
         _item(
           title: 'Accuracy units',
-          subtitle: 'Feet',
-          onTap: _comingSoon('Accuracy units'),
+          subtitle: unitLabel,
+          onTap: _showDistanceUnitSelector,
         ),
         _item(
           title: 'Distance units',
-          subtitle: 'Feet',
-          onTap: _comingSoon('Distance units'),
+          subtitle: unitLabel,
+          onTap: _showDistanceUnitSelector,
         ),
         _sectionDivider(),
 
@@ -346,20 +348,65 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             const SizedBox(height: 10),
             ...CoordinateFormat.values.map((format) {
-              return RadioListTile<CoordinateFormat>(
+              final isSelected = format == current;
+              return ListTile(
                 title: Text(format.displayName),
                 subtitle: Text(_getFormatExample(format)),
-                value: format,
-                groupValue: current,
-                activeColor: const Color(0xFF0C8A8C),
-                onChanged: (value) {
-                  if (value != null) {
-                    ref.read(coordinateFormatProvider.notifier).setFormat(value);
-                    Navigator.pop(context);
-                  }
+                trailing: isSelected
+                    ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                    : const Icon(Icons.circle_outlined),
+                onTap: () {
+                  ref.read(coordinateFormatProvider.notifier).setFormat(format);
+                  Navigator.pop(context);
                 },
               );
             }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDistanceUnitSelector() {
+    final current = ref.read(distanceUnitProvider);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            const Text(
+              'Units',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              title: const Text('Meters'),
+              subtitle: const Text('Use meters (m)'),
+              trailing: current == DistanceUnit.meters
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () {
+                ref.read(distanceUnitProvider.notifier).setUnit(DistanceUnit.meters);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('Feet'),
+              subtitle: const Text('Use feet (ft)'),
+              trailing: current == DistanceUnit.feet
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () {
+                ref.read(distanceUnitProvider.notifier).setUnit(DistanceUnit.feet);
+                Navigator.pop(context);
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),

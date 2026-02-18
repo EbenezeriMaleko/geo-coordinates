@@ -48,6 +48,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   bool _isMarkerSaving = false;
   bool _isAutoFieldCapture = false;
   bool _isFullscreen = false;
+  bool _isMapTypeSwitching = false;
   double _currentZoom = _defaultMapZoom;
   String? _locationError;
   List<_PlacedMarker> _savedMarkers = const [];
@@ -289,6 +290,23 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   double _clampZoom(double zoom) => zoom.clamp(_minZoom, _maxZoom);
+
+  void _changeMapType(MapType type, BuildContext sheetContext) {
+    if (_currentMapType == type) {
+      Navigator.pop(sheetContext);
+      return;
+    }
+    Navigator.pop(sheetContext);
+    setState(() {
+      _currentMapType = type;
+      _isMapTypeSwitching = true;
+    });
+
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      setState(() => _isMapTypeSwitching = false);
+    });
+  }
 
   void _focusOnPoints(List<LatLng> points) {
     if (points.isEmpty) return;
@@ -565,6 +583,36 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             MarkerLayer(markers: markers),
           ],
         ),
+
+        if (_isMapTypeSwitching)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.18),
+              alignment: Alignment.center,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 10),
+                    Text(
+                      'Switching map type...',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
 
         // GPS Info Card
         if (!_isFullscreen)
@@ -1037,8 +1085,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       case MapType.normal:
         return [
           TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.example.landmapper',
+            subdomains: const ['a', 'b', 'c'],
+            maxZoom: _maxZoom,
           ),
         ];
       case MapType.satellite:
@@ -1047,14 +1097,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             urlTemplate:
                 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             userAgentPackageName: 'com.example.landmapper',
+            maxZoom: _maxZoom,
           ),
         ];
       case MapType.terrain:
         return [
           TileLayer(
-            urlTemplate:
-                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+            urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.example.landmapper',
+            subdomains: const ['a', 'b', 'c'],
+            maxZoom: 17,
           ),
         ];
       case MapType.hybrid:
@@ -1063,9 +1115,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             urlTemplate:
                 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             userAgentPackageName: 'com.example.landmapper',
+            maxZoom: _maxZoom,
           ),
           TileLayer(
-            urlTemplate:
+            urlTemplate: 
                 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.example.landmapper',
             subdomains: ['a', 'b', 'c', 'd'],
@@ -1099,8 +1152,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     icon: Icons.map,
                     isSelected: _currentMapType == MapType.normal,
                     onTap: () {
-                      setState(() => _currentMapType = MapType.normal);
-                      Navigator.pop(context);
+                      _changeMapType(MapType.normal, context);
                     },
                   ),
                   _MapTypeOption(
@@ -1108,8 +1160,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     icon: Icons.satellite_alt,
                     isSelected: _currentMapType == MapType.satellite,
                     onTap: () {
-                      setState(() => _currentMapType = MapType.satellite);
-                      Navigator.pop(context);
+                      _changeMapType(MapType.satellite, context);
                     },
                   ),
                   _MapTypeOption(
@@ -1117,8 +1168,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     icon: Icons.terrain,
                     isSelected: _currentMapType == MapType.terrain,
                     onTap: () {
-                      setState(() => _currentMapType = MapType.terrain);
-                      Navigator.pop(context);
+                      _changeMapType(MapType.terrain, context);
                     },
                   ),
                   _MapTypeOption(
@@ -1126,8 +1176,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     icon: Icons.layers,
                     isSelected: _currentMapType == MapType.hybrid,
                     onTap: () {
-                      setState(() => _currentMapType = MapType.hybrid);
-                      Navigator.pop(context);
+                      _changeMapType(MapType.hybrid, context);
                     },
                   ),
                 ],

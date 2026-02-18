@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
+import 'package:uuid/uuid.dart';
+
 import 'land_map_page.dart';
 import 'my_location_page.dart';
 import 'saved_locations_page.dart';
 import 'settings_page.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../state/land_map_notifier.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -31,6 +37,84 @@ class _MainNavigationState extends State<MainNavigation> {
     setState(() {
       _currentIndex = index;
     });
+  }
+
+  Future<void> _refreshMyLocation() async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final err = await container.read(landMapProvider.notifier).refreshLocation();
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Location refreshed')));
+  }
+
+  Future<void> _copyText(String text, String label) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copied')),
+    );
+  }
+
+  Future<void> _handleMyLocationMenu(_MyLocationAction action) async {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final current = container.read(landMapProvider).current;
+    switch (action) {
+      case _MyLocationAction.savePoint:
+        if (current == null) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location not available yet')),
+          );
+          return;
+        }
+        final id = const Uuid().v4();
+        final box = Hive.box('landbox');
+        await box.put(id, {
+          'id': id,
+          'entityType': 'marker',
+          'name': 'Marker ${DateTime.now().toIso8601String()}',
+          'lat': current.latitude,
+          'lng': current.longitude,
+          'createdAt': DateTime.now().toIso8601String(),
+        });
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Current point saved')));
+        return;
+      case _MyLocationAction.copyLat:
+        if (current == null) return;
+        await _copyText(current.latitude.toStringAsFixed(6), 'Latitude');
+        return;
+      case _MyLocationAction.copyLon:
+        if (current == null) return;
+        await _copyText(current.longitude.toStringAsFixed(6), 'Longitude');
+        return;
+      case _MyLocationAction.copyBoth:
+        if (current == null) return;
+        await _copyText(
+          '${current.latitude.toStringAsFixed(6)},${current.longitude.toStringAsFixed(6)}',
+          'Coordinates',
+        );
+        return;
+      case _MyLocationAction.share:
+        if (current == null) return;
+        final accuracy = container.read(landMapProvider).accuracyMeters;
+        final payload = StringBuffer()
+          ..writeln('My current location')
+          ..writeln('Latitude: ${current.latitude.toStringAsFixed(6)}')
+          ..writeln('Longitude: ${current.longitude.toStringAsFixed(6)}')
+          ..writeln(
+            'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
+          );
+        await _copyText(payload.toString(), 'Share location text');
+        return;
+    }
   }
 
   @override
@@ -63,6 +147,39 @@ class _MainNavigationState extends State<MainNavigation> {
                       const SnackBar(content: Text('Search - Coming soon')),
                     );
                   },
+                ),
+              ]
+            : _currentIndex == 1
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.black87),
+                  onPressed: _refreshMyLocation,
+                ),
+                PopupMenuButton<_MyLocationAction>(
+                  icon: const Icon(Icons.more_vert, color: Colors.black87),
+                  onSelected: _handleMyLocationMenu,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _MyLocationAction.savePoint,
+                      child: Text('Save current point'),
+                    ),
+                    PopupMenuItem(
+                      value: _MyLocationAction.copyLat,
+                      child: Text('Copy latitude'),
+                    ),
+                    PopupMenuItem(
+                      value: _MyLocationAction.copyLon,
+                      child: Text('Copy longitude'),
+                    ),
+                    PopupMenuItem(
+                      value: _MyLocationAction.copyBoth,
+                      child: Text('Copy coordinates'),
+                    ),
+                    PopupMenuItem(
+                      value: _MyLocationAction.share,
+                      child: Text('Share location'),
+                    ),
+                  ],
                 ),
               ]
             : null,
@@ -123,6 +240,8 @@ class _MainNavigationState extends State<MainNavigation> {
     );
   }
 }
+
+enum _MyLocationAction { savePoint, copyLat, copyLon, copyBoth, share }
 
 class _BottomNavItem extends StatelessWidget {
   final String label;

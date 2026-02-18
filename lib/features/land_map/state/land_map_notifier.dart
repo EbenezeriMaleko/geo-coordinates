@@ -57,6 +57,15 @@ class LandMapNotifier extends Notifier<LandMapState> {
     }
   }
 
+  void updateCurrentFromPosition(Position pos) {
+    state = state.copyWith(
+      current: LatLng(pos.latitude, pos.longitude),
+      accuracyMeters: pos.accuracy,
+      altitudeMeters: pos.altitude,
+      locationTimestamp: pos.timestamp,
+    );
+  }
+
   Future<String?> addPointFromCurrent({double maxAccuracy = 15}) async {
     final err = await refreshLocation();
     if (err != null) return err;
