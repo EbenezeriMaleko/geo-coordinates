@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
@@ -20,16 +21,62 @@ class SavedLocationsPage extends ConsumerStatefulWidget {
 }
 
 class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
+  static const String _prefViewModeKey = 'prefs_saved_locations_view_mode';
+  static const String _prefCompactModeKey = 'prefs_saved_locations_compact_mode';
+
   _ViewMode _viewMode = _ViewMode.combined;
   _SavedSort _sort = _SavedSort.newest;
   _SavedFilter _filter = _SavedFilter.all;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = <String>{};
+  String _groupFilter = 'All groups';
+  bool _compactMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreDisplayPreferences();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _restoreDisplayPreferences() {
+    final box = Hive.box('landbox');
+    final savedMode = box.get(_prefViewModeKey)?.toString();
+    final savedCompact = box.get(_prefCompactModeKey);
+    if (savedMode != null) {
+      _viewMode = _viewModeFromStorage(savedMode);
+    }
+    if (savedCompact is bool) {
+      _compactMode = savedCompact;
+    }
+  }
+
+  Future<void> _setViewMode(_ViewMode mode) async {
+    if (_viewMode == mode) return;
+    setState(() => _viewMode = mode);
+    final box = Hive.box('landbox');
+    await box.put(_prefViewModeKey, mode.name);
+  }
+
+  Future<void> _toggleCompactMode() async {
+    final next = !_compactMode;
+    setState(() => _compactMode = next);
+    final box = Hive.box('landbox');
+    await box.put(_prefCompactModeKey, next);
+  }
+
+  _ViewMode _viewModeFromStorage(String raw) {
+    for (final mode in _ViewMode.values) {
+      if (mode.name == raw) return mode;
+    }
+    return _ViewMode.combined;
   }
 
   @override
@@ -44,7 +91,41 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
+              if (_selectionMode)
+                Text(
+                  '${_selectedIds.length} selected',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               const Spacer(),
+              if (_selectionMode)
+                IconButton(
+                  onPressed: _selectedIds.isEmpty
+                      ? null
+                      : _setGroupForSelectedItems,
+                  icon: const Icon(Icons.folder_outlined, size: 20),
+                  tooltip: 'Set group',
+                ),
+              if (_selectionMode)
+                IconButton(
+                  onPressed: _selectedIds.isEmpty ? null : _shareSelectedItems,
+                  icon: const Icon(Icons.share_outlined, size: 20),
+                  tooltip: 'Share selected',
+                ),
+              if (_selectionMode)
+                IconButton(
+                  onPressed: _selectedIds.isEmpty ? null : _deleteSelectedItems,
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  tooltip: 'Delete selected',
+                ),
+              if (_selectionMode)
+                IconButton(
+                  onPressed: _exitSelectionMode,
+                  icon: const Icon(Icons.close, size: 20),
+                  tooltip: 'Exit selection',
+                ),
+              if (!_selectionMode) ...[
               IconButton(
                 onPressed: _showFilterSheet,
                 icon: const Icon(Icons.tune, size: 20),
@@ -57,6 +138,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 onPressed: _showPageMenu,
                 icon: const Icon(Icons.more_vert, size: 20),
               ),
+              ],
             ],
           ),
         ),
@@ -83,7 +165,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         const SizedBox(height: 8),
         if (_searchQuery.isNotEmpty ||
             _filter != _SavedFilter.all ||
-            _sort != _SavedSort.newest)
+            _sort != _SavedSort.newest ||
+            _groupFilter != 'All groups')
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
@@ -108,40 +191,62 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     label: 'Sort: ${_sortLabel(_sort)}',
                     onClear: () => setState(() => _sort = _SavedSort.newest),
                   ),
+                if (_groupFilter != 'All groups')
+                  _ActiveTag(
+                    label: 'Group: $_groupFilter',
+                    onClear: () => setState(() => _groupFilter = 'All groups'),
+                  ),
               ],
             ),
           ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              _ViewModeChip(
-                label: 'Combined',
-                icon: Icons.view_list,
-                isSelected: _viewMode == _ViewMode.combined,
-                onTap: () => setState(() => _viewMode = _ViewMode.combined),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _ViewModeChip(
+                        label: 'Combined',
+                        icon: Icons.view_list,
+                        isSelected: _viewMode == _ViewMode.combined,
+                        onTap: () => _setViewMode(_ViewMode.combined),
+                      ),
+                      const SizedBox(width: 8),
+                      _ViewModeChip(
+                        label: 'Basic',
+                        icon: Icons.view_agenda,
+                        isSelected: _viewMode == _ViewMode.basic,
+                        onTap: () => _setViewMode(_ViewMode.basic),
+                      ),
+                      const SizedBox(width: 8),
+                      _ViewModeChip(
+                        label: 'Text',
+                        icon: Icons.notes,
+                        isSelected: _viewMode == _ViewMode.text,
+                        onTap: () => _setViewMode(_ViewMode.text),
+                      ),
+                      const SizedBox(width: 8),
+                      _ViewModeChip(
+                        label: 'Photo',
+                        icon: Icons.photo_camera,
+                        isSelected: _viewMode == _ViewMode.photo,
+                        onTap: () => _setViewMode(_ViewMode.photo),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
-              _ViewModeChip(
-                label: 'Basic',
-                icon: Icons.view_agenda,
-                isSelected: _viewMode == _ViewMode.basic,
-                onTap: () => setState(() => _viewMode = _ViewMode.basic),
-              ),
-              const SizedBox(width: 8),
-              _ViewModeChip(
-                label: 'Text',
-                icon: Icons.notes,
-                isSelected: _viewMode == _ViewMode.text,
-                onTap: () => setState(() => _viewMode = _ViewMode.text),
-              ),
-              const SizedBox(width: 8),
-              _ViewModeChip(
-                label: 'Photo',
-                icon: Icons.photo_camera,
-                isSelected: _viewMode == _ViewMode.photo,
-                onTap: () => setState(() => _viewMode = _ViewMode.photo),
+              IconButton(
+                onPressed: _toggleCompactMode,
+                tooltip: _compactMode ? 'Disable compact mode' : 'Enable compact mode',
+                icon: Icon(
+                  _compactMode ? Icons.compress : Icons.expand,
+                  color: _compactMode ? Theme.of(context).colorScheme.primary : null,
+                ),
               ),
             ],
           ),
@@ -164,20 +269,45 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
               final filteredSorted = _applyFilterAndSort(items);
               final searched = _applySearch(filteredSorted);
-
-              if (searched.isEmpty) {
-                return _searchQuery.isNotEmpty ||
-                        _filter != _SavedFilter.all ||
-                        _sort != _SavedSort.newest
-                    ? const _EmptyState(
-                        title: 'No matching saved locations',
-                        subtitle: 'Try changing search text, filter, or sort.',
-                      )
-                    : const _EmptyState();
-              }
+              final groups = _groupOptions(items);
 
               return Column(
                 children: [
+                  if (groups.length > 1)
+                    SizedBox(
+                      height: 40,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: groups.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final group = groups[index];
+                          return ChoiceChip(
+                            label: Text(group),
+                            selected: _groupFilter == group,
+                            onSelected: (_) =>
+                                setState(() => _groupFilter = group),
+                          );
+                        },
+                      ),
+                    ),
+                  if (groups.length > 1) const SizedBox(height: 8),
+                  if (searched.isEmpty)
+                    Expanded(
+                      child: _searchQuery.isNotEmpty ||
+                              _filter != _SavedFilter.all ||
+                              _sort != _SavedSort.newest ||
+                              _groupFilter != 'All groups'
+                          ? const _EmptyState(
+                              title: 'No matching saved locations',
+                              subtitle:
+                                  'Try changing search text, filter, sort, or group.',
+                            )
+                          : const _EmptyState(),
+                    )
+                  else
+                    ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
                     child: Align(
@@ -195,22 +325,49 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       itemCount: searched.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      separatorBuilder: (_, _) =>
+                          SizedBox(height: _compactMode ? 8 : 12),
                       itemBuilder: (context, index) {
                         final item = searched[index];
                         final id = item['id']?.toString() ?? '';
+                        final isSelected = _selectedIds.contains(id);
                         return _SavedLocationCard(
+                          id: id,
                           name: item['name']?.toString() ?? 'Saved location',
+                          group: _groupOf(item),
                           createdAt: item['createdAt']?.toString(),
                           updatedAt: item['updatedAt']?.toString(),
                           points: (item['points'] as List?)?.length ?? 0,
                           viewMode: _viewMode,
-                          onTap: () => _showDetails(context, item),
-                          onMore: () => _showActions(context, id, item),
+                          compactMode: _compactMode,
+                          selectionMode: _selectionMode,
+                          isSelected: isSelected,
+                          onTap: () {
+                            if (_selectionMode) {
+                              _toggleSelection(id);
+                              return;
+                            }
+                            _showDetails(context, item);
+                          },
+                          onLongPress: () {
+                            if (_selectionMode) {
+                              _toggleSelection(id);
+                              return;
+                            }
+                            _enterSelectionModeWith(id);
+                          },
+                          onMore: () {
+                            if (_selectionMode) {
+                              _toggleSelection(id);
+                              return;
+                            }
+                            _showActions(context, id, item);
+                          },
                         );
                       },
                     ),
                   ),
+                    ],
                 ],
               );
             },
@@ -224,6 +381,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   List<Map<String, dynamic>> _applyFilterAndSort(List<Map<String, dynamic>> src) {
     final out = src.where((item) {
       final points = (item['points'] as List?)?.length ?? 0;
+      if (_groupFilter != 'All groups' && _groupOf(item) != _groupFilter) {
+        return false;
+      }
       switch (_filter) {
         case _SavedFilter.all:
           return true;
@@ -270,8 +430,26 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final name = item['name']?.toString().toLowerCase() ?? '';
       final created = _formatDate(item['createdAt']?.toString()).toLowerCase();
       final points = (item['points'] as List?)?.length ?? 0;
-      return name.contains(q) || created.contains(q) || '$points'.contains(q);
+      final group = _groupOf(item).toLowerCase();
+      return name.contains(q) ||
+          created.contains(q) ||
+          '$points'.contains(q) ||
+          group.contains(q);
     }).toList();
+  }
+
+  String _groupOf(Map<String, dynamic> item) {
+    final value = item['group']?.toString().trim() ?? '';
+    return value.isEmpty ? 'General' : value;
+  }
+
+  List<String> _groupOptions(List<Map<String, dynamic>> items) {
+    final options = <String>{'All groups'};
+    for (final item in items) {
+      options.add(_groupOf(item));
+    }
+    final sorted = options.where((e) => e != 'All groups').toList()..sort();
+    return ['All groups', ...sorted];
   }
 
   String _filterLabel(_SavedFilter filter) {
@@ -421,13 +599,22 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              leading: const Icon(Icons.checklist_outlined),
+              title: const Text('Select multiple'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() => _selectionMode = true);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.filter_alt_off_outlined),
-              title: const Text('Reset filters/sort'),
+              title: const Text('Reset filters/sort/group'),
               onTap: () {
                 Navigator.pop(sheetContext);
                 setState(() {
                   _filter = _SavedFilter.all;
                   _sort = _SavedSort.newest;
+                  _groupFilter = 'All groups';
                 });
               },
             ),
@@ -471,6 +658,144 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               }
             },
             child: const Text('Delete all'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _enterSelectionModeWith(String id) {
+    setState(() {
+      _selectionMode = true;
+      if (id.isNotEmpty) _selectedIds.add(id);
+    });
+  }
+
+  void _toggleSelection(String id) {
+    if (id.isEmpty) return;
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+      if (_selectedIds.isEmpty) {
+        _selectionMode = false;
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _shareSelectedItems() async {
+    if (_selectedIds.isEmpty) return;
+    final box = Hive.box('landbox');
+    final out = StringBuffer();
+    for (final id in _selectedIds) {
+      final raw = box.get(id);
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(raw);
+      final name = item['name']?.toString() ?? 'Saved location';
+      final group = _groupOf(item);
+      final points = (item['points'] as List?) ?? const [];
+      final createdAt = _formatDate(item['createdAt']?.toString());
+      out
+        ..writeln(name)
+        ..writeln('Group: $group')
+        ..writeln('Points: ${points.length}')
+        ..writeln('Created: $createdAt');
+      for (final p in points) {
+        if (p is Map) {
+          out.writeln('${p['lat']},${p['lng']}');
+        }
+      }
+      out.writeln('');
+    }
+    await Clipboard.setData(ClipboardData(text: out.toString()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Selected items copied')));
+  }
+
+  void _deleteSelectedItems() {
+    if (_selectedIds.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete selected locations?'),
+        content: Text(
+          'This will delete ${_selectedIds.length} selected item(s). This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final box = Hive.box('landbox');
+              await box.deleteAll(_selectedIds.toList());
+              if (!mounted) return;
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              _exitSelectionMode();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Selected items deleted')),
+              );
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _setGroupForSelectedItems() {
+    if (_selectedIds.isEmpty) return;
+    final controller = TextEditingController(text: 'General');
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Set group for selected'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Group name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final group = controller.text.trim().isEmpty
+                  ? 'General'
+                  : controller.text.trim();
+              final now = DateTime.now().toIso8601String();
+              final box = Hive.box('landbox');
+              for (final id in _selectedIds) {
+                final raw = box.get(id);
+                if (raw is! Map) continue;
+                final item = Map<String, dynamic>.from(raw);
+                item['group'] = group;
+                item['updatedAt'] = now;
+                await box.put(id, item);
+              }
+              if (!mounted) return;
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Group updated for selected items')),
+              );
+            },
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -536,6 +861,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   },
                 ),
                 _ActionTile(
+                  icon: Icons.folder_outlined,
+                  label: 'Set group',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _setGroupForItem(context, id, item);
+                  },
+                ),
+                _ActionTile(
                   icon: Icons.delete_outline,
                   label: 'Delete',
                   isDestructive: true,
@@ -553,19 +886,26 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   void _showDetails(BuildContext context, Map<String, dynamic> item) {
-    final points = (item['points'] as List?) ?? [];
+    final points = _extractLatLngPoints(item);
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.82,
+            minChildSize: 0.5,
+            maxChildSize: 0.94,
+            builder: (context, scrollController) => SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 Container(
                   width: 36,
                   height: 4,
@@ -598,6 +938,17 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
+                    'Group: ${_groupOf(item)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
                     'Created: ${_formatDate(item['createdAt']?.toString())}',
                     style: Theme.of(
                       context,
@@ -615,6 +966,81 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     ),
                   ),
                 const SizedBox(height: 16),
+                if (points.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 180,
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: points.first,
+                          initialZoom: 17,
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.none,
+                          ),
+                          cameraConstraint: CameraConstraint.contain(
+                            bounds: LatLngBounds.fromPoints(points),
+                          ),
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.example.geo_coordinates',
+                          ),
+                          if (points.length >= 2)
+                            PolylineLayer(
+                              polylines: [
+                                Polyline(
+                                  points: points,
+                                  strokeWidth: 3,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ],
+                            ),
+                          if (points.length >= 3)
+                            PolygonLayer(
+                              polygons: [
+                                Polygon(
+                                  points: points,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.16),
+                                  borderStrokeWidth: 2,
+                                  borderColor: Theme.of(
+                                    context,
+                                  ).colorScheme.primary,
+                                ),
+                              ],
+                            ),
+                          MarkerLayer(
+                            markers: points
+                                .map(
+                                  (p) => Marker(
+                                    width: 20,
+                                    height: 20,
+                                    point: p,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (points.isNotEmpty) const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: ElevatedButton.icon(
@@ -630,24 +1056,22 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (points.isEmpty)
                   const Text('No points saved.')
                 else
-                  SizedBox(
-                    height: 180,
-                    child: ListView.separated(
-                      itemCount: points.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final p = points[index] as Map;
-                        final lat = p['lat'];
-                        final lng = p['lng'];
-                        return ListTile(
-                          dense: true,
-                          leading: Text('#${index + 1}'),
-                          title: Text('$lat, $lng'),
-                        );
-                      },
-                    ),
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: points.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final p = points[index];
+                      return ListTile(
+                        dense: true,
+                        leading: Text('#${index + 1}'),
+                        title: Text('${p.latitude}, ${p.longitude}'),
+                      );
+                    },
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -656,27 +1080,11 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   void _openSavedLandOnMap(BuildContext context, Map<String, dynamic> item) {
-    final pointsRaw = (item['points'] as List?) ?? const [];
-    if (pointsRaw.isEmpty) {
+    final points = _extractLatLngPoints(item);
+    if (points.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No points found for this land')),
       );
-      return;
-    }
-
-    final points = <LatLng>[];
-    for (final e in pointsRaw) {
-      if (e is! Map) continue;
-      final lat = (e['lat'] as num?)?.toDouble();
-      final lng = (e['lng'] as num?)?.toDouble();
-      if (lat == null || lng == null) continue;
-      points.add(LatLng(lat, lng));
-    }
-
-    if (points.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Saved points are invalid')));
       return;
     }
 
@@ -688,6 +1096,62 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           fieldName: item['name']?.toString(),
         );
     widget.onOpenMapRequested?.call();
+  }
+
+  void _setGroupForItem(
+    BuildContext context,
+    String id,
+    Map<String, dynamic> item,
+  ) {
+    final controller = TextEditingController(text: _groupOf(item));
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Set group'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Group name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final group = controller.text.trim().isEmpty
+                  ? 'General'
+                  : controller.text.trim();
+              final box = Hive.box('landbox');
+              final raw = box.get(id);
+              if (raw is! Map) return;
+              final data = Map<String, dynamic>.from(raw);
+              data['group'] = group;
+              data['updatedAt'] = DateTime.now().toIso8601String();
+              await box.put(id, data);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<LatLng> _extractLatLngPoints(Map<String, dynamic> item) {
+    final pointsRaw = (item['points'] as List?) ?? const [];
+    final points = <LatLng>[];
+    for (final e in pointsRaw) {
+      if (e is! Map) continue;
+      final lat = (e['lat'] as num?)?.toDouble();
+      final lng = (e['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) continue;
+      points.add(LatLng(lat, lng));
+    }
+    return points;
   }
 
   void _renameItem(BuildContext context, String id, String currentName) {
@@ -775,6 +1239,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   ) async {
     final points = (item['points'] as List?) ?? [];
     final name = item['name']?.toString() ?? 'Saved location';
+    final group = _groupOf(item);
     final createdAt = _formatDate(item['createdAt']?.toString());
     final updatedAt = _formatDate(item['updatedAt']?.toString());
     final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
@@ -784,6 +1249,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .join('\n');
     final text = (StringBuffer()
           ..writeln(name)
+          ..writeln('Group: $group')
           ..writeln('Points: ${points.length}')
           ..writeln('Created: $createdAt')
           ..writeln(hasUpdated ? 'Updated: $updatedAt' : 'Updated: -')
@@ -857,21 +1323,33 @@ class _ViewModeChip extends StatelessWidget {
 }
 
 class _SavedLocationCard extends StatelessWidget {
+  final String id;
   final String name;
+  final String group;
   final String? createdAt;
   final String? updatedAt;
   final int points;
   final _ViewMode viewMode;
+  final bool compactMode;
+  final bool selectionMode;
+  final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final VoidCallback onMore;
 
   const _SavedLocationCard({
+    required this.id,
     required this.name,
+    required this.group,
     required this.createdAt,
     required this.updatedAt,
     required this.points,
     required this.viewMode,
+    required this.compactMode,
+    required this.selectionMode,
+    required this.isSelected,
     required this.onTap,
+    required this.onLongPress,
     required this.onMore,
   });
 
@@ -884,12 +1362,20 @@ class _SavedLocationCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(compactMode ? 12 : 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isSelected
+              ? theme.colorScheme.primary.withValues(alpha: 0.08)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary
+                : Colors.grey.withValues(alpha: 0.12),
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
@@ -927,18 +1413,78 @@ class _SavedLocationCard extends StatelessWidget {
     bool hasUpdated,
     String updatedText,
   ) {
+    final subtitle = hasUpdated
+        ? '$points points · Updated $updatedText'
+        : '$points points · Created $dateText';
     return Row(
       children: [
+        if (selectionMode) ...[
+          Icon(
+            isSelected ? Icons.check_circle : Icons.circle_outlined,
+            color: isSelected ? theme.colorScheme.primary : Colors.black45,
+          ),
+          SizedBox(width: compactMode ? 8 : 10),
+        ],
         Container(
-          width: 48,
-          height: 48,
+          width: compactMode ? 40 : 48,
+          height: compactMode ? 40 : 48,
           decoration: BoxDecoration(
             color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(Icons.place, color: theme.colorScheme.primary),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: compactMode ? 10 : 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: compactMode ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: compactMode ? 2 : 4),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.black54,
+                ),
+              ),
+              SizedBox(height: compactMode ? 0 : 2),
+              Text(
+                group,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!selectionMode)
+          IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+      ],
+    );
+  }
+
+  Widget _buildBasic(ThemeData theme, String dateText) {
+    return Row(
+      children: [
+        if (selectionMode) ...[
+          Icon(
+            isSelected ? Icons.check_circle : Icons.circle_outlined,
+            color: isSelected ? theme.colorScheme.primary : Colors.black45,
+          ),
+          SizedBox(width: compactMode ? 8 : 10),
+        ],
+        Icon(Icons.place, color: theme.colorScheme.primary),
+        SizedBox(width: compactMode ? 8 : 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -947,15 +1493,14 @@ class _SavedLocationCard extends StatelessWidget {
                 name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
               Text(
-                hasUpdated
-                    ? '$points points · Updated $updatedText'
-                    : '$points points · Created $dateText',
+                '$points pts · $group',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: Colors.black54,
                 ),
@@ -963,42 +1508,39 @@ class _SavedLocationCard extends StatelessWidget {
             ],
           ),
         ),
-        IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
-      ],
-    );
-  }
-
-  Widget _buildBasic(ThemeData theme, String dateText) {
-    return Row(
-      children: [
-        Icon(Icons.place, color: theme.colorScheme.primary),
-        const SizedBox(width: 10),
-        Expanded(
+        SizedBox(
+          width: compactMode ? 72 : 84,
           child: Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
+            dateText,
+            textAlign: TextAlign.right,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.black54,
             ),
           ),
         ),
-        Text(
-          dateText,
-          style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
-        ),
-        const SizedBox(width: 6),
-        IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+        if (!selectionMode) ...[
+          SizedBox(width: compactMode ? 2 : 6),
+          IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+        ],
       ],
     );
   }
 
   Widget _buildText(ThemeData theme, String dateText) {
+    final updatedText = _formatDate(updatedAt);
+    final hasUpdated = (updatedAt ?? '').isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
+            if (selectionMode) ...[
+              Icon(
+                isSelected ? Icons.check_circle : Icons.circle_outlined,
+                color: isSelected ? theme.colorScheme.primary : Colors.black45,
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Text(
                 name,
@@ -1007,17 +1549,31 @@ class _SavedLocationCard extends StatelessWidget {
                 ),
               ),
             ),
-            IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+            if (!selectionMode)
+              IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
           ],
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: compactMode ? 4 : 6),
         Text(
           'Points: $points',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
+        Text(
+          'Group: $group',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
         Text(
           'Created: $dateText',
+          style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          hasUpdated ? 'Updated: $updatedText' : 'Updated: -',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
       ],
@@ -1025,27 +1581,67 @@ class _SavedLocationCard extends StatelessWidget {
   }
 
   Widget _buildPhoto(ThemeData theme, String dateText) {
+    final topHeight = compactMode ? 92.0 : 120.0;
+    final iconSize = compactMode ? 26.0 : 32.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          height: 120,
+          height: topHeight,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withValues(alpha: 0.08),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                theme.colorScheme.primary.withValues(alpha: 0.22),
+                theme.colorScheme.primary.withValues(alpha: 0.08),
+              ],
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Center(
-            child: Icon(
-              Icons.photo,
-              size: 32,
-              color: theme.colorScheme.primary.withValues(alpha: 0.6),
-            ),
+          child: Stack(
+            children: [
+              Center(
+                child: Icon(
+                  Icons.landscape_rounded,
+                  size: iconSize,
+                  color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '$points pts',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: compactMode ? 8 : 12),
         Row(
           children: [
+            if (selectionMode) ...[
+              Icon(
+                isSelected ? Icons.check_circle : Icons.circle_outlined,
+                color: isSelected ? theme.colorScheme.primary : Colors.black45,
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Text(
                 name,
@@ -1056,12 +1652,13 @@ class _SavedLocationCard extends StatelessWidget {
                 ),
               ),
             ),
-            IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+            if (!selectionMode)
+              IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Text(
-          '$points points · $dateText',
+          '$group · $dateText',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
       ],
