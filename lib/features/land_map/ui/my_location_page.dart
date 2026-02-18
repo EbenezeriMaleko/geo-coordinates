@@ -176,188 +176,187 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
     final accuracyText = _formatDistanceValue(st.accuracyMeters, unit);
 
     return SingleChildScrollView(
-      child: Column(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(28),
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    // borderRadius: const BorderRadius.vertical(
+                    //   bottom: Radius.circular(28),
+                    // ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.explore,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                            const Spacer(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _StatusChip(
+                        label: _statusLabel(viewState),
+                        color: _statusColor(viewState),
+                      ),
+                      const SizedBox(height: 12),
+                      if (viewState != _LocationViewState.ready)
+                        _LocationStatePanel(
+                          state: viewState,
+                          errorMessage: _errorMessage,
+                          onRetry: _retry,
+                          onOpenLocationSettings: _openLocationSettings,
+                          onOpenAppSettings: _openAppSettings,
+                        ),
+                      if (viewState != _LocationViewState.ready)
+                        const SizedBox(height: 12),
+                      Text(
+                        'Latitude',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        transitionBuilder: (child, animation) =>
+                            FadeTransition(opacity: animation, child: child),
+                        child: Text(
+                          latText,
+                          key: ValueKey(latText),
+                          style: theme.textTheme.displaySmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Longitude',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        transitionBuilder: (child, animation) =>
+                            FadeTransition(opacity: animation, child: child),
+                        child: Text(
+                          lonText,
+                          key: ValueKey(lonText),
+                          style: theme.textTheme.displaySmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        formatted,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Last update: $lastUpdateText',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                Positioned(
+                  right: 20,
+                  bottom: -24,
+                  child: FloatingActionButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Camera - Coming soon')),
+                      );
+                    },
+                    backgroundColor: theme.colorScheme.primary,
+                    child: const Icon(Icons.camera_alt, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 40),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 12,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.explore,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
-                          const Spacer(),
-                        ],
-                      ),
+                    _InfoRow(label: 'Altitude', value: altitudeText),
+                    _InfoDivider(),
+                    _InfoRow(
+                      label: 'Coordinates accuracy',
+                      value: accuracyText,
+                      valueColor: qualityColor,
                     ),
-                    const SizedBox(height: 8),
-                    _StatusChip(
-                      label: _statusLabel(viewState),
-                      color: _statusColor(viewState),
+                    _InfoDivider(),
+                    _InfoRow(
+                      label: 'Signal quality',
+                      value: quality,
+                      valueColor: qualityColor,
                     ),
-                    const SizedBox(height: 12),
-                    if (viewState != _LocationViewState.ready)
-                      _LocationStatePanel(
-                        state: viewState,
-                        errorMessage: _errorMessage,
-                        onRetry: _retry,
-                        onOpenLocationSettings: _openLocationSettings,
-                        onOpenAppSettings: _openAppSettings,
-                      ),
-                    if (viewState != _LocationViewState.ready)
-                      const SizedBox(height: 12),
-                    Text(
-                      'Latitude',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      ),
-                      child: Text(
-                        latText,
-                        key: ValueKey(latText),
-                        style: theme.textTheme.displaySmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Longitude',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      ),
-                      child: Text(
-                        lonText,
-                        key: ValueKey(lonText),
-                        style: theme.textTheme.displaySmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      formatted,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Last update: $lastUpdateText',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    _InfoDivider(),
+                    _InfoRow(label: 'Location age', value: ageText),
+                    _InfoDivider(),
+                    _InfoRow(
+                      label: 'Tracking',
+                      value: _isStreaming ? 'Live' : 'Stopped',
                     ),
                   ],
                 ),
               ),
-              Positioned(
-                right: 20,
-                bottom: -24,
-                child: FloatingActionButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Camera - Coming soon')),
-                    );
-                  },
-                  backgroundColor: theme.colorScheme.primary,
-                  child: const Icon(Icons.camera_alt, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 40),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  _InfoRow(label: 'Altitude', value: altitudeText),
-                  _InfoDivider(),
-                  _InfoRow(
-                    label: 'Coordinates accuracy',
-                    value: accuracyText,
-                    valueColor: qualityColor,
-                  ),
-                  _InfoDivider(),
-                  _InfoRow(
-                    label: 'Signal quality',
-                    value: quality,
-                    valueColor: qualityColor,
-                  ),
-                  _InfoDivider(),
-                  _InfoRow(label: 'Location age', value: ageText),
-                  _InfoDivider(),
-                  _InfoRow(
-                    label: 'Tracking',
-                    value: _isStreaming ? 'Live' : 'Stopped',
-                  ),
-                ],
-              ),
             ),
-          ),
-          const SizedBox(height: 24),
-        ],
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }

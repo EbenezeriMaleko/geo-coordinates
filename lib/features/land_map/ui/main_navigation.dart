@@ -22,8 +22,8 @@ class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
   static const double _bottomNavHeight = 72;
-  static const Color _bottomNavBackground = Color(0xFFF5EFF7);
-  static const Color _selectedColor = Color(0xFF0B8A8D);
+  static const Color _bottomNavBackground = Colors.white;
+  static const Color _selectedColor = Color(0xFF001F3F);
   static const Color _unselectedColor = Color(0xFF7C7C7C);
 
   late final List<Widget> _pages = [
@@ -41,7 +41,9 @@ class _MainNavigationState extends State<MainNavigation> {
 
   Future<void> _refreshMyLocation() async {
     final container = ProviderScope.containerOf(context, listen: false);
-    final err = await container.read(landMapProvider.notifier).refreshLocation();
+    final err = await container
+        .read(landMapProvider.notifier)
+        .refreshLocation();
     if (!mounted) return;
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
@@ -55,9 +57,9 @@ class _MainNavigationState extends State<MainNavigation> {
   Future<void> _copyText(String text, String label) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label copied')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label copied')));
   }
 
   Future<void> _handleMyLocationMenu(_MyLocationAction action) async {
@@ -121,13 +123,14 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     final titles = ['Map', 'My location', 'Saved locations', 'Settings'];
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
           titles[_currentIndex],
           style: const TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.w700,
-            fontSize: 22,
+            fontSize: 18,
           ),
         ),
         actions: _currentIndex == 0
@@ -135,8 +138,8 @@ class _MainNavigationState extends State<MainNavigation> {
                 IconButton(
                   icon: SvgPicture.asset(
                     'lib/assets/icons/search.svg',
-                    width: 20,
-                    height: 20,
+                    width: 18,
+                    height: 18,
                     colorFilter: const ColorFilter.mode(
                       Colors.black87,
                       BlendMode.srcIn,

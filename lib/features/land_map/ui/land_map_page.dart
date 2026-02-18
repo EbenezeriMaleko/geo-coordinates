@@ -927,11 +927,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           ),
 
         // Compass (Top Right)
-        Positioned(
-          right: 16,
-          top: _isFullscreen ? 20 : 90,
-          child: const CompassWidget(),
-        ),
+        // Positioned(
+        //   right: 16,
+        //   top: _isFullscreen ? 20 : 90,
+        //   child: const CompassWidget(),
+        // ),
 
         // Map Controls (Right side)
         Positioned(

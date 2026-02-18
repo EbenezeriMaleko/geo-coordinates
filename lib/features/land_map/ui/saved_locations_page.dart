@@ -7,6 +7,8 @@ import 'package:latlong2/latlong.dart';
 import '../state/land_map_notifier.dart';
 
 enum _ViewMode { combined, basic, text, photo }
+enum _SavedSort { newest, oldest, nameAsc, nameDesc, pointsDesc }
+enum _SavedFilter { all, threePlusPoints, updatedOnly }
 
 class SavedLocationsPage extends ConsumerStatefulWidget {
   final VoidCallback? onOpenMapRequested;
@@ -19,45 +21,96 @@ class SavedLocationsPage extends ConsumerStatefulWidget {
 
 class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   _ViewMode _viewMode = _ViewMode.combined;
+  _SavedSort _sort = _SavedSort.newest;
+  _SavedFilter _filter = _SavedFilter.all;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final box = Hive.box('landbox');
 
-    return Column(
-      children: [
+    return Container(
+      color: Colors.white70,
+      child: Column(
+        children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: Row(
             children: [
               const Spacer(),
               IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Filter - Coming soon')),
-                  );
-                },
+                onPressed: _showFilterSheet,
                 icon: const Icon(Icons.tune, size: 20),
               ),
               IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Sort - Coming soon')),
-                  );
-                },
+                onPressed: _showSortSheet,
                 icon: const Icon(Icons.sort, size: 20),
               ),
               IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('More - Coming soon')),
-                  );
-                },
+                onPressed: _showPageMenu,
                 icon: const Icon(Icons.more_vert, size: 20),
               ),
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _searchQuery = value.trim()),
+            decoration: InputDecoration(
+              hintText: 'Search saved locations',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      icon: const Icon(Icons.close),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (_searchQuery.isNotEmpty ||
+            _filter != _SavedFilter.all ||
+            _sort != _SavedSort.newest)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (_searchQuery.isNotEmpty)
+                  _ActiveTag(
+                    label: 'Search: $_searchQuery',
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  ),
+                if (_filter != _SavedFilter.all)
+                  _ActiveTag(
+                    label: 'Filter: ${_filterLabel(_filter)}',
+                    onClear: () => setState(() => _filter = _SavedFilter.all),
+                  ),
+                if (_sort != _SavedSort.newest)
+                  _ActiveTag(
+                    label: 'Sort: ${_sortLabel(_sort)}',
+                    onClear: () => setState(() => _sort = _SavedSort.newest),
+                  ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -107,38 +160,320 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         if (entityType == 'marker') return false;
                         return true;
                       })
-                      .toList()
-                    ..sort(
-                      (a, b) => (b['createdAt'] ?? '').toString().compareTo(
-                        (a['createdAt'] ?? '').toString(),
-                      ),
-                    );
+                      .toList();
 
-              if (items.isEmpty) {
-                return _EmptyState();
+              final filteredSorted = _applyFilterAndSort(items);
+              final searched = _applySearch(filteredSorted);
+
+              if (searched.isEmpty) {
+                return _searchQuery.isNotEmpty ||
+                        _filter != _SavedFilter.all ||
+                        _sort != _SavedSort.newest
+                    ? const _EmptyState(
+                        title: 'No matching saved locations',
+                        subtitle: 'Try changing search text, filter, or sort.',
+                      )
+                    : const _EmptyState();
               }
 
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  final id = item['id']?.toString() ?? '';
-                  return _SavedLocationCard(
-                    name: item['name']?.toString() ?? 'Saved location',
-                    createdAt: item['createdAt']?.toString(),
-                    points: (item['points'] as List?)?.length ?? 0,
-                    viewMode: _viewMode,
-                    onTap: () => _showDetails(context, item),
-                    onMore: () => _showActions(context, id, item),
-                  );
-                },
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${searched.length} result${searched.length == 1 ? '' : 's'}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      itemCount: searched.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final item = searched[index];
+                        final id = item['id']?.toString() ?? '';
+                        return _SavedLocationCard(
+                          name: item['name']?.toString() ?? 'Saved location',
+                          createdAt: item['createdAt']?.toString(),
+                          updatedAt: item['updatedAt']?.toString(),
+                          points: (item['points'] as List?)?.length ?? 0,
+                          viewMode: _viewMode,
+                          onTap: () => _showDetails(context, item),
+                          onMore: () => _showActions(context, id, item),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               );
             },
           ),
         ),
       ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _applyFilterAndSort(List<Map<String, dynamic>> src) {
+    final out = src.where((item) {
+      final points = (item['points'] as List?)?.length ?? 0;
+      switch (_filter) {
+        case _SavedFilter.all:
+          return true;
+        case _SavedFilter.threePlusPoints:
+          return points >= 3;
+        case _SavedFilter.updatedOnly:
+          return (item['updatedAt']?.toString().isNotEmpty ?? false);
+      }
+    }).toList();
+
+    out.sort((a, b) {
+      switch (_sort) {
+        case _SavedSort.oldest:
+          return (a['createdAt'] ?? '')
+              .toString()
+              .compareTo((b['createdAt'] ?? '').toString());
+        case _SavedSort.nameAsc:
+          return (a['name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((b['name'] ?? '').toString().toLowerCase());
+        case _SavedSort.nameDesc:
+          return (b['name'] ?? '')
+              .toString()
+              .toLowerCase()
+              .compareTo((a['name'] ?? '').toString().toLowerCase());
+        case _SavedSort.pointsDesc:
+          final aPoints = (a['points'] as List?)?.length ?? 0;
+          final bPoints = (b['points'] as List?)?.length ?? 0;
+          return bPoints.compareTo(aPoints);
+        case _SavedSort.newest:
+          return (b['createdAt'] ?? '')
+              .toString()
+              .compareTo((a['createdAt'] ?? '').toString());
+      }
+    });
+    return out;
+  }
+
+  List<Map<String, dynamic>> _applySearch(List<Map<String, dynamic>> src) {
+    if (_searchQuery.isEmpty) return src;
+    final q = _searchQuery.toLowerCase();
+    return src.where((item) {
+      final name = item['name']?.toString().toLowerCase() ?? '';
+      final created = _formatDate(item['createdAt']?.toString()).toLowerCase();
+      final points = (item['points'] as List?)?.length ?? 0;
+      return name.contains(q) || created.contains(q) || '$points'.contains(q);
+    }).toList();
+  }
+
+  String _filterLabel(_SavedFilter filter) {
+    switch (filter) {
+      case _SavedFilter.all:
+        return 'All';
+      case _SavedFilter.threePlusPoints:
+        return '3+ points';
+      case _SavedFilter.updatedOnly:
+        return 'Updated only';
+    }
+  }
+
+  String _sortLabel(_SavedSort sort) {
+    switch (sort) {
+      case _SavedSort.newest:
+        return 'Newest';
+      case _SavedSort.oldest:
+        return 'Oldest';
+      case _SavedSort.nameAsc:
+        return 'Name A-Z';
+      case _SavedSort.nameDesc:
+        return 'Name Z-A';
+      case _SavedSort.pointsDesc:
+        return 'Most points';
+    }
+  }
+
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            const Text(
+              'Filter',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            _FilterTile(
+              title: 'All saved lands',
+              selected: _filter == _SavedFilter.all,
+              onTap: () {
+                setState(() => _filter = _SavedFilter.all);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            _FilterTile(
+              title: '3+ points only',
+              selected: _filter == _SavedFilter.threePlusPoints,
+              onTap: () {
+                setState(() => _filter = _SavedFilter.threePlusPoints);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            _FilterTile(
+              title: 'Updated only',
+              selected: _filter == _SavedFilter.updatedOnly,
+              onTap: () {
+                setState(() => _filter = _SavedFilter.updatedOnly);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSortSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            const Text(
+              'Sort',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            _FilterTile(
+              title: 'Newest first',
+              selected: _sort == _SavedSort.newest,
+              onTap: () {
+                setState(() => _sort = _SavedSort.newest);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            _FilterTile(
+              title: 'Oldest first',
+              selected: _sort == _SavedSort.oldest,
+              onTap: () {
+                setState(() => _sort = _SavedSort.oldest);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            _FilterTile(
+              title: 'Name A-Z',
+              selected: _sort == _SavedSort.nameAsc,
+              onTap: () {
+                setState(() => _sort = _SavedSort.nameAsc);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            _FilterTile(
+              title: 'Name Z-A',
+              selected: _sort == _SavedSort.nameDesc,
+              onTap: () {
+                setState(() => _sort = _SavedSort.nameDesc);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            _FilterTile(
+              title: 'Most points',
+              selected: _sort == _SavedSort.pointsDesc,
+              onTap: () {
+                setState(() => _sort = _SavedSort.pointsDesc);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPageMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.filter_alt_off_outlined),
+              title: const Text('Reset filters/sort'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() {
+                  _filter = _SavedFilter.all;
+                  _sort = _SavedSort.newest;
+                });
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
+              title: const Text('Delete all saved lands'),
+              textColor: Colors.red,
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _confirmDeleteAll();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteAll() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete all saved lands?'),
+        content: const Text('Markers will be kept. This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final box = Hive.box('landbox');
+              final keysToDelete = box.toMap().entries.where((entry) {
+                final value = entry.value;
+                if (value is! Map) return false;
+                return value['entityType']?.toString() != 'marker';
+              }).map((e) => e.key).toList();
+              await box.deleteAll(keysToDelete);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('Delete all'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -253,12 +588,32 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '${points.length} points · ${_formatDate(item['createdAt']?.toString())}',
+                    '${points.length} points',
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: Colors.black54),
                   ),
                 ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Created: ${_formatDate(item['createdAt']?.toString())}',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                  ),
+                ),
+                if ((item['updatedAt']?.toString().isNotEmpty ?? false))
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Updated: ${_formatDate(item['updatedAt']?.toString())}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -421,11 +776,20 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final points = (item['points'] as List?) ?? [];
     final name = item['name']?.toString() ?? 'Saved location';
     final createdAt = _formatDate(item['createdAt']?.toString());
+    final updatedAt = _formatDate(item['updatedAt']?.toString());
+    final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
     final coords = points
         .map((p) => '${p['lat']},${p['lng']}')
         .toList()
         .join('\n');
-    final text = '$name\n$createdAt\n\n$coords';
+    final text = (StringBuffer()
+          ..writeln(name)
+          ..writeln('Points: ${points.length}')
+          ..writeln('Created: $createdAt')
+          ..writeln(hasUpdated ? 'Updated: $updatedAt' : 'Updated: -')
+          ..writeln('')
+          ..writeln(coords))
+        .toString();
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
       ScaffoldMessenger.of(
@@ -495,6 +859,7 @@ class _ViewModeChip extends StatelessWidget {
 class _SavedLocationCard extends StatelessWidget {
   final String name;
   final String? createdAt;
+  final String? updatedAt;
   final int points;
   final _ViewMode viewMode;
   final VoidCallback onTap;
@@ -503,6 +868,7 @@ class _SavedLocationCard extends StatelessWidget {
   const _SavedLocationCard({
     required this.name,
     required this.createdAt,
+    required this.updatedAt,
     required this.points,
     required this.viewMode,
     required this.onTap,
@@ -513,6 +879,8 @@ class _SavedLocationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dateText = _formatDate(createdAt);
+    final updatedText = _formatDate(updatedAt);
+    final hasUpdated = (updatedAt ?? '').isNotEmpty;
 
     return InkWell(
       onTap: onTap,
@@ -530,12 +898,17 @@ class _SavedLocationCard extends StatelessWidget {
             ),
           ],
         ),
-        child: _buildContent(theme, dateText),
+        child: _buildContent(theme, dateText, hasUpdated, updatedText),
       ),
     );
   }
 
-  Widget _buildContent(ThemeData theme, String dateText) {
+  Widget _buildContent(
+    ThemeData theme,
+    String dateText,
+    bool hasUpdated,
+    String updatedText,
+  ) {
     switch (viewMode) {
       case _ViewMode.basic:
         return _buildBasic(theme, dateText);
@@ -544,11 +917,16 @@ class _SavedLocationCard extends StatelessWidget {
       case _ViewMode.photo:
         return _buildPhoto(theme, dateText);
       case _ViewMode.combined:
-        return _buildCombined(theme, dateText);
+        return _buildCombined(theme, dateText, hasUpdated, updatedText);
     }
   }
 
-  Widget _buildCombined(ThemeData theme, String dateText) {
+  Widget _buildCombined(
+    ThemeData theme,
+    String dateText,
+    bool hasUpdated,
+    String updatedText,
+  ) {
     return Row(
       children: [
         Container(
@@ -575,7 +953,9 @@ class _SavedLocationCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '$points points · $dateText',
+                hasUpdated
+                    ? '$points points · Updated $updatedText'
+                    : '$points points · Created $dateText',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: Colors.black54,
                 ),
@@ -723,7 +1103,38 @@ class _ActionTile extends StatelessWidget {
   }
 }
 
+class _FilterTile extends StatelessWidget {
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterTile({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      title: Text(title),
+      trailing: selected
+          ? const Icon(Icons.check_circle, color: Color(0xFF0B8A8D))
+          : const Icon(Icons.circle_outlined),
+      onTap: onTap,
+    );
+  }
+}
+
 class _EmptyState extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _EmptyState({
+    this.title = 'No saved locations',
+    this.subtitle = 'Your saved places will appear here.',
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -738,7 +1149,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'No saved locations',
+            title,
             style: theme.textTheme.titleMedium?.copyWith(
               color: Colors.black54,
               fontWeight: FontWeight.w600,
@@ -746,8 +1157,44 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Your saved places will appear here.',
+            subtitle,
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveTag extends StatelessWidget {
+  final String label;
+  final VoidCallback onClear;
+
+  const _ActiveTag({required this.label, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B8A8D).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF0B8A8D),
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: onClear,
+            child: const Icon(Icons.close, size: 14, color: Color(0xFF0B8A8D)),
           ),
         ],
       ),

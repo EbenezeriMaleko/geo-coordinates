@@ -25,18 +25,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        _sectionHeader('Premium', theme),
-        _item(
-          title: 'Subscriptions',
-          onTap: _comingSoon('Subscriptions'),
-        ),
-        _item(
-          title: 'Remove ads',
-          subtitle: 'Watch 3 ads to go ad-free for 24 hours',
-          onTap: _comingSoon('Remove ads'),
-        ),
-        _sectionDivider(),
-
         _sectionHeader('Cloud synchronization', theme),
         _item(
           title: 'Account',
@@ -73,26 +61,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           subtitle: 'Fused',
           onTap: _comingSoon('Location provider'),
         ),
-        _switchItem(
-          title: 'One-click copy',
-          subtitle:
-              'After long press on latitude or longitude, copy both as CSV.',
-          value: _oneClickCopy,
-          onChanged: (value) => setState(() => _oneClickCopy = value),
-        ),
-        _item(
-          title: 'Elevation cache',
-          subtitle: 'Size 0 MB. Tap to clear cache',
-          onTap: _comingSoon('Elevation cache'),
-        ),
-        _item(
-          title: 'Device settings',
-          onTap: _comingSoon('Device settings'),
-        ),
-        _item(
-          title: 'Location data is based on WGS84',
-          onTap: _comingSoon('Location data'),
-        ),
         _sectionDivider(),
 
         _sectionHeader('Units', theme),
@@ -112,20 +80,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           onTap: _showDistanceUnitSelector,
         ),
         _sectionDivider(),
-
-        _sectionHeader('SOS', theme),
-        _item(
-          title: 'Rescue phone number',
-          subtitle: 'Not set',
-          onTap: _comingSoon('Rescue phone number'),
-        ),
-        _item(
-          title: 'Rescue message',
-          subtitle: 'Not set',
-          onTap: _comingSoon('Rescue message'),
-        ),
-        _sectionDivider(),
-
         _sectionHeader('Photo', theme),
         _switchItem(
           title: 'Save original photo',
@@ -150,20 +104,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           onTap: _comingSoon('Capture mode'),
         ),
         _sectionDivider(),
-
-        _sectionHeader('Maps', theme),
-        _item(
-          title: 'Default map zoom level',
-          subtitle: '14.0',
-          onTap: _comingSoon('Default map zoom level'),
-        ),
-        _item(
-          title: 'Navigate with',
-          subtitle: 'Google Maps',
-          onTap: _comingSoon('Navigate with'),
-        ),
-        _sectionDivider(),
-
         _sectionHeader('Saved locations', theme),
         _item(
           title: 'View modes',
@@ -184,22 +124,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _item(
           title: 'Privacy policy',
           onTap: _comingSoon('Privacy policy'),
-        ),
-        _item(
-          title: 'Install app on a watch',
-          onTap: _comingSoon('Install app on a watch'),
-        ),
-        _item(
-          title: 'More applications',
-          onTap: _comingSoon('More applications'),
-        ),
-        _item(
-          title: 'Share this app',
-          onTap: _comingSoon('Share this app'),
-        ),
-        _item(
-          title: 'Rate us',
-          onTap: _comingSoon('Rate us'),
         ),
         _sectionDivider(),
 
@@ -223,7 +147,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 6),
       child: Text(
-        title,
+        title,  
         style: theme.textTheme.titleMedium?.copyWith(
           color: const Color(0xFF0C8A8C),
           fontWeight: FontWeight.w700,
