@@ -27,8 +27,8 @@ class MyApp extends StatelessWidget {
           seedColor: const Color(0xFF001F3F), // Navy Blue
           primary: const Color(0xFF001F3F),
           secondary: const Color(0xFF0074D9),
-          surface: Colors.white.withOpacity(0.7),
-          background: const Color(0xFFF5F5F5),
+          surface: Colors.white.withValues(alpha:0.7),
+         surfaceBright: const Color(0xFFF5F5F5),
         ),
         textTheme: GoogleFonts.interTextTheme(),
         appBarTheme: AppBarTheme(
@@ -65,7 +65,7 @@ class MyApp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white.withOpacity(0.9),
+          fillColor: Colors.white.withValues(alpha:0.9),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: Colors.grey.shade300),

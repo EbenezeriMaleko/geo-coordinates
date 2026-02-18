@@ -3,200 +3,367 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/coordinate_format.dart';
 import '../state/settings_provider.dart';
 
-class SettingsPage extends ConsumerWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  bool _keepScreenOn = false;
+  bool _oneClickCopy = false;
+  bool _saveOriginalPhoto = true;
+
+  @override
+  Widget build(BuildContext context) {
     final selectedFormat = ref.watch(coordinateFormatProvider);
+    final theme = Theme.of(context);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.only(bottom: 24),
       children: [
-        // Coordinate Format Section
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF001F3F).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.location_on_outlined,
-                      color: Color(0xFF001F3F),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Coordinate Format',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ...CoordinateFormat.values.map((format) {
-                final isSelected = format == selectedFormat;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFF001F3F)
-                          : Colors.grey.shade300,
-                      width: isSelected ? 2 : 1,
-                    ),
-                    color: isSelected
-                        ? const Color(0xFF001F3F).withValues(alpha: 0.05)
-                        : Colors.transparent,
-                  ),
-                  child: RadioListTile<CoordinateFormat>(
-                    title: Text(
-                      format.displayName,
-                      style: TextStyle(
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        color: isSelected
-                            ? const Color(0xFF001F3F)
-                            : Colors.black87,
-                      ),
-                    ),
-                    subtitle: Text(
-                      _getFormatExample(format),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    value: format,
-                    groupValue: selectedFormat,
-                    activeColor: const Color(0xFF001F3F),
-                    onChanged: (value) {
-                      if (value != null) {
-                        ref
-                            .read(coordinateFormatProvider.notifier)
-                            .setFormat(value);
-                      }
-                    },
-                  ),
-                );
-              }),
-            ],
-          ),
+        _sectionHeader('Premium', theme),
+        _item(
+          title: 'Subscriptions',
+          onTap: _comingSoon('Subscriptions'),
         ),
-        const SizedBox(height: 16),
+        _item(
+          title: 'Remove ads',
+          subtitle: 'Watch 3 ads to go ad-free for 24 hours',
+          onTap: _comingSoon('Remove ads'),
+        ),
+        _sectionDivider(),
 
-        // Unit Formats Section
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Unit Formats',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildUnitItem(
-                context,
-                icon: Icons.square_outlined,
-                title: 'Area Unit',
-                currentValue: 'm²',
-              ),
-              const Divider(height: 1),
-              _buildUnitItem(
-                context,
-                icon: Icons.straighten,
-                title: 'Distance Unit',
-                currentValue: 'm',
-              ),
-              const Divider(height: 1),
-              _buildUnitItem(
-                context,
-                icon: Icons.category_outlined,
-                title: 'Perimeter Unit',
-                currentValue: 'm',
-              ),
-            ],
-          ),
+        _sectionHeader('Cloud synchronization', theme),
+        _item(
+          title: 'Account',
+          onTap: _comingSoon('Account'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('General', theme),
+        _switchItem(
+          title: 'Keep screen on',
+          value: _keepScreenOn,
+          onChanged: (value) => setState(() => _keepScreenOn = value),
+        ),
+        _item(
+          title: 'App language',
+          subtitle: 'English',
+          onTap: _comingSoon('App language'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Location Settings', theme),
+        _item(
+          title: 'Coordinates format',
+          subtitle: selectedFormat.displayName,
+          onTap: _showCoordinateFormatSelector,
+        ),
+        _item(
+          title: 'Location accuracy',
+          subtitle: 'High accuracy',
+          onTap: _comingSoon('Location accuracy'),
+        ),
+        _item(
+          title: 'Location provider',
+          subtitle: 'Fused',
+          onTap: _comingSoon('Location provider'),
+        ),
+        _switchItem(
+          title: 'One-click copy',
+          subtitle:
+              'After long press on latitude or longitude, copy both as CSV.',
+          value: _oneClickCopy,
+          onChanged: (value) => setState(() => _oneClickCopy = value),
+        ),
+        _item(
+          title: 'Elevation cache',
+          subtitle: 'Size 0 MB. Tap to clear cache',
+          onTap: _comingSoon('Elevation cache'),
+        ),
+        _item(
+          title: 'Device settings',
+          onTap: _comingSoon('Device settings'),
+        ),
+        _item(
+          title: 'Location data is based on WGS84',
+          onTap: _comingSoon('Location data'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Units', theme),
+        _item(
+          title: 'Altitude units',
+          subtitle: 'Feet',
+          onTap: _comingSoon('Altitude units'),
+        ),
+        _item(
+          title: 'Accuracy units',
+          subtitle: 'Feet',
+          onTap: _comingSoon('Accuracy units'),
+        ),
+        _item(
+          title: 'Distance units',
+          subtitle: 'Feet',
+          onTap: _comingSoon('Distance units'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('SOS', theme),
+        _item(
+          title: 'Rescue phone number',
+          subtitle: 'Not set',
+          onTap: _comingSoon('Rescue phone number'),
+        ),
+        _item(
+          title: 'Rescue message',
+          subtitle: 'Not set',
+          onTap: _comingSoon('Rescue message'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Photo', theme),
+        _switchItem(
+          title: 'Save original photo',
+          subtitle:
+              'Save with no data on it. Useful for editing before sharing.',
+          value: _saveOriginalPhoto,
+          onChanged: (value) => setState(() => _saveOriginalPhoto = value),
+        ),
+        _item(
+          title: 'Save to gallery',
+          subtitle: 'Save image with data',
+          onTap: _comingSoon('Save to gallery'),
+        ),
+        _item(
+          title: 'Image quality',
+          subtitle: 'High',
+          onTap: _comingSoon('Image quality'),
+        ),
+        _item(
+          title: 'Capture mode',
+          subtitle: 'Inside the app',
+          onTap: _comingSoon('Capture mode'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Maps', theme),
+        _item(
+          title: 'Default map zoom level',
+          subtitle: '14.0',
+          onTap: _comingSoon('Default map zoom level'),
+        ),
+        _item(
+          title: 'Navigate with',
+          subtitle: 'Google Maps',
+          onTap: _comingSoon('Navigate with'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Saved locations', theme),
+        _item(
+          title: 'View modes',
+          subtitle: '[Combined, Basic, Text, Photo]',
+          onTap: _comingSoon('View modes'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Compass', theme),
+        _item(
+          title: 'Compass mode',
+          subtitle: 'True north',
+          onTap: _comingSoon('Compass mode'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Other', theme),
+        _item(
+          title: 'Privacy policy',
+          onTap: _comingSoon('Privacy policy'),
+        ),
+        _item(
+          title: 'Install app on a watch',
+          onTap: _comingSoon('Install app on a watch'),
+        ),
+        _item(
+          title: 'More applications',
+          onTap: _comingSoon('More applications'),
+        ),
+        _item(
+          title: 'Share this app',
+          onTap: _comingSoon('Share this app'),
+        ),
+        _item(
+          title: 'Rate us',
+          onTap: _comingSoon('Rate us'),
+        ),
+        _sectionDivider(),
+
+        _sectionHeader('Information', theme),
+        _item(
+          title: 'Contact us',
+          subtitle:
+              'Send suggestions or report a bug. We appreciate your feedback.',
+          onTap: _comingSoon('Contact us'),
+        ),
+        _item(
+          title: 'Version',
+          subtitle: '1.0.0+1',
+          onTap: _comingSoon('Version'),
         ),
       ],
     );
   }
 
-  Widget _buildUnitItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String currentValue,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(vertical: 4),
-      leading: Icon(icon, color: Colors.black87, size: 24),
-      title: Text(
+  Widget _sectionHeader(String title, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 6),
+      child: Text(
         title,
-        style: const TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-          color: Colors.black87,
+        style: theme.textTheme.titleMedium?.copyWith(
+          color: const Color(0xFF0C8A8C),
+          fontWeight: FontWeight.w700,
         ),
       ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    );
+  }
+
+  Widget _item({
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Colors.black54,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _switchItem({
+    required String title,
+    String? subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            currentValue,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: Colors.black54,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(width: 8),
-          Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 20),
+          const SizedBox(width: 10),
+          Checkbox(
+            value: value,
+            onChanged: (newValue) => onChanged(newValue ?? false),
+            side: const BorderSide(color: Colors.black45, width: 2),
+            activeColor: const Color(0xFF0C8A8C),
+          ),
         ],
       ),
-      onTap: () {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$title - Coming soon')));
-      },
+    );
+  }
+
+  Widget _sectionDivider() {
+    return Divider(height: 1, color: Colors.grey.shade300);
+  }
+
+  VoidCallback _comingSoon(String feature) {
+    return () {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$feature - Coming soon')));
+    };
+  }
+
+  void _showCoordinateFormatSelector() {
+    final current = ref.read(coordinateFormatProvider);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            const Text(
+              'Coordinates format',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            ...CoordinateFormat.values.map((format) {
+              return RadioListTile<CoordinateFormat>(
+                title: Text(format.displayName),
+                subtitle: Text(_getFormatExample(format)),
+                value: format,
+                groupValue: current,
+                activeColor: const Color(0xFF0C8A8C),
+                onChanged: (value) {
+                  if (value != null) {
+                    ref.read(coordinateFormatProvider.notifier).setFormat(value);
+                    Navigator.pop(context);
+                  }
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 
