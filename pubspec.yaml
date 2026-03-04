@@ -72,7 +72,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - lib/assets/dataBenki-logo.png
+    - lib/assets/databenki_latest_logo.png
     - lib/assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -104,19 +104,19 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "lib/assets/dataBenki-logo.png"
+  image_path: "lib/assets/databenki_latest_logo.png"
   min_sdk_android: 21
 
 flutter_native_splash:
   color: "#FFFFFF"
-  image: lib/assets/dataBenki-logo.png
+  image: lib/assets/databenki_latest_logo.png
   android: true
   ios: true
   web: false
   
   android_12:
     color: "#FFFFFF"
-    image: lib/assets/dataBenki-logo.png
+    image: lib/assets/databenki_latest_logo.png
   
   # Customize splash screen appearance
   fullscreen: true

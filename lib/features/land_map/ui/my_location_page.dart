@@ -17,6 +17,7 @@ class MyLocationPage extends ConsumerStatefulWidget {
 
 class _MyLocationPageState extends ConsumerState<MyLocationPage> {
   StreamSubscription<Position>? _locationSubscription;
+  late final LandMapNotifier _landMapNotifier;
   bool _isInitializing = false;
   bool _isStreaming = false;
   bool _serviceDisabled = false;
@@ -27,6 +28,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
   @override
   void initState() {
     super.initState();
+    _landMapNotifier = ref.read(landMapProvider.notifier);
     Future.microtask(_initializeTracking);
   }
 
@@ -37,6 +39,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
   }
 
   Future<void> _initializeTracking() async {
+    if (!mounted) return;
+
     setState(() {
       _isInitializing = true;
       _isStreaming = false;
@@ -79,7 +83,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
       return;
     }
 
-    await ref.read(landMapProvider.notifier).refreshLocation();
+    await _landMapNotifier.refreshLocation();
+    if (!mounted) return;
     await _startTracking();
 
     if (!mounted) return;
@@ -91,8 +96,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
 
   Future<void> _startTracking() async {
     await _locationSubscription?.cancel();
+    if (!mounted) return;
 
-    final notifier = ref.read(landMapProvider.notifier);
     _locationSubscription =
         Geolocator.getPositionStream(
           locationSettings: const LocationSettings(
@@ -101,7 +106,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
           ),
         ).listen(
           (position) {
-            notifier.updateCurrentFromPosition(position);
+            _landMapNotifier.updateCurrentFromPosition(position);
             if (!mounted) return;
 
             if (_errorMessage != null ||
