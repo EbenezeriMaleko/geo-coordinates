@@ -46,6 +46,7 @@ dependencies:
   google_fonts: ^6.2.1
   flutter_svg: ^2.2.3
   flutter_compass: ^0.8.1
+  http: ^1.3.0
 
 dev_dependencies:
   flutter_test:
@@ -57,7 +58,6 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
-  flutter_native_splash: ^2.4.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -106,20 +106,3 @@ flutter_launcher_icons:
   ios: true
   image_path: "lib/assets/databenki_latest_logo.png"
   min_sdk_android: 21
-
-flutter_native_splash:
-  color: "#FFFFFF"
-  image: lib/assets/databenki_latest_logo.png
-  android: true
-  ios: true
-  web: false
-  
-  android_12:
-    color: "#FFFFFF"
-    image: lib/assets/databenki_latest_logo.png
-  
-  # Customize splash screen appearance
-  fullscreen: true
-  android_gravity: fill
-  ios_content_mode: scaleAspectFill
-

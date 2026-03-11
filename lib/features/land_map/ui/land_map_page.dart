@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_compass/flutter_compass.dart';
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 import '../models/coordinate_format.dart';
@@ -35,6 +37,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   static const double _minZoom = 3;
   static const double _maxZoom = 20;
   static const double _defaultMapZoom = 16;
+  static const String _submitUrl = 'https://ardhi.co.tz/api/submit';
+  static const String _defaultPhone = '1111111111';
+  static const String _defaultPlace = 'xx';
 
   final MapController _mapController = MapController();
   final TextEditingController _nameController = TextEditingController();
@@ -439,6 +444,152 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (mounted) {
       setState(() => _isAutoFieldCapture = false);
     }
+  }
+
+  Future<String?> _submitFieldPayload({
+    required String name,
+    required List<LatLng> points,
+  }) async {
+    if (points.length < 3) {
+      return 'Not enough points to submit.';
+    }
+
+    final box = Hive.box('landbox');
+    final phone = _stringOrFallback(box.get('submit_phone'), _defaultPhone);
+    final place = _stringOrFallback(box.get('submit_place'), _defaultPlace);
+
+    final payload = <String, dynamic>{
+      'name': name,
+      'phone': phone,
+      'place': place,
+      'coordinates': points.map(_latLngToServerCoordinate).toList(),
+    };
+
+    try {
+      final response = await http.post(
+        Uri.parse(_submitUrl),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return 'Server rejected payload (${response.statusCode}).';
+      }
+      return null;
+    } catch (_) {
+      return 'Failed to send payload to server.';
+    }
+  }
+
+  String _stringOrFallback(dynamic value, String fallback) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? fallback : text;
+  }
+
+  Map<String, dynamic> _latLngToServerCoordinate(LatLng point) {
+    final zone = _utmZone(point.latitude, point.longitude);
+    final converted = _toUtm(
+      latitude: point.latitude,
+      longitude: point.longitude,
+      zone: zone,
+    );
+
+    return {
+      'x': converted.easting,
+      'y': converted.northing,
+      'z': 0,
+      'zone': zone,
+      'band': _utmBand(point.latitude),
+      'hemisphere': point.latitude >= 0 ? 'Northern' : 'Southern',
+    };
+  }
+
+  int _utmZone(double latitude, double longitude) {
+    final lon = ((longitude + 180) % 360 + 360) % 360 - 180;
+
+    if (latitude >= 56 && latitude < 64 && lon >= 3 && lon < 12) {
+      return 32;
+    }
+    if (latitude >= 72 && latitude < 84) {
+      if (lon >= 0 && lon < 9) return 31;
+      if (lon >= 9 && lon < 21) return 33;
+      if (lon >= 21 && lon < 33) return 35;
+      if (lon >= 33 && lon < 42) return 37;
+    }
+
+    return ((lon + 180) / 6).floor() + 1;
+  }
+
+  String _utmBand(double latitude) {
+    if (latitude < -80 || latitude > 84) return 'Z';
+    const bands = 'CDEFGHJKLMNPQRSTUVWX';
+    final index = ((latitude + 80) / 8).floor().clamp(0, bands.length - 1);
+    return bands[index];
+  }
+
+  _UtmCoordinate _toUtm({
+    required double latitude,
+    required double longitude,
+    required int zone,
+  }) {
+    const a = 6378137.0;
+    const f = 1 / 298.257223563;
+    const k0 = 0.9996;
+    final e2 = f * (2 - f);
+    final ep2 = e2 / (1 - e2);
+
+    final latRad = latitude * pi / 180.0;
+    final lonRad = longitude * pi / 180.0;
+    final lonOrigin = (zone - 1) * 6 - 180 + 3;
+    final lonOriginRad = lonOrigin * pi / 180.0;
+
+    final sinLat = sin(latRad);
+    final cosLat = cos(latRad);
+    final tanLat = tan(latRad);
+
+    final n = a / sqrt(1 - e2 * sinLat * sinLat);
+    final t = tanLat * tanLat;
+    final c = ep2 * cosLat * cosLat;
+    final aTerm = cosLat * (lonRad - lonOriginRad);
+
+    final m =
+        a *
+        ((1 - e2 / 4 - 3 * pow(e2, 2) / 64 - 5 * pow(e2, 3) / 256) * latRad -
+            (3 * e2 / 8 +
+                    3 * pow(e2, 2) / 32 +
+                    45 * pow(e2, 3) / 1024) *
+                sin(2 * latRad) +
+            (15 * pow(e2, 2) / 256 + 45 * pow(e2, 3) / 1024) *
+                sin(4 * latRad) -
+            (35 * pow(e2, 3) / 3072) * sin(6 * latRad));
+
+    final easting =
+        k0 *
+            n *
+            (aTerm +
+                (1 - t + c) * pow(aTerm, 3) / 6 +
+                (5 - 18 * t + t * t + 72 * c - 58 * ep2) * pow(aTerm, 5) / 120) +
+        500000.0;
+
+    var northing =
+        k0 *
+        (m +
+            n *
+                tanLat *
+                (pow(aTerm, 2) / 2 +
+                    (5 - t + 9 * c + 4 * c * c) * pow(aTerm, 4) / 24 +
+                    (61 - 58 * t + t * t + 600 * c - 330 * ep2) *
+                        pow(aTerm, 6) /
+                        720));
+
+    if (latitude < 0) {
+      northing += 10000000.0;
+    }
+
+    return _UtmCoordinate(
+      easting: (easting as num).toDouble(),
+      northing: (northing as num).toDouble(),
+    );
   }
 
   void _showMarkerActions(_PlacedMarker marker) {
@@ -1061,6 +1212,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 const SizedBox(height: 12),
               ],
               FloatingActionButton(
+                heroTag: 'map_main_fab',
                 onPressed: () {
                   setState(() {
                     _isFabExpanded = !_isFabExpanded;
@@ -1435,8 +1587,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   onPressed: mapState.isSaving
                       ? null
                       : () async {
+                          final pointsSnapshot = List<LatLng>.from(
+                            mapState.points,
+                          );
+                          final enteredName = _nameController.text.trim();
+                          final effectiveName = enteredName.isNotEmpty
+                              ? enteredName
+                              : ((mapState.activeFieldName ?? '').trim().isNotEmpty
+                                    ? mapState.activeFieldName!.trim()
+                                    : 'Land ${DateTime.now().toIso8601String()}');
+
                           final err = await notifier.saveOffline(
-                            name: _nameController.text.trim(),
+                            name: enteredName,
                           );
                           if (dialogContext.mounted) {
                             if (err != null) {
@@ -1444,18 +1606,23 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 dialogContext,
                               ).showSnackBar(SnackBar(content: Text(err)));
                             } else {
+                              final submitErr = await _submitFieldPayload(
+                                name: effectiveName,
+                                points: pointsSnapshot,
+                              );
                               await _stopAutoFieldCapture();
                               if (!dialogContext.mounted) return;
                               _nameController.clear();
-                              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    mapState.activeFieldId != null
-                                        ? 'Field updated successfully'
-                                        : 'Field saved successfully',
-                                  ),
-                                ),
-                              );
+                              final baseMessage = mapState.activeFieldId != null
+                                  ? 'Field updated offline successfully'
+                                  : 'Field saved offline successfully';
+                              final fullMessage = submitErr == null
+                                  ? '$baseMessage and sent to server'
+                                  : '$baseMessage. Sync pending: $submitErr';
+
+                              ScaffoldMessenger.of(
+                                dialogContext,
+                              ).showSnackBar(SnackBar(content: Text(fullMessage)));
                               Navigator.pop(dialogContext);
                             }
                           }
@@ -1479,6 +1646,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       ),
     );
   }
+}
+
+class _UtmCoordinate {
+  final double easting;
+  final double northing;
+
+  const _UtmCoordinate({required this.easting, required this.northing});
 }
 
 // Helper Widgets
@@ -1568,6 +1742,7 @@ class _FabOption extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         FloatingActionButton(
+          heroTag: 'map_tool_${label.toLowerCase().replaceAll(' ', '_')}',
           mini: true,
           onPressed: onPressed,
           backgroundColor: Colors.white,

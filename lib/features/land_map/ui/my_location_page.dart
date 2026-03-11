@@ -306,6 +306,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
                   right: 20,
                   bottom: -24,
                   child: FloatingActionButton(
+                    heroTag: 'my_location_camera_fab',
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Camera - Coming soon')),
