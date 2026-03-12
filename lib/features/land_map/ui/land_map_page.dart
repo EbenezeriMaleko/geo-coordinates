@@ -39,7 +39,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   static const double _defaultMapZoom = 16;
   static const String _submitUrl = 'https://ardhi.co.tz/api/submit';
   static const String _defaultPhone = '1111111111';
-  static const String _defaultPlace = 'xx';
 
   final MapController _mapController = MapController();
   final TextEditingController _nameController = TextEditingController();
@@ -456,12 +455,22 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     final box = Hive.box('landbox');
     final phone = _stringOrFallback(box.get('submit_phone'), _defaultPhone);
-    final place = _stringOrFallback(box.get('submit_place'), _defaultPlace);
+
+    // `name` = full name of the logged-in user; `place` = the field name entered by the user
+    final firstName = _stringOrFallback(box.get('auth_first_name'), '');
+    final lastName = _stringOrFallback(box.get('auth_last_name'), '');
+    final userFullName = [
+      firstName,
+      lastName,
+    ].where((s) => s.isNotEmpty).join(' ').trim();
+    final ownerName = userFullName.isNotEmpty
+        ? userFullName
+        : _stringOrFallback(box.get('auth_email'), 'Unknown');
 
     final payload = <String, dynamic>{
-      'name': name,
+      'name': ownerName,
       'phone': phone,
-      'place': place,
+      'place': name, // field name entered by the user
       'coordinates': points.map(_latLngToServerCoordinate).toList(),
     };
 
@@ -555,12 +564,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final m =
         a *
         ((1 - e2 / 4 - 3 * pow(e2, 2) / 64 - 5 * pow(e2, 3) / 256) * latRad -
-            (3 * e2 / 8 +
-                    3 * pow(e2, 2) / 32 +
-                    45 * pow(e2, 3) / 1024) *
+            (3 * e2 / 8 + 3 * pow(e2, 2) / 32 + 45 * pow(e2, 3) / 1024) *
                 sin(2 * latRad) +
-            (15 * pow(e2, 2) / 256 + 45 * pow(e2, 3) / 1024) *
-                sin(4 * latRad) -
+            (15 * pow(e2, 2) / 256 + 45 * pow(e2, 3) / 1024) * sin(4 * latRad) -
             (35 * pow(e2, 3) / 3072) * sin(6 * latRad));
 
     final easting =
@@ -568,7 +574,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             n *
             (aTerm +
                 (1 - t + c) * pow(aTerm, 3) / 6 +
-                (5 - 18 * t + t * t + 72 * c - 58 * ep2) * pow(aTerm, 5) / 120) +
+                (5 - 18 * t + t * t + 72 * c - 58 * ep2) *
+                    pow(aTerm, 5) /
+                    120) +
         500000.0;
 
     var northing =
@@ -741,7 +749,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               color: Colors.black.withValues(alpha: 0.18),
               alignment: Alignment.center,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -1270,7 +1281,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             maxZoom: _maxZoom,
           ),
           TileLayer(
-            urlTemplate: 
+            urlTemplate:
                 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.example.landmapper',
             subdomains: ['a', 'b', 'c', 'd'],
@@ -1593,7 +1604,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                           final enteredName = _nameController.text.trim();
                           final effectiveName = enteredName.isNotEmpty
                               ? enteredName
-                              : ((mapState.activeFieldName ?? '').trim().isNotEmpty
+                              : ((mapState.activeFieldName ?? '')
+                                        .trim()
+                                        .isNotEmpty
                                     ? mapState.activeFieldName!.trim()
                                     : 'Land ${DateTime.now().toIso8601String()}');
 
@@ -1620,9 +1633,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   ? '$baseMessage and sent to server'
                                   : '$baseMessage. Sync pending: $submitErr';
 
-                              ScaffoldMessenger.of(
-                                dialogContext,
-                              ).showSnackBar(SnackBar(content: Text(fullMessage)));
+                              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                SnackBar(content: Text(fullMessage)),
+                              );
                               Navigator.pop(dialogContext);
                             }
                           }

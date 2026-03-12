@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'main_navigation.dart';
+import '../../auth/ui/login_page.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -22,9 +22,8 @@ class _SplashPageState extends State<SplashPage> {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
           pageBuilder: (context, animation, secondaryAnimation) =>
-              const MainNavigation(),
-          transitionsBuilder:
-              (context, animation, secondaryAnimation, child) =>
+              const LoginPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
               FadeTransition(opacity: animation, child: child),
           transitionDuration: const Duration(milliseconds: 450),
         ),
