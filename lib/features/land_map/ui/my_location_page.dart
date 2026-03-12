@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../models/coordinate_format.dart';
@@ -24,6 +28,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
   bool _permissionDenied = false;
   bool _permissionDeniedForever = false;
   String? _errorMessage;
+  bool _isCapturingPhoto = false;
+  _GeoTaggedPhoto? _latestPhoto;
 
   @override
   void initState() {
@@ -143,6 +149,81 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
 
   Future<void> _openAppSettings() async {
     await Geolocator.openAppSettings();
+  }
+
+  Future<void> _openGeoCamera() async {
+    if (_isCapturingPhoto) return;
+
+    setState(() {
+      _isCapturingPhoto = true;
+    });
+
+    try {
+      final format = ref.read(coordinateFormatProvider);
+      final unit = ref.read(distanceUnitProvider);
+      final capture = await Navigator.of(context).push<_GeoTaggedPhoto>(
+        MaterialPageRoute(
+          builder: (_) => _GeoCameraCapturePage(
+            coordinateFormat: format,
+            distanceUnit: unit,
+            initialName: _latestPhoto?.name ?? '',
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+
+      if (!mounted || capture == null) return;
+
+      setState(() {
+        _latestPhoto = capture;
+      });
+      _showCaptureDetails(capture);
+    } on PlatformException catch (e) {
+      if (!mounted) return;
+      final code = e.code.toLowerCase();
+      final message = code.contains('camera_access_denied')
+          ? 'Camera permission is denied. Allow camera permission in app settings.'
+          : 'Failed to open camera. Please try again.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to capture GPS photo. Try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCapturingPhoto = false;
+        });
+      }
+    }
+  }
+
+  void _showCaptureDetails(_GeoTaggedPhoto capture) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        final format = ref.read(coordinateFormatProvider);
+        return _CapturedPhotoDetailsSheet(
+          capture: capture,
+          formattedCoordinates: capture.position == null
+              ? 'Coordinates unavailable'
+              : CoordinateFormatter.format(
+                  capture.position!.latitude,
+                  capture.position!.longitude,
+                  format,
+                ),
+          coordinateFormat: format,
+          distanceUnit: ref.read(distanceUnitProvider),
+        );
+      },
+    );
   }
 
   _LocationViewState _viewState() {
@@ -307,13 +388,18 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
                   bottom: -24,
                   child: FloatingActionButton(
                     heroTag: 'my_location_camera_fab',
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Camera - Coming soon')),
-                      );
-                    },
+                    onPressed: _isCapturingPhoto ? null : _openGeoCamera,
                     backgroundColor: theme.colorScheme.primary,
-                    child: const Icon(Icons.camera_alt, color: Colors.white),
+                    child: _isCapturingPhoto
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.camera_alt, color: Colors.white),
                   ),
                 ),
               ],
@@ -360,6 +446,18 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
                 ),
               ),
             ),
+            if (_latestPhoto != null) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _LatestCaptureCard(
+                  capture: _latestPhoto!,
+                  unit: unit,
+                  coordinateFormat: format,
+                  onViewDetails: () => _showCaptureDetails(_latestPhoto!),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
           ],
         ),
@@ -444,6 +542,1012 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
     }
     return '${meters.toStringAsFixed(1)} m';
   }
+}
+
+class _GeoTaggedPhoto {
+  final String imagePath;
+  final DateTime capturedAt;
+  final Position? position;
+  final Placemark? placemark;
+  final String? locationError;
+  final String name;
+
+  const _GeoTaggedPhoto({
+    required this.imagePath,
+    required this.capturedAt,
+    required this.position,
+    required this.placemark,
+    required this.locationError,
+    required this.name,
+  });
+}
+
+class _LatestCaptureCard extends StatelessWidget {
+  final _GeoTaggedPhoto capture;
+  final DistanceUnit unit;
+  final CoordinateFormat coordinateFormat;
+  final VoidCallback onViewDetails;
+
+  const _LatestCaptureCard({
+    required this.capture,
+    required this.unit,
+    required this.coordinateFormat,
+    required this.onViewDetails,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pos = capture.position;
+
+    final coordinateText = pos == null
+        ? 'Coordinates unavailable'
+        : CoordinateFormatter.format(
+            pos.latitude,
+            pos.longitude,
+            coordinateFormat,
+          );
+    final accuracyText = pos == null
+        ? '—'
+        : _formatDistance(pos.accuracy, unit);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  capture.name.isEmpty ? 'Latest GPS Photo' : capture.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: onViewDetails,
+                  child: const Text('View details'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 200,
+                width: double.infinity,
+                child: _GeoPhotoCanvas(
+                  imagePath: capture.imagePath,
+                  name: capture.name,
+                  lines: _buildOverlayLines(
+                    capture: capture,
+                    coordinateFormat: coordinateFormat,
+                    unit: unit,
+                  ),
+                  dense: true,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              coordinateText,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Accuracy: $accuracyText',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ),
+            if (capture.locationError != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                capture.locationError!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFFC65D12),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CapturedPhotoDetailsSheet extends StatelessWidget {
+  final _GeoTaggedPhoto capture;
+  final String formattedCoordinates;
+  final CoordinateFormat coordinateFormat;
+  final DistanceUnit distanceUnit;
+
+  const _CapturedPhotoDetailsSheet({
+    required this.capture,
+    required this.formattedCoordinates,
+    required this.coordinateFormat,
+    required this.distanceUnit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pos = capture.position;
+    final placemarkText = _formatPlacemark(capture.placemark);
+    final date = capture.capturedAt;
+    final when =
+        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          Center(
+            child: Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            capture.name.isEmpty ? 'GPS Photo Details' : capture.name,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              height: 420,
+              width: double.infinity,
+              child: _GeoPhotoCanvas(
+                imagePath: capture.imagePath,
+                name: capture.name,
+                lines: _buildOverlayLines(
+                  capture: capture,
+                  coordinateFormat: coordinateFormat,
+                  unit: distanceUnit,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DetailRow(label: 'Captured at', value: when),
+          _DetailRow(label: 'Coordinates', value: formattedCoordinates),
+          _DetailRow(label: 'Latitude', value: _formatNumber(pos?.latitude)),
+          _DetailRow(label: 'Longitude', value: _formatNumber(pos?.longitude)),
+          _DetailRow(
+            label: 'Accuracy',
+            value: pos == null ? '—' : '${pos.accuracy.toStringAsFixed(1)} m',
+          ),
+          _DetailRow(
+            label: 'Altitude',
+            value: pos == null ? '—' : '${pos.altitude.toStringAsFixed(1)} m',
+          ),
+          _DetailRow(
+            label: 'Speed',
+            value: pos == null ? '—' : '${pos.speed.toStringAsFixed(2)} m/s',
+          ),
+          _DetailRow(
+            label: 'Heading',
+            value: pos == null ? '—' : '${pos.heading.toStringAsFixed(1)}°',
+          ),
+          _DetailRow(label: 'Address', value: placemarkText),
+          if (capture.locationError != null)
+            _DetailRow(label: 'Location note', value: capture.locationError!),
+        ],
+      ),
+    );
+  }
+}
+
+class _GeoCameraCapturePage extends StatefulWidget {
+  final CoordinateFormat coordinateFormat;
+  final DistanceUnit distanceUnit;
+  final String initialName;
+
+  const _GeoCameraCapturePage({
+    required this.coordinateFormat,
+    required this.distanceUnit,
+    required this.initialName,
+  });
+
+  @override
+  State<_GeoCameraCapturePage> createState() => _GeoCameraCapturePageState();
+}
+
+class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
+  CameraController? _cameraController;
+  StreamSubscription<Position>? _positionSubscription;
+  final TextEditingController _nameController = TextEditingController();
+  bool _isInitializing = true;
+  bool _isTakingPhoto = false;
+  String? _setupError;
+  String? _locationError;
+  Position? _livePosition;
+  Placemark? _livePlacemark;
+  Position? _placemarkPosition;
+  XFile? _capturedPhoto;
+  DateTime? _capturedAt;
+  Position? _capturedPosition;
+  Placemark? _capturedPlacemark;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.text = widget.initialName;
+    Future.microtask(_initialize);
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    _cameraController?.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      final cameras = await availableCameras();
+      final rearCamera = cameras.where(
+        (camera) => camera.lensDirection == CameraLensDirection.back,
+      );
+      final description = rearCamera.isNotEmpty
+          ? rearCamera.first
+          : cameras.first;
+
+      final controller = CameraController(
+        description,
+        ResolutionPreset.high,
+        enableAudio: false,
+      );
+      await controller.initialize();
+
+      _cameraController = controller;
+      await _startLocationTracking();
+
+      if (!mounted) return;
+      setState(() {
+        _isInitializing = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isInitializing = false;
+        _setupError = 'Failed to initialize the in-app camera.';
+      });
+    }
+  }
+
+  Future<void> _startLocationTracking() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      _locationError = 'Location service is disabled.';
+      return;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied) {
+      _locationError = 'Location permission denied.';
+      return;
+    }
+    if (permission == LocationPermission.deniedForever) {
+      _locationError = 'Location permission blocked in settings.';
+      return;
+    }
+
+    try {
+      final current = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
+      );
+      _livePosition = current;
+      _livePlacemark = await _reverseGeocode(current);
+      _placemarkPosition = current;
+    } catch (_) {
+      _locationError = 'Unable to resolve current location.';
+    }
+
+    _positionSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 1,
+          ),
+        ).listen(
+          (position) async {
+            _livePosition = position;
+            if (!mounted) return;
+            setState(() {});
+
+            final shouldRefreshPlacemark =
+                _placemarkPosition == null ||
+                Geolocator.distanceBetween(
+                      _placemarkPosition!.latitude,
+                      _placemarkPosition!.longitude,
+                      position.latitude,
+                      position.longitude,
+                    ) >
+                    20;
+            if (!shouldRefreshPlacemark) return;
+
+            final nextPlacemark = await _reverseGeocode(position);
+            if (!mounted) return;
+            setState(() {
+              _livePlacemark = nextPlacemark;
+              _placemarkPosition = position;
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() {
+              _locationError = 'Live location updates failed.';
+            });
+          },
+        );
+  }
+
+  Future<void> _takePhoto() async {
+    final controller = _cameraController;
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        _isTakingPhoto) {
+      return;
+    }
+
+    setState(() {
+      _isTakingPhoto = true;
+    });
+
+    try {
+      final file = await controller.takePicture();
+      if (!mounted) return;
+
+      final captureTime = DateTime.now();
+      final position = _livePosition;
+      Placemark? placemark = _livePlacemark;
+      if (position != null && placemark == null) {
+        placemark = await _reverseGeocode(position);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _capturedPhoto = file;
+        _capturedAt = captureTime;
+        _capturedPosition = position;
+        _capturedPlacemark = placemark;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to capture photo.')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTakingPhoto = false;
+        });
+      }
+    }
+  }
+
+  void _retake() {
+    setState(() {
+      _capturedPhoto = null;
+      _capturedAt = null;
+      _capturedPosition = null;
+      _capturedPlacemark = null;
+    });
+  }
+
+  void _save() {
+    final capturedPhoto = _capturedPhoto;
+    if (capturedPhoto == null) return;
+
+    Navigator.of(context).pop(
+      _GeoTaggedPhoto(
+        imagePath: capturedPhoto.path,
+        capturedAt: _capturedAt ?? DateTime.now(),
+        position: _capturedPosition,
+        placemark: _capturedPlacemark,
+        locationError: _locationError,
+        name: _nameController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final previewLines = _buildOverlayLines(
+      capture: _GeoTaggedPhoto(
+        imagePath: _capturedPhoto?.path ?? '',
+        capturedAt: _capturedAt ?? DateTime.now(),
+        position: _capturedPhoto == null ? _livePosition : _capturedPosition,
+        placemark: _capturedPhoto == null ? _livePlacemark : _capturedPlacemark,
+        locationError: _locationError,
+        name: _nameController.text.trim(),
+      ),
+      coordinateFormat: widget.coordinateFormat,
+      unit: widget.distanceUnit,
+      includeLocationNote: false,
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: _isInitializing
+            ? const Center(child: CircularProgressIndicator())
+            : _setupError != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _setupError!,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(
+                    child: _capturedPhoto == null
+                        ? _buildCameraPreview()
+                        : _GeoPhotoCanvas(
+                            imagePath: _capturedPhoto!.path,
+                            name: _nameController.text.trim(),
+                            lines: previewLines,
+                          ),
+                  ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.55),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.72),
+                            ],
+                            stops: const [0, 0.36, 1],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 12,
+                    left: 16,
+                    right: 16,
+                    child: Row(
+                      children: [
+                        _TopIconButton(
+                          icon: Icons.close,
+                          onTap: () => Navigator.of(context).pop(),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            _capturedPhoto == null ? 'GPS Camera' : 'Preview',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    left: 20,
+                    right: 20,
+                    bottom: 28,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          child: TextField(
+                            controller: _nameController,
+                            style: const TextStyle(color: Colors.black54),
+                            onChanged: (_) => setState(() {}),
+                            decoration: const InputDecoration(
+                              hintText: 'Enter place name',
+                              hintStyle: TextStyle(color: Colors.black54),
+                              prefixIcon: Icon(
+                                Icons.edit_location_alt_outlined,
+                                color: Colors.black54,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_locationError != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            _locationError!,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        if (_capturedPhoto == null)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              GestureDetector(
+                                onTap: _isTakingPhoto ? null : _takePhoto,
+                                child: Container(
+                                  width: 86,
+                                  height: 86,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 5,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      width: 68,
+                                      height: 68,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: _isTakingPhoto
+                                          ? const Padding(
+                                              padding: EdgeInsets.all(20),
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                              ),
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _retake,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(
+                                      color: Colors.white70,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                  child: const Text('Retake'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _save,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0C8A8C),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                  child: const Text('Save'),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview() {
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isInitialized) {
+      return const ColoredBox(color: Colors.black);
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CameraPreview(controller),
+        IgnorePointer(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: _OverlayTextBlock(
+                title: _nameController.text.trim(),
+                lines: _buildOverlayLines(
+                  capture: _GeoTaggedPhoto(
+                    imagePath: '',
+                    capturedAt: DateTime.now(),
+                    position: _livePosition,
+                    placemark: _livePlacemark,
+                    locationError: _locationError,
+                    name: _nameController.text.trim(),
+                  ),
+                  coordinateFormat: widget.coordinateFormat,
+                  unit: widget.distanceUnit,
+                  includeLocationNote: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<Placemark?> _reverseGeocode(Position position) async {
+    try {
+      final marks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (marks.isEmpty) return null;
+      return marks.first;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _GeoPhotoCanvas extends StatelessWidget {
+  final String imagePath;
+  final String name;
+  final List<String> lines;
+  final bool dense;
+
+  const _GeoPhotoCanvas({
+    required this.imagePath,
+    required this.name,
+    required this.lines,
+    this.dense = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.file(File(imagePath), fit: BoxFit.cover),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.08),
+                Colors.black.withValues(alpha: 0.28),
+              ],
+            ),
+          ),
+        ),
+        Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: dense ? 18 : 26),
+            child: _OverlayTextBlock(title: name, lines: lines, dense: dense),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OverlayTextBlock extends StatelessWidget {
+  final String title;
+  final List<String> lines;
+  final bool dense;
+
+  const _OverlayTextBlock({
+    required this.title,
+    required this.lines,
+    this.dense = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fontSize = dense ? 16.0 : 22.0;
+    final titleSize = dense ? 20.0 : 28.0;
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (title.isNotEmpty)
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: _overlayStyle(
+                fontSize: titleSize,
+                weight: FontWeight.w700,
+              ),
+            ),
+          if (title.isNotEmpty) SizedBox(height: dense ? 8 : 12),
+          for (final line in lines) ...[
+            Text(
+              line,
+              textAlign: TextAlign.center,
+              style: _overlayStyle(fontSize: fontSize),
+            ),
+            SizedBox(height: dense ? 4 : 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TopIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _TopIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Ink(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.42),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 108,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.black54,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatNumber(double? value) {
+  if (value == null) return '—';
+  return value.toStringAsFixed(6);
+}
+
+List<String> _buildOverlayLines({
+  required _GeoTaggedPhoto capture,
+  required CoordinateFormat coordinateFormat,
+  required DistanceUnit unit,
+  bool includeLocationNote = true,
+}) {
+  final position = capture.position;
+  final placemark = capture.placemark;
+
+  final lines = <String>[
+    if (position != null)
+      '${_formatLatitudeLabel(position.latitude, coordinateFormat)} LAT',
+    if (position != null)
+      '${_formatLongitudeLabel(position.longitude, coordinateFormat)} LON',
+    if (position != null)
+      'Altitude ${_formatDistance(position.altitude, unit)} a.s.l',
+    _formatCaptureDateTime(capture.capturedAt),
+    'Location provider ${_providerLabel()}',
+    if ((placemark?.street ?? '').trim().isNotEmpty) placemark!.street!.trim(),
+    if ((placemark?.subLocality ?? '').trim().isNotEmpty)
+      placemark!.subLocality!.trim(),
+    if ((placemark?.locality ?? '').trim().isNotEmpty)
+      placemark!.locality!.trim(),
+    if ((placemark?.administrativeArea ?? '').trim().isNotEmpty)
+      placemark!.administrativeArea!.trim(),
+    if ((placemark?.country ?? '').trim().isNotEmpty)
+      placemark!.country!.trim(),
+  ];
+
+  if (includeLocationNote && capture.locationError != null) {
+    lines.add(capture.locationError!);
+  }
+
+  if (lines.isEmpty) {
+    return const ['Waiting for GPS details'];
+  }
+  return lines;
+}
+
+String _formatLatitudeLabel(double value, CoordinateFormat format) {
+  switch (format) {
+    case CoordinateFormat.decimalDegrees:
+      return value.toStringAsFixed(6);
+    case CoordinateFormat.degreesMinutesSeconds:
+      return _toDms(value, value >= 0 ? 'N' : 'S');
+    case CoordinateFormat.degreesDecimalMinutes:
+      return _toDdm(value, value >= 0 ? 'N' : 'S');
+  }
+}
+
+String _formatLongitudeLabel(double value, CoordinateFormat format) {
+  switch (format) {
+    case CoordinateFormat.decimalDegrees:
+      return value.toStringAsFixed(6);
+    case CoordinateFormat.degreesMinutesSeconds:
+      return _toDms(value, value >= 0 ? 'E' : 'W');
+    case CoordinateFormat.degreesDecimalMinutes:
+      return _toDdm(value, value >= 0 ? 'E' : 'W');
+  }
+}
+
+String _toDms(double decimal, String direction) {
+  final absolute = decimal.abs();
+  final degrees = absolute.floor();
+  final minutesDecimal = (absolute - degrees) * 60;
+  final minutes = minutesDecimal.floor();
+  final seconds = (minutesDecimal - minutes) * 60;
+  return '$degrees°$minutes\'${seconds.toStringAsFixed(2)}"$direction';
+}
+
+String _toDdm(double decimal, String direction) {
+  final absolute = decimal.abs();
+  final degrees = absolute.floor();
+  final minutes = (absolute - degrees) * 60;
+  return '$degrees°${minutes.toStringAsFixed(4)}\'$direction';
+}
+
+String _formatDistance(double meters, DistanceUnit unit) {
+  if (unit == DistanceUnit.feet) {
+    final feet = meters * 3.28084;
+    return '${feet.toStringAsFixed(1)} ft';
+  }
+  return '${meters.toStringAsFixed(1)} m';
+}
+
+String _formatCaptureDateTime(DateTime value) {
+  final day = value.day.toString().padLeft(2, '0');
+  final month = value.month.toString().padLeft(2, '0');
+  final year = value.year.toString();
+  final hh = value.hour.toString().padLeft(2, '0');
+  final mm = value.minute.toString().padLeft(2, '0');
+  return '$day/$month/$year $hh:$mm';
+}
+
+String _providerLabel() {
+  if (Platform.isAndroid) return 'Fused';
+  if (Platform.isIOS) return 'Core Location';
+  return 'Device GPS';
+}
+
+TextStyle _overlayStyle({
+  required double fontSize,
+  FontWeight weight = FontWeight.w600,
+}) {
+  return TextStyle(
+    color: Colors.white,
+    fontSize: fontSize,
+    fontWeight: weight,
+    height: 1.22,
+    shadows: const [
+      Shadow(color: Colors.black87, blurRadius: 8, offset: Offset(0, 2)),
+    ],
+  );
+}
+
+String _formatPlacemark(Placemark? placemark) {
+  if (placemark == null) return 'Address unavailable';
+
+  final values = <String>[
+    placemark.street ?? '',
+    placemark.subLocality ?? '',
+    placemark.locality ?? '',
+    placemark.administrativeArea ?? '',
+    placemark.postalCode ?? '',
+    placemark.country ?? '',
+  ].where((value) => value.trim().isNotEmpty).toSet().toList();
+
+  if (values.isEmpty) return 'Address unavailable';
+  return values.join(', ');
 }
 
 enum _LocationViewState {
