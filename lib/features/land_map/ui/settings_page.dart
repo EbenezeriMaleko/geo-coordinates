@@ -12,134 +12,136 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _keepScreenOn = false;
-  bool _oneClickCopy = false;
-  bool _saveOriginalPhoto = true;
 
   @override
   Widget build(BuildContext context) {
     final selectedFormat = ref.watch(coordinateFormatProvider);
     final selectedUnit = ref.watch(distanceUnitProvider);
+    final saveOriginalPhoto = ref.watch(saveOriginalPhotoProvider);
+    final saveToGallery = ref.watch(saveToGalleryProvider);
+    final photoQuality = ref.watch(photoQualityProvider);
+    final captureMode = ref.watch(photoCaptureModeProvider);
     final theme = Theme.of(context);
     final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        _sectionHeader('Cloud synchronization', theme),
-        _item(
-          title: 'Account',
-          onTap: _comingSoon('Account'),
-        ),
-        _sectionDivider(),
+    return ColoredBox(
+      color: const Color(0xFFF5F5F5),
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          _sectionHeader('Cloud synchronization', theme),
+          _item(title: 'Account', onTap: _comingSoon('Account')),
+          _sectionDivider(),
 
-        _sectionHeader('General', theme),
-        _switchItem(
-          title: 'Keep screen on',
-          value: _keepScreenOn,
-          onChanged: (value) => setState(() => _keepScreenOn = value),
-        ),
-        _item(
-          title: 'App language',
-          subtitle: 'English',
-          onTap: _comingSoon('App language'),
-        ),
-        _sectionDivider(),
+          _sectionHeader('General', theme),
+          _switchItem(
+            title: 'Keep screen on',
+            value: _keepScreenOn,
+            onChanged: (value) => setState(() => _keepScreenOn = value),
+          ),
+          _item(
+            title: 'App language',
+            subtitle: 'English',
+            onTap: _comingSoon('App language'),
+          ),
+          _sectionDivider(),
 
-        _sectionHeader('Location Settings', theme),
-        _item(
-          title: 'Coordinates format',
-          subtitle: selectedFormat.displayName,
-          onTap: _showCoordinateFormatSelector,
-        ),
-        _item(
-          title: 'Location accuracy',
-          subtitle: 'High accuracy',
-          onTap: _comingSoon('Location accuracy'),
-        ),
-        _item(
-          title: 'Location provider',
-          subtitle: 'Fused',
-          onTap: _comingSoon('Location provider'),
-        ),
-        _sectionDivider(),
+          _sectionHeader('Location Settings', theme),
+          _item(
+            title: 'Coordinates format',
+            subtitle: selectedFormat.displayName,
+            onTap: _showCoordinateFormatSelector,
+          ),
+          _item(
+            title: 'Location accuracy',
+            subtitle: 'High accuracy',
+            onTap: _comingSoon('Location accuracy'),
+          ),
+          _item(
+            title: 'Location provider',
+            subtitle: 'Fused',
+            onTap: _comingSoon('Location provider'),
+          ),
+          _sectionDivider(),
 
-        _sectionHeader('Units', theme),
-        _item(
-          title: 'Altitude units',
-          subtitle: unitLabel,
-          onTap: _showDistanceUnitSelector,
-        ),
-        _item(
-          title: 'Accuracy units',
-          subtitle: unitLabel,
-          onTap: _showDistanceUnitSelector,
-        ),
-        _item(
-          title: 'Distance units',
-          subtitle: unitLabel,
-          onTap: _showDistanceUnitSelector,
-        ),
-        _sectionDivider(),
-        _sectionHeader('Photo', theme),
-        _switchItem(
-          title: 'Save original photo',
-          subtitle:
-              'Save with no data on it. Useful for editing before sharing.',
-          value: _saveOriginalPhoto,
-          onChanged: (value) => setState(() => _saveOriginalPhoto = value),
-        ),
-        _item(
-          title: 'Save to gallery',
-          subtitle: 'Save image with data',
-          onTap: _comingSoon('Save to gallery'),
-        ),
-        _item(
-          title: 'Image quality',
-          subtitle: 'High',
-          onTap: _comingSoon('Image quality'),
-        ),
-        _item(
-          title: 'Capture mode',
-          subtitle: 'Inside the app',
-          onTap: _comingSoon('Capture mode'),
-        ),
-        _sectionDivider(),
-        _sectionHeader('Saved locations', theme),
-        _item(
-          title: 'View modes',
-          subtitle: '[Combined, Basic, Text, Photo]',
-          onTap: _comingSoon('View modes'),
-        ),
-        _sectionDivider(),
+          _sectionHeader('Units', theme),
+          _item(
+            title: 'Altitude units',
+            subtitle: unitLabel,
+            onTap: _showDistanceUnitSelector,
+          ),
+          _item(
+            title: 'Accuracy units',
+            subtitle: unitLabel,
+            onTap: _showDistanceUnitSelector,
+          ),
+          _item(
+            title: 'Distance units',
+            subtitle: unitLabel,
+            onTap: _showDistanceUnitSelector,
+          ),
+          _sectionDivider(),
+          _sectionHeader('Photo', theme),
+          _switchItem(
+            title: 'Save original photo',
+            subtitle:
+                'Save with no data on it. Useful for editing before sharing.',
+            value: saveOriginalPhoto,
+            onChanged: (value) =>
+                ref.read(saveOriginalPhotoProvider.notifier).setValue(value),
+          ),
+          _switchItem(
+            title: 'Save to gallery',
+            subtitle: 'Save image with data',
+            value: saveToGallery,
+            onChanged: (value) =>
+                ref.read(saveToGalleryProvider.notifier).setValue(value),
+          ),
+          _item(
+            title: 'Image quality',
+            subtitle: _photoQualityLabel(photoQuality),
+            onTap: _showPhotoQualitySelector,
+          ),
+          _item(
+            title: 'Capture mode',
+            subtitle: _captureModeLabel(captureMode),
+            onTap: _showCaptureModeSelector,
+          ),
+          _sectionDivider(),
+          _sectionHeader('Saved locations', theme),
+          _item(
+            title: 'View modes',
+            subtitle: '[Combined, Basic, Text, Photo]',
+            onTap: _comingSoon('View modes'),
+          ),
+          _sectionDivider(),
 
-        _sectionHeader('Compass', theme),
-        _item(
-          title: 'Compass mode',
-          subtitle: 'True north',
-          onTap: _comingSoon('Compass mode'),
-        ),
-        _sectionDivider(),
+          _sectionHeader('Compass', theme),
+          _item(
+            title: 'Compass mode',
+            subtitle: 'True north',
+            onTap: _comingSoon('Compass mode'),
+          ),
+          _sectionDivider(),
 
-        _sectionHeader('Other', theme),
-        _item(
-          title: 'Privacy policy',
-          onTap: _comingSoon('Privacy policy'),
-        ),
-        _sectionDivider(),
+          _sectionHeader('Other', theme),
+          _item(title: 'Privacy policy', onTap: _comingSoon('Privacy policy')),
+          _sectionDivider(),
 
-        _sectionHeader('Information', theme),
-        _item(
-          title: 'Contact us',
-          subtitle:
-              'Send suggestions or report a bug. We appreciate your feedback.',
-          onTap: _comingSoon('Contact us'),
-        ),
-        _item(
-          title: 'Version',
-          subtitle: '1.0.0+1',
-          onTap: _comingSoon('Version'),
-        ),
-      ],
+          _sectionHeader('Information', theme),
+          _item(
+            title: 'Contact us',
+            subtitle:
+                'Send suggestions or report a bug. We appreciate your feedback.',
+            onTap: _comingSoon('Contact us'),
+          ),
+          _item(
+            title: 'Version',
+            subtitle: '1.0.0+1',
+            onTap: _comingSoon('Version'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -147,7 +149,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 6),
       child: Text(
-        title,  
+        title,
         style: theme.textTheme.titleMedium?.copyWith(
           color: const Color(0xFF0C8A8C),
           fontWeight: FontWeight.w700,
@@ -316,7 +318,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
               onTap: () {
-                ref.read(distanceUnitProvider.notifier).setUnit(DistanceUnit.meters);
+                ref
+                    .read(distanceUnitProvider.notifier)
+                    .setUnit(DistanceUnit.meters);
                 Navigator.pop(context);
               },
             ),
@@ -327,7 +331,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
               onTap: () {
-                ref.read(distanceUnitProvider.notifier).setUnit(DistanceUnit.feet);
+                ref
+                    .read(distanceUnitProvider.notifier)
+                    .setUnit(DistanceUnit.feet);
                 Navigator.pop(context);
               },
             ),
@@ -342,5 +348,104 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     const lat = -6.7924;
     const lon = 39.2083;
     return 'Example: ${CoordinateFormatter.format(lat, lon, format)}';
+  }
+
+  String _photoQualityLabel(PhotoCaptureQuality quality) {
+    switch (quality) {
+      case PhotoCaptureQuality.low:
+        return 'Low';
+      case PhotoCaptureQuality.medium:
+        return 'Medium';
+      case PhotoCaptureQuality.high:
+        return 'High';
+    }
+  }
+
+  String _captureModeLabel(PhotoCaptureMode mode) {
+    switch (mode) {
+      case PhotoCaptureMode.inApp:
+        return 'Inside the app';
+      case PhotoCaptureMode.systemCamera:
+        return 'System camera';
+    }
+  }
+
+  void _showPhotoQualitySelector() {
+    final current = ref.read(photoQualityProvider);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            const Text(
+              'Image quality',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            ...PhotoCaptureQuality.values.map((quality) {
+              final selected = quality == current;
+              return ListTile(
+                title: Text(_photoQualityLabel(quality)),
+                trailing: selected
+                    ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                    : const Icon(Icons.circle_outlined),
+                onTap: () {
+                  ref.read(photoQualityProvider.notifier).setQuality(quality);
+                  Navigator.pop(context);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCaptureModeSelector() {
+    final current = ref.read(photoCaptureModeProvider);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            const Text(
+              'Capture mode',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            ...PhotoCaptureMode.values.map((mode) {
+              final selected = mode == current;
+              return ListTile(
+                title: Text(_captureModeLabel(mode)),
+                subtitle: Text(
+                  mode == PhotoCaptureMode.inApp
+                      ? 'Built-in camera with live GPS overlay.'
+                      : 'Use the device camera app (falls back to in-app if unavailable).',
+                ),
+                trailing: selected
+                    ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                    : const Icon(Icons.circle_outlined),
+                onTap: () {
+                  ref.read(photoCaptureModeProvider.notifier).setMode(mode);
+                  Navigator.pop(context);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 }

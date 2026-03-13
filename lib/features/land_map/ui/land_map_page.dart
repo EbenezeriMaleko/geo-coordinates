@@ -33,12 +33,13 @@ class LandMapPage extends ConsumerStatefulWidget {
 }
 
 class _LandMapPageState extends ConsumerState<LandMapPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   static const double _minZoom = 3;
   static const double _maxZoom = 20;
   static const double _defaultMapZoom = 16;
   static const String _submitUrl = 'https://ardhi.co.tz/api/submit';
   static const String _defaultPhone = '1111111111';
+  static const String _mapTypePrefKey = 'prefs_land_map_type';
 
   final MapController _mapController = MapController();
   final TextEditingController _nameController = TextEditingController();
@@ -65,6 +66,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   @override
   void initState() {
     super.initState();
+    _restoreMapTypePreference();
     _landMapSubscription = ref.listenManual(landMapProvider, (previous, next) {
       final prevLen = previous?.points.length ?? 0;
       final nextLen = next.points.length;
@@ -295,6 +297,31 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   double _clampZoom(double zoom) => zoom.clamp(_minZoom, _maxZoom);
 
+  @override
+  bool get wantKeepAlive => true;
+
+  void _restoreMapTypePreference() {
+    final box = Hive.box('landbox');
+    final raw = box.get(_mapTypePrefKey)?.toString();
+    if (raw == null) return;
+
+    final savedType = _mapTypeFromRaw(raw);
+    if (savedType == null || !mounted) return;
+    setState(() => _currentMapType = savedType);
+  }
+
+  Future<void> _saveMapTypePreference(MapType type) async {
+    final box = Hive.box('landbox');
+    await box.put(_mapTypePrefKey, type.name);
+  }
+
+  MapType? _mapTypeFromRaw(String raw) {
+    for (final type in MapType.values) {
+      if (type.name == raw) return type;
+    }
+    return null;
+  }
+
   void _changeMapType(MapType type, BuildContext sheetContext) {
     if (_currentMapType == type) {
       Navigator.pop(sheetContext);
@@ -305,6 +332,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _currentMapType = type;
       _isMapTypeSwitching = true;
     });
+    _saveMapTypePreference(type);
 
     Future.delayed(const Duration(milliseconds: 700), () {
       if (!mounted) return;
@@ -638,6 +666,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final st = ref.watch(landMapProvider);
     final notifier = ref.read(landMapProvider.notifier);
     final coordinateFormat = ref.watch(coordinateFormatProvider);

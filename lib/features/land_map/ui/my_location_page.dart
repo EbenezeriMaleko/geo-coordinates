@@ -5,8 +5,11 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hive/hive.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/coordinate_format.dart';
 import '../state/land_map_notifier.dart';
@@ -19,7 +22,11 @@ class MyLocationPage extends ConsumerStatefulWidget {
   ConsumerState<MyLocationPage> createState() => _MyLocationPageState();
 }
 
-class _MyLocationPageState extends ConsumerState<MyLocationPage> {
+class _MyLocationPageState extends ConsumerState<MyLocationPage>
+    with AutomaticKeepAliveClientMixin {
+  static const String _latestPhotoKey = 'my_location_latest_photo';
+  static const String _photosDirName = 'geo_photos';
+
   StreamSubscription<Position>? _locationSubscription;
   late final LandMapNotifier _landMapNotifier;
   bool _isInitializing = false;
@@ -35,7 +42,10 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
   void initState() {
     super.initState();
     _landMapNotifier = ref.read(landMapProvider.notifier);
-    Future.microtask(_initializeTracking);
+    Future.microtask(() async {
+      await _restoreLatestPhoto();
+      await _initializeTracking();
+    });
   }
 
   @override
@@ -161,11 +171,25 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
     try {
       final format = ref.read(coordinateFormatProvider);
       final unit = ref.read(distanceUnitProvider);
+      final quality = ref.read(photoQualityProvider);
+      final captureMode = ref.read(photoCaptureModeProvider);
+
+      if (captureMode == PhotoCaptureMode.systemCamera && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'System camera mode is not available yet, using in-app camera.',
+            ),
+          ),
+        );
+      }
+
       final capture = await Navigator.of(context).push<_GeoTaggedPhoto>(
         MaterialPageRoute(
           builder: (_) => _GeoCameraCapturePage(
             coordinateFormat: format,
             distanceUnit: unit,
+            quality: quality,
             initialName: _latestPhoto?.name ?? '',
           ),
           fullscreenDialog: true,
@@ -174,10 +198,16 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
 
       if (!mounted || capture == null) return;
 
+      final persistedCapture = await _persistCapturedPhoto(capture);
+      final saveToGallery = ref.read(saveToGalleryProvider);
+      if (saveToGallery) {
+        await _saveImageToGallery(persistedCapture.imagePath);
+      }
+
       setState(() {
-        _latestPhoto = capture;
+        _latestPhoto = persistedCapture;
       });
-      _showCaptureDetails(capture);
+      _showCaptureDetails(persistedCapture);
     } on PlatformException catch (e) {
       if (!mounted) return;
       final code = e.code.toLowerCase();
@@ -201,6 +231,109 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
         });
       }
     }
+  }
+
+  Future<void> _restoreLatestPhoto() async {
+    final box = Hive.box('landbox');
+    final raw = box.get(_latestPhotoKey);
+    if (raw is! Map) return;
+
+    final data = Map<String, dynamic>.from(raw);
+    final imagePath = data['imagePath']?.toString() ?? '';
+    if (imagePath.isEmpty) return;
+    if (!await File(imagePath).exists()) return;
+
+    final restored = _GeoTaggedPhoto.fromMap(data);
+    if (restored == null || !mounted) return;
+
+    setState(() {
+      _latestPhoto = restored;
+    });
+  }
+
+  Future<_GeoTaggedPhoto> _persistCapturedPhoto(_GeoTaggedPhoto capture) async {
+    final photosDir = await _getPhotosDirectory();
+    final source = File(capture.imagePath);
+    var storedPath = capture.imagePath;
+
+    if (await source.exists()) {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final ext = _fileExtension(capture.imagePath);
+      final safeName = _safeFileName(capture.name);
+      final fileName = safeName.isEmpty
+          ? 'gps_$timestamp$ext'
+          : '${safeName}_$timestamp$ext';
+      final destination = File('${photosDir.path}/$fileName');
+      final copied = await source.copy(destination.path);
+      storedPath = copied.path;
+
+      final keepOriginal = ref.read(saveOriginalPhotoProvider);
+      if (!keepOriginal && source.path != copied.path) {
+        try {
+          await source.delete();
+        } catch (_) {
+          // Keep working even if source cleanup fails.
+        }
+      }
+    }
+
+    final persisted = capture.copyWith(imagePath: storedPath);
+    final box = Hive.box('landbox');
+    await box.put(_latestPhotoKey, persisted.toMap());
+    return persisted;
+  }
+
+  Future<void> _saveImageToGallery(String imagePath) async {
+    try {
+      final saved = await GallerySaver.saveImage(
+        imagePath,
+        albumName: 'GeoCoordinates',
+      );
+      if (!mounted) return;
+      if (saved == true) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Photo saved to gallery')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not save photo to gallery. Check permissions.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save photo to gallery. Check permissions.'),
+        ),
+      );
+    }
+  }
+
+  Future<Directory> _getPhotosDirectory() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final photosDir = Directory('${appDir.path}/$_photosDirName');
+    if (!await photosDir.exists()) {
+      await photosDir.create(recursive: true);
+    }
+    return photosDir;
+  }
+
+  String _fileExtension(String path) {
+    final index = path.lastIndexOf('.');
+    if (index == -1) return '.jpg';
+    final ext = path.substring(index);
+    return ext.isEmpty ? '.jpg' : ext;
+  }
+
+  String _safeFileName(String name) {
+    final trimmed = name.trim().toLowerCase();
+    if (trimmed.isEmpty) return '';
+    final cleaned = trimmed.replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    return cleaned.replaceAll(RegExp(r'^_+|_+$'), '');
   }
 
   void _showCaptureDetails(_GeoTaggedPhoto capture) {
@@ -238,7 +371,11 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final theme = Theme.of(context);
     final st = ref.watch(landMapProvider);
     final format = ref.watch(coordinateFormatProvider);
@@ -560,6 +697,55 @@ class _GeoTaggedPhoto {
     required this.locationError,
     required this.name,
   });
+
+  _GeoTaggedPhoto copyWith({
+    String? imagePath,
+    DateTime? capturedAt,
+    Position? position,
+    Placemark? placemark,
+    String? locationError,
+    String? name,
+  }) {
+    return _GeoTaggedPhoto(
+      imagePath: imagePath ?? this.imagePath,
+      capturedAt: capturedAt ?? this.capturedAt,
+      position: position ?? this.position,
+      placemark: placemark ?? this.placemark,
+      locationError: locationError ?? this.locationError,
+      name: name ?? this.name,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'imagePath': imagePath,
+      'capturedAt': capturedAt.toIso8601String(),
+      'position': _positionToMap(position),
+      'placemark': _placemarkToMap(placemark),
+      'locationError': locationError,
+      'name': name,
+    };
+  }
+
+  static _GeoTaggedPhoto? fromMap(Map<String, dynamic> raw) {
+    final imagePath = raw['imagePath']?.toString();
+    final capturedAtRaw = raw['capturedAt']?.toString();
+    final capturedAt = capturedAtRaw == null
+        ? null
+        : DateTime.tryParse(capturedAtRaw);
+    if (imagePath == null || imagePath.isEmpty || capturedAt == null) {
+      return null;
+    }
+
+    return _GeoTaggedPhoto(
+      imagePath: imagePath,
+      capturedAt: capturedAt,
+      position: _positionFromMap(raw['position']),
+      placemark: _placemarkFromMap(raw['placemark']),
+      locationError: raw['locationError']?.toString(),
+      name: raw['name']?.toString() ?? '',
+    );
+  }
 }
 
 class _LatestCaptureCard extends StatelessWidget {
@@ -765,11 +951,13 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
 class _GeoCameraCapturePage extends StatefulWidget {
   final CoordinateFormat coordinateFormat;
   final DistanceUnit distanceUnit;
+  final PhotoCaptureQuality quality;
   final String initialName;
 
   const _GeoCameraCapturePage({
     required this.coordinateFormat,
     required this.distanceUnit,
+    required this.quality,
     required this.initialName,
   });
 
@@ -820,7 +1008,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
 
       final controller = CameraController(
         description,
-        ResolutionPreset.high,
+        _resolutionForQuality(widget.quality),
         enableAudio: false,
       );
       await controller.initialize();
@@ -1265,6 +1453,93 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
       return null;
     }
   }
+
+  ResolutionPreset _resolutionForQuality(PhotoCaptureQuality quality) {
+    switch (quality) {
+      case PhotoCaptureQuality.low:
+        return ResolutionPreset.medium;
+      case PhotoCaptureQuality.medium:
+        return ResolutionPreset.high;
+      case PhotoCaptureQuality.high:
+        return ResolutionPreset.veryHigh;
+    }
+  }
+}
+
+Map<String, dynamic>? _positionToMap(Position? position) {
+  if (position == null) return null;
+  return {
+    'latitude': position.latitude,
+    'longitude': position.longitude,
+    'timestamp': position.timestamp.toIso8601String(),
+    'accuracy': position.accuracy,
+    'altitude': position.altitude,
+    'altitudeAccuracy': position.altitudeAccuracy,
+    'heading': position.heading,
+    'headingAccuracy': position.headingAccuracy,
+    'speed': position.speed,
+    'speedAccuracy': position.speedAccuracy,
+    'floor': position.floor,
+    'isMocked': position.isMocked,
+  };
+}
+
+Position? _positionFromMap(dynamic raw) {
+  if (raw is! Map) return null;
+  try {
+    final data = Map<String, dynamic>.from(raw);
+    return Position(
+      latitude: (data['latitude'] as num).toDouble(),
+      longitude: (data['longitude'] as num).toDouble(),
+      timestamp: DateTime.parse(data['timestamp'].toString()),
+      accuracy: (data['accuracy'] as num).toDouble(),
+      altitude: (data['altitude'] as num).toDouble(),
+      altitudeAccuracy: (data['altitudeAccuracy'] as num).toDouble(),
+      heading: (data['heading'] as num).toDouble(),
+      headingAccuracy: (data['headingAccuracy'] as num).toDouble(),
+      speed: (data['speed'] as num).toDouble(),
+      speedAccuracy: (data['speedAccuracy'] as num).toDouble(),
+      floor: (data['floor'] as num?)?.toInt(),
+      isMocked: data['isMocked'] == true,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+Map<String, dynamic>? _placemarkToMap(Placemark? placemark) {
+  if (placemark == null) return null;
+  return {
+    'name': placemark.name,
+    'street': placemark.street,
+    'isoCountryCode': placemark.isoCountryCode,
+    'country': placemark.country,
+    'postalCode': placemark.postalCode,
+    'administrativeArea': placemark.administrativeArea,
+    'subAdministrativeArea': placemark.subAdministrativeArea,
+    'locality': placemark.locality,
+    'subLocality': placemark.subLocality,
+    'thoroughfare': placemark.thoroughfare,
+    'subThoroughfare': placemark.subThoroughfare,
+  };
+}
+
+Placemark? _placemarkFromMap(dynamic raw) {
+  if (raw is! Map) return null;
+  final data = Map<String, dynamic>.from(raw);
+  return Placemark(
+    name: data['name']?.toString(),
+    street: data['street']?.toString(),
+    isoCountryCode: data['isoCountryCode']?.toString(),
+    country: data['country']?.toString(),
+    postalCode: data['postalCode']?.toString(),
+    administrativeArea: data['administrativeArea']?.toString(),
+    subAdministrativeArea: data['subAdministrativeArea']?.toString(),
+    locality: data['locality']?.toString(),
+    subLocality: data['subLocality']?.toString(),
+    thoroughfare: data['thoroughfare']?.toString(),
+    subThoroughfare: data['subThoroughfare']?.toString(),
+  );
 }
 
 class _GeoPhotoCanvas extends StatelessWidget {

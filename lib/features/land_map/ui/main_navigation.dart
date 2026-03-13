@@ -189,10 +189,7 @@ class _MainNavigationState extends State<MainNavigation> {
         backgroundColor: Colors.white,
         elevation: 0,
       ),
-      body: Container(
-        color: _currentIndex == 3 ? const Color(0xFFF5F5F5) : null,
-        child: IndexedStack(index: _currentIndex, children: _pages),
-      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: Container(
         height: _bottomNavHeight + MediaQuery.of(context).padding.bottom,
         padding: EdgeInsets.only(
