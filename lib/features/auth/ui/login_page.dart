@@ -127,15 +127,11 @@ class _LoginPageState extends ConsumerState<LoginPage>
               width: 2,
             ),
           ),
-          child: const Icon(
-            Icons.terrain_rounded,
-            size: 40,
-            color: Colors.white,
-          ),
+          child: Image.asset('lib/assets/databenki_latest_logo.png'),
         ),
         const SizedBox(height: 20),
         Text(
-          'Land Mapper',
+          'TAREF GPS',
           style: GoogleFonts.inter(
             fontSize: 30,
             fontWeight: FontWeight.w800,
@@ -193,8 +189,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Email is required';
                 final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
-                if (!emailRegex.hasMatch(v.trim()))
+                if (!emailRegex.hasMatch(v.trim())) {
                   return 'Enter a valid email';
+                }
                 return null;
               },
             ),
@@ -224,8 +221,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
               ),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Password is required';
-                if (v.length < 6)
+                if (v.length < 6) {
                   return 'Password must be at least 6 characters';
+                }
                 return null;
               },
             ),

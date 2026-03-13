@@ -1312,7 +1312,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 children: [
                   _MapTypeOption(
                     label: 'Normal',
-                    icon: Icons.map,
+                    preview: Image.asset(
+                      'lib/assets/mapsImages/Normal.jpg',
+                      fit: BoxFit.cover,
+                    ),
                     isSelected: _currentMapType == MapType.normal,
                     onTap: () {
                       _changeMapType(MapType.normal, context);
@@ -1320,7 +1323,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   ),
                   _MapTypeOption(
                     label: 'Satellite',
-                    icon: Icons.satellite_alt,
+                    preview: Image.asset(
+                      'lib/assets/mapsImages/satellite.png',
+                      fit: BoxFit.cover,
+                    ),
                     isSelected: _currentMapType == MapType.satellite,
                     onTap: () {
                       _changeMapType(MapType.satellite, context);
@@ -1328,7 +1334,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   ),
                   _MapTypeOption(
                     label: 'Terrain',
-                    icon: Icons.terrain,
+                    preview: Image.asset(
+                      'lib/assets/mapsImages/terrain.jpg',
+                      fit: BoxFit.cover,
+                    ),
                     isSelected: _currentMapType == MapType.terrain,
                     onTap: () {
                       _changeMapType(MapType.terrain, context);
@@ -1336,7 +1345,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   ),
                   _MapTypeOption(
                     label: 'Hybrid',
-                    icon: Icons.layers,
+                    preview: Image.asset(
+                      'lib/assets/mapsImages/satellite.png',
+                      fit: BoxFit.cover,
+                    ),
                     isSelected: _currentMapType == MapType.hybrid,
                     onTap: () {
                       _changeMapType(MapType.hybrid, context);
@@ -1768,13 +1780,13 @@ class _FabOption extends StatelessWidget {
 
 class _MapTypeOption extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final Widget preview;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _MapTypeOption({
     required this.label,
-    required this.icon,
+    required this.preview,
     required this.isSelected,
     required this.onTap,
   });
@@ -1789,21 +1801,32 @@ class _MapTypeOption extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFF001F3F)
-                  : Colors.grey.shade200,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSelected
-                    ? const Color(0xFF001F3F)
+                    ? const Color(0xFF0EA5E9)
                     : Colors.grey.shade300,
-                width: 2,
+                width: isSelected ? 3 : 1.5,
               ),
+              boxShadow: [
+                if (isSelected)
+                  BoxShadow(
+                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+              ],
             ),
-            child: Icon(
-              icon,
-              color: isSelected ? Colors.white : Colors.grey,
-              size: 28,
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                preview,
+                if (isSelected)
+                  Container(
+                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.18),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 6),
@@ -1812,7 +1835,7 @@ class _MapTypeOption extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color: isSelected ? const Color(0xFF001F3F) : Colors.grey,
+              color: isSelected ? const Color(0xFF0B3B5A) : Colors.grey,
             ),
           ),
         ],
@@ -1903,13 +1926,49 @@ class _CurrentMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.blue.withValues(alpha: 0.9),
-        border: Border.all(color: Colors.white, width: 2),
-      ),
-      child: const Icon(Icons.person_pin_circle, color: Colors.white, size: 20),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Outer soft halo to improve visibility on busy tiles.
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF2563EB).withValues(alpha: 0.20),
+          ),
+        ),
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF60A5FA), Color(0xFF2563EB)],
+            ),
+            border: Border.all(color: Colors.white, width: 2.2),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1D4ED8).withValues(alpha: 0.40),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

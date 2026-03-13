@@ -220,11 +220,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               width: 2,
             ),
           ),
-          child: const Icon(
-            Icons.terrain_rounded,
-            size: 40,
-            color: Colors.white,
-          ),
+          child: Image.asset('lib/assets/databenki_latest_logo.png'),
         ),
         const SizedBox(height: 20),
         Text(
@@ -238,7 +234,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
         ),
         const SizedBox(height: 8),
         Text(
-          'Join Land Mapper today',
+          'Join Taref Gps today',
           style: GoogleFonts.inter(
             fontSize: 15,
             color: Colors.white.withValues(alpha: 0.75),
@@ -338,8 +334,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Email is required';
                 final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
-                if (!emailRegex.hasMatch(v.trim()))
+                if (!emailRegex.hasMatch(v.trim())) {
                   return 'Enter a valid email';
+                }
                 return null;
               },
             ),
@@ -401,10 +398,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                 ),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty)
+                if (v == null || v.isEmpty) {
                   return 'Please confirm your password';
-                if (v != _passwordController.text)
+                }
+                if (v != _passwordController.text) {
                   return 'Passwords do not match';
+                }
                 return null;
               },
             ),

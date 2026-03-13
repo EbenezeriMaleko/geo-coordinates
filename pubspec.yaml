@@ -76,6 +76,7 @@ flutter:
   assets:
     - lib/assets/databenki_latest_logo.png
     - lib/assets/icons/
+    - lib/assets/mapsImages/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
