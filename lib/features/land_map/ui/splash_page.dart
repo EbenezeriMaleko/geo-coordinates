@@ -66,7 +66,7 @@ class _SplashPageState extends State<SplashPage> {
               ),
               const SizedBox(height: 18),
               Text(
-                'Land Mapper',
+                'Taref Gps',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: const Color(0xFF001F3F),
                   fontWeight: FontWeight.w700,
