@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
+
+import '../../auth/ui/login_page.dart';
 import '../models/coordinate_format.dart';
+import '../models/reference_ellipsoid.dart';
 import '../state/settings_provider.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -21,8 +25,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final saveToGallery = ref.watch(saveToGalleryProvider);
     final photoQuality = ref.watch(photoQualityProvider);
     final captureMode = ref.watch(photoCaptureModeProvider);
+    final selectedEllipsoid = ref.watch(referenceEllipsoidProvider);
     final theme = Theme.of(context);
     final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
+    final accountSubtitle = _accountSubtitle();
 
     return ColoredBox(
       color: const Color(0xFFF5F5F5),
@@ -30,7 +36,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         padding: const EdgeInsets.only(bottom: 24),
         children: [
           _sectionHeader('Cloud synchronization', theme),
-          _item(title: 'Account', onTap: _comingSoon('Account')),
+          _item(
+            title: 'Account',
+            subtitle: accountSubtitle,
+            onTap: _openAccountPage,
+          ),
           _sectionDivider(),
 
           _sectionHeader('General', theme),
@@ -56,6 +66,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             title: 'Location accuracy',
             subtitle: 'High accuracy',
             onTap: _comingSoon('Location accuracy'),
+          ),
+          _item(
+            title: 'Reference ellipsoid',
+            subtitle: selectedEllipsoid.displayName,
+            onTap: _showReferenceEllipsoidSelector,
           ),
           _item(
             title: 'Location provider',
@@ -256,6 +271,40 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     };
   }
 
+  String _accountSubtitle() {
+    final box = Hive.box('landbox');
+    final firstName = box.get('auth_first_name')?.toString().trim() ?? '';
+    final lastName = box.get('auth_last_name')?.toString().trim() ?? '';
+    final email = box.get('auth_email')?.toString().trim() ?? '';
+    final fullName = '$firstName $lastName'.trim();
+
+    if (fullName.isNotEmpty && email.isNotEmpty) {
+      return '$fullName\n$email';
+    }
+    if (fullName.isNotEmpty) {
+      return '$fullName\nSigned in';
+    }
+    if (email.isNotEmpty) {
+      return '$email\nSigned in';
+    }
+    return 'Sign in only when you want to sync data to the server.';
+  }
+
+  Future<void> _openAccountPage() async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => const LoginPage(returnToPreviousPage: true),
+      ),
+    );
+
+    if (updated == true && mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account connected')),
+      );
+    }
+  }
+
   void _showCoordinateFormatSelector() {
     final current = ref.read(coordinateFormatProvider);
     showModalBottomSheet(
@@ -339,6 +388,62 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             const SizedBox(height: 8),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showReferenceEllipsoidSelector() {
+    final current = ref.read(referenceEllipsoidProvider);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.75,
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              const Text(
+                'Reference ellipsoid',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView(
+                  children: [
+                    ...ReferenceEllipsoid.values.map((ellipsoid) {
+                      final isSelected = ellipsoid == current;
+                      return ListTile(
+                        title: Text(ellipsoid.displayName),
+                        subtitle: Text(
+                          ellipsoid.isDefault
+                              ? 'Default GPS reference for this app.'
+                              : 'Use for display or export workflows that follow this model.',
+                        ),
+                        trailing: isSelected
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Color(0xFF0C8A8C),
+                              )
+                            : const Icon(Icons.circle_outlined),
+                        onTap: () {
+                          ref
+                              .read(referenceEllipsoidProvider.notifier)
+                              .setEllipsoid(ellipsoid);
+                          Navigator.pop(context);
+                        },
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

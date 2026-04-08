@@ -12,8 +12,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 import '../models/coordinate_format.dart';
+import '../models/reference_ellipsoid.dart';
+import '../services/utm_converter.dart';
 import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
@@ -641,7 +644,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.my_location),
+                leading: const HugeIcon(icon: HugeIcons.strokeRoundedPinLocation02),
                 title: const Text('Center here'),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -670,6 +673,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final st = ref.watch(landMapProvider);
     final notifier = ref.read(landMapProvider.notifier);
     final coordinateFormat = ref.watch(coordinateFormatProvider);
+    final referenceEllipsoid = ref.watch(referenceEllipsoidProvider);
+    final utmText = st.current == null
+        ? null
+        : _formatMapUtm(
+            st.current!.latitude,
+            st.current!.longitude,
+            referenceEllipsoid,
+          );
     final bottomFabOffset = widget.bottomInset + 16;
     final bottomZoomOffset = widget.bottomInset + 140;
     final toolBannerTop = _locationError == null ? 92.0 : 202.0;
@@ -863,7 +874,15 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         ),
                         if (st.current != null)
                           Text(
-                            'Accuracy: ${(st.accuracyMeters ?? 0).toStringAsFixed(1)}m',
+                            utmText ?? 'UTM unavailable',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        if (st.current != null)
+                          Text(
+                            '${referenceEllipsoid.displayName} • Accuracy: ${(st.accuracyMeters ?? 0).toStringAsFixed(1)}m',
                             style: TextStyle(
                               fontSize: 10,
                               color: Colors.grey.shade600,
@@ -1700,6 +1719,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       ),
     );
   }
+}
+
+String _formatMapUtm(
+  double latitude,
+  double longitude,
+  ReferenceEllipsoid ellipsoid,
+) {
+  final utm = UtmConverter.fromLatLng(latitude, longitude, ellipsoid);
+  if (utm == null) return 'UTM unavailable';
+  return utm.toDisplayString();
 }
 
 class _UtmCoordinate {

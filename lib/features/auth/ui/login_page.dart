@@ -8,7 +8,9 @@ import '../providers/auth_provider.dart';
 import 'register_page.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.returnToPreviousPage = false});
+
+  final bool returnToPreviousPage;
 
   @override
   ConsumerState<LoginPage> createState() => _LoginPageState();
@@ -60,6 +62,11 @@ class _LoginPageState extends ConsumerState<LoginPage>
       }
 
       if (!mounted) return;
+      if (widget.returnToPreviousPage) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+
       Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
           pageBuilder: (context, animation, _) => const MainNavigation(),

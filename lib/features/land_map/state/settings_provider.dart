@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import '../models/coordinate_format.dart';
+import '../models/reference_ellipsoid.dart';
 
 enum DistanceUnit { meters, feet }
 
@@ -37,10 +38,16 @@ final photoCaptureModeProvider =
       PhotoCaptureModeNotifier.new,
     );
 
+final referenceEllipsoidProvider =
+    NotifierProvider<ReferenceEllipsoidNotifier, ReferenceEllipsoid>(
+      ReferenceEllipsoidNotifier.new,
+    );
+
 const _saveOriginalPhotoKey = 'prefs_photo_save_original';
 const _saveToGalleryKey = 'prefs_photo_save_to_gallery';
 const _photoQualityKey = 'prefs_photo_quality';
 const _photoCaptureModeKey = 'prefs_photo_capture_mode';
+const _referenceEllipsoidKey = 'prefs_reference_ellipsoid';
 
 class CoordinateFormatNotifier extends Notifier<CoordinateFormat> {
   @override
@@ -137,5 +144,20 @@ class PhotoCaptureModeNotifier extends Notifier<PhotoCaptureMode> {
       if (m.name == raw) return m;
     }
     return PhotoCaptureMode.inApp;
+  }
+}
+
+class ReferenceEllipsoidNotifier extends Notifier<ReferenceEllipsoid> {
+  @override
+  ReferenceEllipsoid build() {
+    final box = Hive.box('landbox');
+    final raw = box.get(_referenceEllipsoidKey)?.toString();
+    return ReferenceEllipsoid.fromRaw(raw);
+  }
+
+  Future<void> setEllipsoid(ReferenceEllipsoid ellipsoid) async {
+    state = ellipsoid;
+    final box = Hive.box('landbox');
+    await box.put(_referenceEllipsoidKey, ellipsoid.name);
   }
 }

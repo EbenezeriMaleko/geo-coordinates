@@ -12,6 +12,8 @@ import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/coordinate_format.dart';
+import '../models/reference_ellipsoid.dart';
+import '../services/utm_converter.dart';
 import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 
@@ -173,6 +175,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       final unit = ref.read(distanceUnitProvider);
       final quality = ref.read(photoQualityProvider);
       final captureMode = ref.read(photoCaptureModeProvider);
+      final ellipsoid = ref.read(referenceEllipsoidProvider);
 
       if (captureMode == PhotoCaptureMode.systemCamera && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -188,6 +191,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         MaterialPageRoute(
           builder: (_) => _GeoCameraCapturePage(
             coordinateFormat: format,
+            referenceEllipsoid: ellipsoid,
             distanceUnit: unit,
             quality: quality,
             initialName: _latestPhoto?.name ?? '',
@@ -353,6 +357,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                   format,
                 ),
           coordinateFormat: format,
+          referenceEllipsoid: ref.read(referenceEllipsoidProvider),
           distanceUnit: ref.read(distanceUnitProvider),
         );
       },
@@ -379,6 +384,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     final theme = Theme.of(context);
     final st = ref.watch(landMapProvider);
     final format = ref.watch(coordinateFormatProvider);
+    final ellipsoid = ref.watch(referenceEllipsoidProvider);
     final unit = ref.watch(distanceUnitProvider);
     final viewState = _viewState();
 
@@ -390,6 +396,9 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     final formatted = (lat != null && lon != null)
         ? CoordinateFormatter.format(lat, lon, format)
         : 'Waiting for GPS...';
+    final utmText = (lat != null && lon != null)
+        ? _formatUtmCoordinate(lat, lon, ellipsoid)
+        : 'Waiting for UTM...';
 
     final ageText = _formatAge(st.locationTimestamp);
     final altitudeText = _formatDistanceValue(st.altitudeMeters, unit);
@@ -508,6 +517,24 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                           color: Colors.white70,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Reference ellipsoid: ${ellipsoid.displayName}',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        utmText,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         'Last update: $lastUpdateText',
@@ -591,6 +618,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                   capture: _latestPhoto!,
                   unit: unit,
                   coordinateFormat: format,
+                  referenceEllipsoid: ellipsoid,
                   onViewDetails: () => _showCaptureDetails(_latestPhoto!),
                 ),
               ),
@@ -752,12 +780,14 @@ class _LatestCaptureCard extends StatelessWidget {
   final _GeoTaggedPhoto capture;
   final DistanceUnit unit;
   final CoordinateFormat coordinateFormat;
+  final ReferenceEllipsoid referenceEllipsoid;
   final VoidCallback onViewDetails;
 
   const _LatestCaptureCard({
     required this.capture,
     required this.unit,
     required this.coordinateFormat,
+    required this.referenceEllipsoid,
     required this.onViewDetails,
   });
 
@@ -772,6 +802,13 @@ class _LatestCaptureCard extends StatelessWidget {
             pos.latitude,
             pos.longitude,
             coordinateFormat,
+          );
+    final utmText = pos == null
+        ? 'UTM unavailable'
+        : _formatUtmCoordinate(
+            pos.latitude,
+            pos.longitude,
+            referenceEllipsoid,
           );
     final accuracyText = pos == null
         ? '—'
@@ -821,6 +858,7 @@ class _LatestCaptureCard extends StatelessWidget {
                   lines: _buildOverlayLines(
                     capture: capture,
                     coordinateFormat: coordinateFormat,
+                    referenceEllipsoid: referenceEllipsoid,
                     unit: unit,
                   ),
                   dense: true,
@@ -833,6 +871,16 @@ class _LatestCaptureCard extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Ellipsoid: ${referenceEllipsoid.displayName}',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              utmText,
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
             ),
             const SizedBox(height: 4),
             Text(
@@ -860,12 +908,14 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
   final _GeoTaggedPhoto capture;
   final String formattedCoordinates;
   final CoordinateFormat coordinateFormat;
+  final ReferenceEllipsoid referenceEllipsoid;
   final DistanceUnit distanceUnit;
 
   const _CapturedPhotoDetailsSheet({
     required this.capture,
     required this.formattedCoordinates,
     required this.coordinateFormat,
+    required this.referenceEllipsoid,
     required this.distanceUnit,
   });
 
@@ -878,6 +928,13 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
     final when =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}';
+    final utmText = pos == null
+        ? '—'
+        : _formatUtmCoordinate(
+            pos.latitude,
+            pos.longitude,
+            referenceEllipsoid,
+          );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -913,6 +970,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
                 lines: _buildOverlayLines(
                   capture: capture,
                   coordinateFormat: coordinateFormat,
+                  referenceEllipsoid: referenceEllipsoid,
                   unit: distanceUnit,
                 ),
               ),
@@ -920,7 +978,12 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _DetailRow(label: 'Captured at', value: when),
+          _DetailRow(
+            label: 'Reference ellipsoid',
+            value: referenceEllipsoid.displayName,
+          ),
           _DetailRow(label: 'Coordinates', value: formattedCoordinates),
+          _DetailRow(label: 'UTM', value: utmText),
           _DetailRow(label: 'Latitude', value: _formatNumber(pos?.latitude)),
           _DetailRow(label: 'Longitude', value: _formatNumber(pos?.longitude)),
           _DetailRow(
@@ -950,12 +1013,14 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
 
 class _GeoCameraCapturePage extends StatefulWidget {
   final CoordinateFormat coordinateFormat;
+  final ReferenceEllipsoid referenceEllipsoid;
   final DistanceUnit distanceUnit;
   final PhotoCaptureQuality quality;
   final String initialName;
 
   const _GeoCameraCapturePage({
     required this.coordinateFormat,
+    required this.referenceEllipsoid,
     required this.distanceUnit,
     required this.quality,
     required this.initialName,
@@ -1184,6 +1249,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
         name: _nameController.text.trim(),
       ),
       coordinateFormat: widget.coordinateFormat,
+      referenceEllipsoid: widget.referenceEllipsoid,
       unit: widget.distanceUnit,
       includeLocationNote: false,
     );
@@ -1430,6 +1496,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                     name: _nameController.text.trim(),
                   ),
                   coordinateFormat: widget.coordinateFormat,
+                  referenceEllipsoid: widget.referenceEllipsoid,
                   unit: widget.distanceUnit,
                   includeLocationNote: false,
                 ),
@@ -1694,20 +1761,42 @@ String _formatNumber(double? value) {
   return value.toStringAsFixed(6);
 }
 
+String _formatUtmCoordinate(
+  double latitude,
+  double longitude,
+  ReferenceEllipsoid ellipsoid,
+) {
+  final utm = UtmConverter.fromLatLng(latitude, longitude, ellipsoid);
+  if (utm == null) {
+    return 'UTM unavailable for this latitude';
+  }
+  return utm.toDisplayString();
+}
+
 List<String> _buildOverlayLines({
   required _GeoTaggedPhoto capture,
   required CoordinateFormat coordinateFormat,
+  required ReferenceEllipsoid referenceEllipsoid,
   required DistanceUnit unit,
   bool includeLocationNote = true,
 }) {
   final position = capture.position;
   final placemark = capture.placemark;
+  final utmText = position == null
+      ? null
+      : _formatUtmCoordinate(
+          position.latitude,
+          position.longitude,
+          referenceEllipsoid,
+        );
 
   final lines = <String>[
     if (position != null)
       '${_formatLatitudeLabel(position.latitude, coordinateFormat)} LAT',
     if (position != null)
       '${_formatLongitudeLabel(position.longitude, coordinateFormat)} LON',
+    if (utmText != null) ...[utmText],
+    'Ellipsoid ${referenceEllipsoid.displayName}',
     if (position != null)
       'Altitude ${_formatDistance(position.altitude, unit)} a.s.l',
     _formatCaptureDateTime(capture.capturedAt),
