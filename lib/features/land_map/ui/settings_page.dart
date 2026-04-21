@@ -33,7 +33,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final accountSubtitle = _accountSubtitle(session);
 
     return ColoredBox(
-      color: const Color(0xFFF5F5F5),
+      color:Colors.white,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -167,8 +167,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 6),
       child: Text(
         title,
-        style: theme.textTheme.titleMedium?.copyWith(
-          color: const Color(0xFF0C8A8C),
+        style: theme.textTheme.titleSmall?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -190,7 +190,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             Text(
               title,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
               ),
@@ -200,7 +200,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               Text(
                 subtitle,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   color: Colors.black54,
                   height: 1.3,
                 ),
@@ -230,7 +230,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87,
                   ),
@@ -240,7 +240,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       color: Colors.black54,
                       height: 1.3,
                     ),
