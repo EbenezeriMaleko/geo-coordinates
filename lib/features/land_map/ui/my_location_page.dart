@@ -1220,9 +1220,11 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
     });
   }
 
-  void _save() {
+  Future<void> _save() async {
     final capturedPhoto = _capturedPhoto;
     if (capturedPhoto == null) return;
+    final shouldContinue = await _promptForPlaceName();
+    if (!mounted || !shouldContinue) return;
 
     Navigator.of(context).pop(
       _GeoTaggedPhoto(
@@ -1234,6 +1236,44 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
         name: _nameController.text.trim(),
       ),
     );
+  }
+
+  Future<bool> _promptForPlaceName() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Place name'),
+          content: TextField(
+            controller: _nameController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              hintText: 'Enter place name',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                _nameController.clear();
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Skip'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
   }
 
   @override
@@ -1350,35 +1390,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.18),
-                            ),
-                          ),
-                          child: TextField(
-                            controller: _nameController,
-                            style: const TextStyle(color: Colors.black54),
-                            onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
-                              hintText: 'Enter place name',
-                              hintStyle: TextStyle(color: Colors.black54),
-                              prefixIcon: Icon(
-                                Icons.edit_location_alt_outlined,
-                                color: Colors.black54,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
-                        ),
                         if (_locationError != null) ...[
-                          const SizedBox(height: 10),
                           Text(
                             _locationError!,
                             style: const TextStyle(
@@ -1671,8 +1683,8 @@ class _OverlayTextBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fontSize = dense ? 16.0 : 22.0;
-    final titleSize = dense ? 20.0 : 28.0;
+    final fontSize = dense ? 11.0 : 14.0;
+    final titleSize = dense ? 14.0 : 18.0;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: dense ? 220 : 300),
       child: Column(
@@ -1789,36 +1801,17 @@ List<String> _buildOverlayLines({
   required DistanceUnit unit,
   bool includeLocationNote = true,
 }) {
-  final position = capture.position;
   final placemark = capture.placemark;
-  final utmText = position == null
-      ? null
-      : _formatUtmCoordinate(
-          position.latitude,
-          position.longitude,
-          referenceEllipsoid,
-        );
+  final street = (placemark?.street ?? '').trim();
+  final area = [
+    placemark?.subLocality?.trim() ?? '',
+    placemark?.locality?.trim() ?? '',
+  ].firstWhere((value) => value.isNotEmpty, orElse: () => '');
 
   final lines = <String>[
-    if (position != null)
-      '${_formatLatitudeLabel(position.latitude, coordinateFormat)} LAT',
-    if (position != null)
-      '${_formatLongitudeLabel(position.longitude, coordinateFormat)} LON',
-    if (utmText != null) ...[utmText],
-    'Ellipsoid ${referenceEllipsoid.displayName}',
-    if (position != null)
-      'Altitude ${_formatDistance(position.altitude, unit)} a.s.l',
-    _formatCaptureDateTime(capture.capturedAt),
-    'Location provider ${_providerLabel()}',
-    if ((placemark?.street ?? '').trim().isNotEmpty) placemark!.street!.trim(),
-    if ((placemark?.subLocality ?? '').trim().isNotEmpty)
-      placemark!.subLocality!.trim(),
-    if ((placemark?.locality ?? '').trim().isNotEmpty)
-      placemark!.locality!.trim(),
-    if ((placemark?.administrativeArea ?? '').trim().isNotEmpty)
-      placemark!.administrativeArea!.trim(),
-    if ((placemark?.country ?? '').trim().isNotEmpty)
-      placemark!.country!.trim(),
+    'Date ${_formatCaptureDateTime(capture.capturedAt)}',
+    if (street.isNotEmpty) 'Street $street',
+    if (area.isNotEmpty) 'Place $area',
   ];
 
   if (includeLocationNote && capture.locationError != null) {
@@ -1829,44 +1822,6 @@ List<String> _buildOverlayLines({
     return const ['Waiting for GPS details'];
   }
   return lines;
-}
-
-String _formatLatitudeLabel(double value, CoordinateFormat format) {
-  switch (format) {
-    case CoordinateFormat.decimalDegrees:
-      return value.toStringAsFixed(6);
-    case CoordinateFormat.degreesMinutesSeconds:
-      return _toDms(value, value >= 0 ? 'N' : 'S');
-    case CoordinateFormat.degreesDecimalMinutes:
-      return _toDdm(value, value >= 0 ? 'N' : 'S');
-  }
-}
-
-String _formatLongitudeLabel(double value, CoordinateFormat format) {
-  switch (format) {
-    case CoordinateFormat.decimalDegrees:
-      return value.toStringAsFixed(6);
-    case CoordinateFormat.degreesMinutesSeconds:
-      return _toDms(value, value >= 0 ? 'E' : 'W');
-    case CoordinateFormat.degreesDecimalMinutes:
-      return _toDdm(value, value >= 0 ? 'E' : 'W');
-  }
-}
-
-String _toDms(double decimal, String direction) {
-  final absolute = decimal.abs();
-  final degrees = absolute.floor();
-  final minutesDecimal = (absolute - degrees) * 60;
-  final minutes = minutesDecimal.floor();
-  final seconds = (minutesDecimal - minutes) * 60;
-  return '$degrees°$minutes\'${seconds.toStringAsFixed(2)}"$direction';
-}
-
-String _toDdm(double decimal, String direction) {
-  final absolute = decimal.abs();
-  final degrees = absolute.floor();
-  final minutes = (absolute - degrees) * 60;
-  return '$degrees°${minutes.toStringAsFixed(4)}\'$direction';
 }
 
 String _formatDistance(double meters, DistanceUnit unit) {
@@ -1884,12 +1839,6 @@ String _formatCaptureDateTime(DateTime value) {
   final hh = value.hour.toString().padLeft(2, '0');
   final mm = value.minute.toString().padLeft(2, '0');
   return '$day/$month/$year $hh:$mm';
-}
-
-String _providerLabel() {
-  if (Platform.isAndroid) return 'Fused';
-  if (Platform.isIOS) return 'Core Location';
-  return 'Device GPS';
 }
 
 TextStyle _overlayStyle({
