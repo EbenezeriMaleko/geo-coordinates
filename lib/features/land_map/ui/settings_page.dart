@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive/hive.dart';
 
-import '../../auth/ui/login_page.dart';
+import '../../auth/models/auth_models.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../auth/ui/account_page.dart';
 import '../models/coordinate_format.dart';
 import '../models/reference_ellipsoid.dart';
 import '../state/settings_provider.dart';
@@ -26,9 +27,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final photoQuality = ref.watch(photoQualityProvider);
     final captureMode = ref.watch(photoCaptureModeProvider);
     final selectedEllipsoid = ref.watch(referenceEllipsoidProvider);
+    final session = ref.watch(authSessionProvider);
     final theme = Theme.of(context);
     final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
-    final accountSubtitle = _accountSubtitle();
+    final accountSubtitle = _accountSubtitle(session);
 
     return ColoredBox(
       color: const Color(0xFFF5F5F5),
@@ -271,12 +273,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     };
   }
 
-  String _accountSubtitle() {
-    final box = Hive.box('landbox');
-    final firstName = box.get('auth_first_name')?.toString().trim() ?? '';
-    final lastName = box.get('auth_last_name')?.toString().trim() ?? '';
-    final email = box.get('auth_email')?.toString().trim() ?? '';
-    final fullName = '$firstName $lastName'.trim();
+  String _accountSubtitle(AuthSession session) {
+    final user = session.user;
+    final fullName = user?.name.trim() ?? '';
+    final email = user?.email.trim() ?? '';
 
     if (fullName.isNotEmpty && email.isNotEmpty) {
       return '$fullName\n$email';
@@ -291,18 +291,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _openAccountPage() async {
-    final updated = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => const LoginPage(returnToPreviousPage: true),
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const AccountPage(),
       ),
     );
-
-    if (updated == true && mounted) {
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account connected')),
-      );
-    }
   }
 
   void _showCoordinateFormatSelector() {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:hive/hive.dart';
 
 import '../providers/auth_provider.dart';
 import 'login_page.dart';
@@ -63,21 +62,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     if (!mounted) return;
 
     if (result != null && result.success) {
-      // Persist logged-in user info so other parts of the app can use it
-      final box = Hive.box('landbox');
-      await box.put(
-        'auth_first_name',
-        result.user?.firstName ?? _firstNameController.text.trim(),
-      );
-      await box.put(
-        'auth_last_name',
-        result.user?.lastName ?? _lastNameController.text.trim(),
-      );
-      await box.put(
-        'auth_email',
-        result.user?.email ?? _emailController.text.trim(),
-      );
-
       _showSuccessDialog(result.message);
     }
   }

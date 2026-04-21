@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import 'land_map_page.dart';
 import 'my_location_page.dart';
 import 'saved_locations_page.dart';
+import '../services/land_sync_service.dart';
 import 'settings_page.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../state/land_map_notifier.dart';
@@ -20,11 +23,14 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
+  Timer? _syncTimer;
+  bool _syncInProgress = false;
 
   static const double _bottomNavHeight = 72;
   static const Color _bottomNavBackground = Colors.white;
   static const Color _selectedColor = Color(0xFF001F3F);
   static const Color _unselectedColor = Color(0xFF7C7C7C);
+  static const Duration _syncInterval = Duration(seconds: 60);
 
   late final List<Widget> _pages = [
     const LandMapPage(bottomInset: _bottomNavHeight + 12),
@@ -32,6 +38,33 @@ class _MainNavigationState extends State<MainNavigation> {
     SavedLocationsPage(onOpenMapRequested: () => _navigateToPage(0)),
     const SettingsPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runBackgroundSync();
+      _syncTimer = Timer.periodic(_syncInterval, (_) => _runBackgroundSync());
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _runBackgroundSync() async {
+    if (_syncInProgress || !mounted) return;
+
+    _syncInProgress = true;
+    try {
+      final service = LandSyncService(Hive.box('landbox'));
+      await service.syncPendingLands(limit: 10);
+    } finally {
+      _syncInProgress = false;
+    }
+  }
 
   void _navigateToPage(int index) {
     setState(() {

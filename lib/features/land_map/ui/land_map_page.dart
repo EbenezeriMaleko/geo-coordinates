@@ -10,10 +10,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_compass/flutter_compass.dart';
-import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import 'package:hugeicons/hugeicons.dart';
 
+import '../../../core/network/api_client.dart';
 import '../models/coordinate_format.dart';
 import '../models/reference_ellipsoid.dart';
 import '../services/utm_converter.dart';
@@ -40,7 +40,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   static const double _minZoom = 3;
   static const double _maxZoom = 20;
   static const double _defaultMapZoom = 16;
-  static const String _submitUrl = 'https://ardhi.co.tz/api/submit';
   static const String _defaultPhone = '1111111111';
   static const String _mapTypePrefKey = 'prefs_land_map_type';
 
@@ -485,6 +484,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }
 
     final box = Hive.box('landbox');
+    final authToken = _stringOrFallback(box.get('auth_token'), '');
+    if (authToken.isEmpty) {
+      return 'Sign in is required before cloud sync.';
+    }
+
     final phone = _stringOrFallback(box.get('submit_phone'), _defaultPhone);
 
     // `name` = full name of the logged-in user; `place` = the field name entered by the user
@@ -499,26 +503,51 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         : _stringOrFallback(box.get('auth_email'), 'Unknown');
 
     final payload = <String, dynamic>{
-      'name': ownerName,
+      'name': name,
       'phone': phone,
-      'place': name, // field name entered by the user
+      'description': ownerName.isEmpty ? null : 'Captured by $ownerName',
       'coordinates': points.map(_latLngToServerCoordinate).toList(),
     };
+    payload.removeWhere((key, value) => value == null);
 
     try {
-      final response = await http.post(
-        Uri.parse(_submitUrl),
-        headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
+      final response = await ApiClient.postJson(
+        '/lands',
+        body: payload,
+        bearerToken: authToken,
+        tag: 'land_map_manual_submit',
       );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return 'Server rejected payload (${response.statusCode}).';
+        return _extractApiError(
+          response.body,
+          'Server rejected payload (${response.statusCode}).',
+        );
       }
       return null;
     } catch (_) {
       return 'Failed to send payload to server.';
     }
+  }
+
+  String _extractApiError(String rawBody, String fallback) {
+    try {
+      final decoded = jsonDecode(rawBody);
+      if (decoded is Map<String, dynamic>) {
+        final topLevel = decoded['message'] as String?;
+        final errors = decoded['errors'];
+        if (errors is Map && errors.isNotEmpty) {
+          final firstValue = errors.values.first;
+          if (firstValue is List && firstValue.isNotEmpty) {
+            return firstValue.first.toString();
+          }
+        }
+        if (topLevel != null && topLevel.trim().isNotEmpty) {
+          return topLevel;
+        }
+      }
+    } catch (_) {}
+    return fallback;
   }
 
   String _stringOrFallback(dynamic value, String fallback) {
@@ -528,19 +557,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   Map<String, dynamic> _latLngToServerCoordinate(LatLng point) {
     final zone = _utmZone(point.latitude, point.longitude);
-    final converted = _toUtm(
-      latitude: point.latitude,
-      longitude: point.longitude,
-      zone: zone,
-    );
 
     return {
-      'x': converted.easting,
-      'y': converted.northing,
+      'x': point.longitude,
+      'y': point.latitude,
       'z': 0,
-      'zone': zone,
+      'zone': zone.toString(),
       'band': _utmBand(point.latitude),
-      'hemisphere': point.latitude >= 0 ? 'Northern' : 'Southern',
+      'hemisphere': point.latitude >= 0 ? 'N' : 'S',
     };
   }
 
@@ -567,70 +591,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return bands[index];
   }
 
-  _UtmCoordinate _toUtm({
-    required double latitude,
-    required double longitude,
-    required int zone,
-  }) {
-    const a = 6378137.0;
-    const f = 1 / 298.257223563;
-    const k0 = 0.9996;
-    final e2 = f * (2 - f);
-    final ep2 = e2 / (1 - e2);
-
-    final latRad = latitude * pi / 180.0;
-    final lonRad = longitude * pi / 180.0;
-    final lonOrigin = (zone - 1) * 6 - 180 + 3;
-    final lonOriginRad = lonOrigin * pi / 180.0;
-
-    final sinLat = sin(latRad);
-    final cosLat = cos(latRad);
-    final tanLat = tan(latRad);
-
-    final n = a / sqrt(1 - e2 * sinLat * sinLat);
-    final t = tanLat * tanLat;
-    final c = ep2 * cosLat * cosLat;
-    final aTerm = cosLat * (lonRad - lonOriginRad);
-
-    final m =
-        a *
-        ((1 - e2 / 4 - 3 * pow(e2, 2) / 64 - 5 * pow(e2, 3) / 256) * latRad -
-            (3 * e2 / 8 + 3 * pow(e2, 2) / 32 + 45 * pow(e2, 3) / 1024) *
-                sin(2 * latRad) +
-            (15 * pow(e2, 2) / 256 + 45 * pow(e2, 3) / 1024) * sin(4 * latRad) -
-            (35 * pow(e2, 3) / 3072) * sin(6 * latRad));
-
-    final easting =
-        k0 *
-            n *
-            (aTerm +
-                (1 - t + c) * pow(aTerm, 3) / 6 +
-                (5 - 18 * t + t * t + 72 * c - 58 * ep2) *
-                    pow(aTerm, 5) /
-                    120) +
-        500000.0;
-
-    var northing =
-        k0 *
-        (m +
-            n *
-                tanLat *
-                (pow(aTerm, 2) / 2 +
-                    (5 - t + 9 * c + 4 * c * c) * pow(aTerm, 4) / 24 +
-                    (61 - 58 * t + t * t + 600 * c - 330 * ep2) *
-                        pow(aTerm, 6) /
-                        720));
-
-    if (latitude < 0) {
-      northing += 10000000.0;
-    }
-
-    return _UtmCoordinate(
-      easting: (easting as num).toDouble(),
-      northing: (northing as num).toDouble(),
-    );
-  }
-
   void _showMarkerActions(_PlacedMarker marker) {
     showModalBottomSheet(
       context: context,
@@ -644,7 +604,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const HugeIcon(icon: HugeIcons.strokeRoundedPinLocation02),
+                leading: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedPinLocation02,
+                ),
                 title: const Text('Center here'),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1729,13 +1691,6 @@ String _formatMapUtm(
   final utm = UtmConverter.fromLatLng(latitude, longitude, ellipsoid);
   if (utm == null) return 'UTM unavailable';
   return utm.toDisplayString();
-}
-
-class _UtmCoordinate {
-  final double easting;
-  final double northing;
-
-  const _UtmCoordinate({required this.easting, required this.northing});
 }
 
 // Helper Widgets

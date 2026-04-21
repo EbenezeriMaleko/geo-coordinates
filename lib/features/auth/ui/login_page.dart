@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:hive/hive.dart';
 
 import '../../land_map/ui/main_navigation.dart';
 import '../providers/auth_provider.dart';
+import 'forgot_password_page.dart';
 import 'register_page.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -54,14 +54,6 @@ class _LoginPageState extends ConsumerState<LoginPage>
     if (!mounted) return;
 
     if (result != null && result.success) {
-      // Save login email so the app can identify the user if name isn't cached yet
-      final box = Hive.box('landbox');
-      final existingName = box.get('auth_first_name')?.toString().trim() ?? '';
-      if (existingName.isEmpty) {
-        await box.put('auth_email', _emailController.text.trim());
-      }
-
-      if (!mounted) return;
       if (widget.returnToPreviousPage) {
         Navigator.of(context).pop(true);
         return;
@@ -263,7 +255,22 @@ class _LoginPageState extends ConsumerState<LoginPage>
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.3,
                         ),
-                      ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: isLoading
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ForgotPasswordPage(),
+                          ),
+                        );
+                      },
+                child: const Text('Forgot password?'),
               ),
             ),
           ],
