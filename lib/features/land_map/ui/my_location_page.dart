@@ -1481,9 +1481,10 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
       children: [
         CameraPreview(controller),
         IgnorePointer(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 20, 116),
+            child: Align(
+              alignment: Alignment.bottomRight,
               child: _OverlayTextBlock(
                 title: _nameController.text.trim(),
                 lines: _buildOverlayLines(
@@ -1640,9 +1641,15 @@ class _GeoPhotoCanvas extends StatelessWidget {
             ),
           ),
         ),
-        Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: dense ? 18 : 26),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            dense ? 18 : 26,
+            dense ? 18 : 26,
+            dense ? 16 : 20,
+            dense ? 22 : 30,
+          ),
+          child: Align(
+            alignment: Alignment.bottomRight,
             child: _OverlayTextBlock(title: name, lines: lines, dense: dense),
           ),
         ),
@@ -1666,14 +1673,16 @@ class _OverlayTextBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final fontSize = dense ? 16.0 : 22.0;
     final titleSize = dense ? 20.0 : 28.0;
-    return SingleChildScrollView(
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: dense ? 220 : 300),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (title.isNotEmpty)
             Text(
               title,
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.right,
               style: _overlayStyle(
                 fontSize: titleSize,
                 weight: FontWeight.w700,
@@ -1683,7 +1692,7 @@ class _OverlayTextBlock extends StatelessWidget {
           for (final line in lines) ...[
             Text(
               line,
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.right,
               style: _overlayStyle(fontSize: fontSize),
             ),
             SizedBox(height: dense ? 4 : 8),

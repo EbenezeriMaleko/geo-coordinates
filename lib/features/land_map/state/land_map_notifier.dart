@@ -150,7 +150,12 @@ class LandMapNotifier extends Notifier<LandMapState> {
     return null;
   }
 
-  Future<String?> saveOffline({required String name}) async {
+  Future<String?> saveOffline({
+    required String name,
+    String? place,
+    String? phone,
+    String? description,
+  }) async {
     if (state.points.length < 3) {
       return 'Add at least 3 points to form a land boundary.';
     }
@@ -161,6 +166,9 @@ class LandMapNotifier extends Notifier<LandMapState> {
       final id = const Uuid().v4();
       final now = DateTime.now();
       final repo = ref.read(landRepoProvider);
+      final placeValue = place?.trim() ?? '';
+      final phoneValue = phone?.trim() ?? '';
+      final descriptionValue = description?.trim() ?? '';
       final pointsPayload = state.points
           .asMap()
           .entries
@@ -190,6 +198,21 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'syncStatus': 'pending',
           'points': pointsPayload,
         };
+        if (placeValue.isNotEmpty) {
+          updated['place'] = placeValue;
+        } else {
+          updated.remove('place');
+        }
+        if (phoneValue.isNotEmpty) {
+          updated['phone'] = phoneValue;
+        } else {
+          updated.remove('phone');
+        }
+        if (descriptionValue.isNotEmpty) {
+          updated['description'] = descriptionValue;
+        } else {
+          updated.remove('description');
+        }
         await repo.updateLand(state.activeFieldId!, updated);
       } else {
         final displayName = name.isEmpty
@@ -203,6 +226,15 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'syncStatus': 'pending',
           'points': pointsPayload,
         };
+        if (placeValue.isNotEmpty) {
+          payload['place'] = placeValue;
+        }
+        if (phoneValue.isNotEmpty) {
+          payload['phone'] = phoneValue;
+        }
+        if (descriptionValue.isNotEmpty) {
+          payload['description'] = descriptionValue;
+        }
         await repo.saveLand(payload);
       }
 

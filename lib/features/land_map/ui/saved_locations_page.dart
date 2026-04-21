@@ -7,13 +7,14 @@ import 'package:latlong2/latlong.dart';
 
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../auth/ui/account_page.dart';
 import '../models/land_api_models.dart';
 import '../providers/land_cloud_provider.dart';
 import '../state/land_map_notifier.dart';
 
 enum _ViewMode { combined, basic, text, photo }
+
 enum _SavedSort { newest, oldest, nameAsc, nameDesc, pointsDesc }
+
 enum _SavedFilter { all, threePlusPoints, updatedOnly }
 
 class SavedLocationsPage extends ConsumerStatefulWidget {
@@ -27,7 +28,8 @@ class SavedLocationsPage extends ConsumerStatefulWidget {
 
 class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   static const String _prefViewModeKey = 'prefs_saved_locations_view_mode';
-  static const String _prefCompactModeKey = 'prefs_saved_locations_compact_mode';
+  static const String _prefCompactModeKey =
+      'prefs_saved_locations_compact_mode';
 
   _ViewMode _viewMode = _ViewMode.combined;
   _SavedSort _sort = _SavedSort.newest;
@@ -64,9 +66,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   Future<void> _fetchRemoteData() async {
     final session = ref.read(authSessionProvider);
     if (!session.isLoggedIn || !session.isVerified) return;
-    await ref.read(remoteLandsProvider.notifier).fetch(
-      search: _searchQuery.isEmpty ? null : _searchQuery,
-    );
+    await ref
+        .read(remoteLandsProvider.notifier)
+        .fetch(search: _searchQuery.isEmpty ? null : _searchQuery);
     await ref.read(remoteLandSummaryProvider.notifier).fetch();
   }
 
@@ -108,335 +110,361 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final box = Hive.box('landbox');
     final authSession = ref.watch(authSessionProvider);
     final remoteLandsState = ref.watch(remoteLandsProvider);
-    final remoteSummaryState = ref.watch(remoteLandSummaryProvider);
     final canUseCloud = authSession.isLoggedIn && authSession.isVerified;
 
     return Container(
       color: Colors.white70,
       child: Column(
         children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
-            children: [
-              if (_selectionMode)
-                Text(
-                  '${_selectedIds.length} selected',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                if (_selectionMode)
+                  Text(
+                    '${_selectedIds.length} selected',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              const Spacer(),
-              if (_selectionMode)
-                IconButton(
-                  onPressed: _selectedIds.isEmpty
-                      ? null
-                      : _setGroupForSelectedItems,
-                  icon: const Icon(Icons.folder_outlined, size: 20),
-                  tooltip: 'Set group',
-                ),
-              if (_selectionMode)
-                IconButton(
-                  onPressed: _selectedIds.isEmpty ? null : _shareSelectedItems,
-                  icon: const Icon(Icons.share_outlined, size: 20),
-                  tooltip: 'Share selected',
-                ),
-              if (_selectionMode)
-                IconButton(
-                  onPressed: _selectedIds.isEmpty ? null : _deleteSelectedItems,
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  tooltip: 'Delete selected',
-                ),
-              if (_selectionMode)
-                IconButton(
-                  onPressed: _exitSelectionMode,
-                  icon: const Icon(Icons.close, size: 20),
-                  tooltip: 'Exit selection',
-                ),
-              if (!_selectionMode) ...[
-              IconButton(
-                onPressed: _showFilterSheet,
-                icon: const Icon(Icons.tune, size: 20),
-              ),
-              IconButton(
-                onPressed: _showSortSheet,
-                icon: const Icon(Icons.sort, size: 20),
-              ),
-              IconButton(
-                onPressed: _showPageMenu,
-                icon: const Icon(Icons.more_vert, size: 20),
-              ),
+                const Spacer(),
+                if (_selectionMode)
+                  IconButton(
+                    onPressed: _selectedIds.isEmpty
+                        ? null
+                        : _setGroupForSelectedItems,
+                    icon: const Icon(Icons.folder_outlined, size: 20),
+                    tooltip: 'Set group',
+                  ),
+                if (_selectionMode)
+                  IconButton(
+                    onPressed: _selectedIds.isEmpty
+                        ? null
+                        : _shareSelectedItems,
+                    icon: const Icon(Icons.share_outlined, size: 20),
+                    tooltip: 'Share selected',
+                  ),
+                if (_selectionMode)
+                  IconButton(
+                    onPressed: _selectedIds.isEmpty
+                        ? null
+                        : _deleteSelectedItems,
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    tooltip: 'Delete selected',
+                  ),
+                if (_selectionMode)
+                  IconButton(
+                    onPressed: _exitSelectionMode,
+                    icon: const Icon(Icons.close, size: 20),
+                    tooltip: 'Exit selection',
+                  ),
+                if (!_selectionMode) ...[
+                  IconButton(
+                    onPressed: _showFilterSheet,
+                    icon: const Icon(Icons.tune, size: 20),
+                  ),
+                  IconButton(
+                    onPressed: _showSortSheet,
+                    icon: const Icon(Icons.sort, size: 20),
+                  ),
+                  IconButton(
+                    onPressed: _showPageMenu,
+                    icon: const Icon(Icons.more_vert, size: 20),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _searchQuery = value.trim()),
-            decoration: InputDecoration(
-              hintText: 'Search saved locations',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      onPressed: () {
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() => _searchQuery = value.trim());
+                if (canUseCloud) {
+                  _fetchRemoteData();
+                }
+              },
+              decoration: InputDecoration(
+                hintText: 'Search saved locations',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                          if (canUseCloud) {
+                            _fetchRemoteData();
+                          }
+                        },
+                        icon: const Icon(Icons.close),
+                      )
+                    : null,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_searchQuery.isNotEmpty ||
+              _filter != _SavedFilter.all ||
+              _sort != _SavedSort.newest ||
+              _groupFilter != 'All groups')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (_searchQuery.isNotEmpty)
+                    _ActiveTag(
+                      label: 'Search: $_searchQuery',
+                      onClear: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
                       },
-                      icon: const Icon(Icons.close),
-                    )
-                  : null,
+                    ),
+                  if (_filter != _SavedFilter.all)
+                    _ActiveTag(
+                      label: 'Filter: ${_filterLabel(_filter)}',
+                      onClear: () => setState(() => _filter = _SavedFilter.all),
+                    ),
+                  if (_sort != _SavedSort.newest)
+                    _ActiveTag(
+                      label: 'Sort: ${_sortLabel(_sort)}',
+                      onClear: () => setState(() => _sort = _SavedSort.newest),
+                    ),
+                  if (_groupFilter != 'All groups')
+                    _ActiveTag(
+                      label: 'Group: $_groupFilter',
+                      onClear: () =>
+                          setState(() => _groupFilter = 'All groups'),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        if (_searchQuery.isNotEmpty ||
-            _filter != _SavedFilter.all ||
-            _sort != _SavedSort.newest ||
-            _groupFilter != 'All groups')
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            child: Row(
               children: [
-                if (_searchQuery.isNotEmpty)
-                  _ActiveTag(
-                    label: 'Search: $_searchQuery',
-                    onClear: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _ViewModeChip(
+                          label: 'Combined',
+                          icon: Icons.view_list,
+                          isSelected: _viewMode == _ViewMode.combined,
+                          onTap: () => _setViewMode(_ViewMode.combined),
+                        ),
+                        const SizedBox(width: 8),
+                        _ViewModeChip(
+                          label: 'Basic',
+                          icon: Icons.view_agenda,
+                          isSelected: _viewMode == _ViewMode.basic,
+                          onTap: () => _setViewMode(_ViewMode.basic),
+                        ),
+                        const SizedBox(width: 8),
+                        _ViewModeChip(
+                          label: 'Text',
+                          icon: Icons.notes,
+                          isSelected: _viewMode == _ViewMode.text,
+                          onTap: () => _setViewMode(_ViewMode.text),
+                        ),
+                        const SizedBox(width: 8),
+                        _ViewModeChip(
+                          label: 'Photo',
+                          icon: Icons.photo_camera,
+                          isSelected: _viewMode == _ViewMode.photo,
+                          onTap: () => _setViewMode(_ViewMode.photo),
+                        ),
+                      ],
+                    ),
                   ),
-                if (_filter != _SavedFilter.all)
-                  _ActiveTag(
-                    label: 'Filter: ${_filterLabel(_filter)}',
-                    onClear: () => setState(() => _filter = _SavedFilter.all),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _toggleCompactMode,
+                  tooltip: _compactMode
+                      ? 'Disable compact mode'
+                      : 'Enable compact mode',
+                  icon: Icon(
+                    _compactMode ? Icons.compress : Icons.expand,
+                    color: _compactMode
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
                   ),
-                if (_sort != _SavedSort.newest)
-                  _ActiveTag(
-                    label: 'Sort: ${_sortLabel(_sort)}',
-                    onClear: () => setState(() => _sort = _SavedSort.newest),
-                  ),
-                if (_groupFilter != 'All groups')
-                  _ActiveTag(
-                    label: 'Group: $_groupFilter',
-                    onClear: () => setState(() => _groupFilter = 'All groups'),
-                  ),
+                ),
               ],
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _ViewModeChip(
-                        label: 'Combined',
-                        icon: Icons.view_list,
-                        isSelected: _viewMode == _ViewMode.combined,
-                        onTap: () => _setViewMode(_ViewMode.combined),
-                      ),
-                      const SizedBox(width: 8),
-                      _ViewModeChip(
-                        label: 'Basic',
-                        icon: Icons.view_agenda,
-                        isSelected: _viewMode == _ViewMode.basic,
-                        onTap: () => _setViewMode(_ViewMode.basic),
-                      ),
-                      const SizedBox(width: 8),
-                      _ViewModeChip(
-                        label: 'Text',
-                        icon: Icons.notes,
-                        isSelected: _viewMode == _ViewMode.text,
-                        onTap: () => _setViewMode(_ViewMode.text),
-                      ),
-                      const SizedBox(width: 8),
-                      _ViewModeChip(
-                        label: 'Photo',
-                        icon: Icons.photo_camera,
-                        isSelected: _viewMode == _ViewMode.photo,
-                        onTap: () => _setViewMode(_ViewMode.photo),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: _toggleCompactMode,
-                tooltip: _compactMode ? 'Disable compact mode' : 'Enable compact mode',
-                icon: Icon(
-                  _compactMode ? Icons.compress : Icons.expand,
-                  color: _compactMode ? Theme.of(context).colorScheme.primary : null,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: ValueListenableBuilder(
-            valueListenable: box.listenable(),
-            builder: (context, Box box, _) {
-              final items =
-                  box.values
-                      .whereType<Map>()
-                      .map((e) => Map<String, dynamic>.from(e))
-                      .where((e) {
-                        final entityType = e['entityType']?.toString();
-                        if (entityType == 'marker') return false;
-                        return true;
-                      })
-                      .toList();
+          const SizedBox(height: 16),
+          Expanded(
+            child: ValueListenableBuilder(
+              valueListenable: box.listenable(),
+              builder: (context, Box box, _) {
+                final localItems = box.values
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .where((e) {
+                      final entityType = e['entityType']?.toString();
+                      if (entityType == 'marker') return false;
+                      return true;
+                    })
+                    .toList();
 
-              final filteredSorted = _applyFilterAndSort(items);
-              final searched = _applySearch(filteredSorted);
-              final groups = _groupOptions(items);
+                final remoteItems =
+                    remoteLandsState.asData?.value?.items ??
+                    const <LandListItem>[];
+                final items = _buildDisplayItems(
+                  localItems: localItems,
+                  remoteItems: remoteItems,
+                  canUseCloud: canUseCloud,
+                );
 
-              return Column(
-                children: [
-                  if (groups.length > 1)
-                    SizedBox(
-                      height: 40,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: groups.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final group = groups[index];
-                          return ChoiceChip(
-                            label: Text(group),
-                            selected: _groupFilter == group,
-                            onSelected: (_) =>
-                                setState(() => _groupFilter = group),
-                          );
-                        },
-                      ),
-                    ),
-                  if (groups.length > 1) const SizedBox(height: 8),
-                  if (authSession.isLoggedIn && !authSession.isVerified)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: _CloudInfoBanner(
-                        title: 'Cloud sync is locked',
-                        subtitle:
-                            'Verify your email to load lands from the server.',
-                        actionLabel: 'Account',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const AccountPage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  if (canUseCloud)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: _RemoteLandsSection(
-                        landsState: remoteLandsState,
-                        summaryState: remoteSummaryState,
-                        compactMode: _compactMode,
-                        onRefresh: _fetchRemoteData,
-                        onOpenLand: _showRemoteLandDetails,
-                      ),
-                    ),
-                  if (searched.isEmpty)
-                    Expanded(
-                      child: _searchQuery.isNotEmpty ||
-                              _filter != _SavedFilter.all ||
-                              _sort != _SavedSort.newest ||
-                              _groupFilter != 'All groups'
-                          ? const _EmptyState(
-                              title: 'No matching saved locations',
-                              subtitle:
-                                  'Try changing search text, filter, sort, or group.',
-                            )
-                          : const _EmptyState(),
-                    )
-                  else
-                    ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${searched.length} result${searched.length == 1 ? '' : 's'}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.black54,
-                          fontWeight: FontWeight.w600,
+                final filteredSorted = _applyFilterAndSort(items);
+                final searched = _applySearch(filteredSorted);
+                final groups = _groupOptions(items);
+
+                return Column(
+                  children: [
+                    if (groups.length > 1)
+                      SizedBox(
+                        height: 40,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: groups.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final group = groups[index];
+                            return ChoiceChip(
+                              label: Text(group),
+                              selected: _groupFilter == group,
+                              onSelected: (_) =>
+                                  setState(() => _groupFilter = group),
+                            );
+                          },
                         ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemCount: searched.length,
-                      separatorBuilder: (_, _) =>
-                          SizedBox(height: _compactMode ? 8 : 12),
-                      itemBuilder: (context, index) {
-                        final item = searched[index];
-                        final id = item['id']?.toString() ?? '';
-                        final isSelected = _selectedIds.contains(id);
-                        return _SavedLocationCard(
-                          id: id,
-                          name: item['name']?.toString() ?? 'Saved location',
-                          group: _groupOf(item),
-                          createdAt: item['createdAt']?.toString(),
-                          updatedAt: item['updatedAt']?.toString(),
-                          points: (item['points'] as List?)?.length ?? 0,
-                          viewMode: _viewMode,
-                          compactMode: _compactMode,
-                          selectionMode: _selectionMode,
-                          isSelected: isSelected,
-                          onTap: () {
-                            if (_selectionMode) {
-                              _toggleSelection(id);
-                              return;
-                            }
-                            _showDetails(context, item);
+                    if (groups.length > 1) const SizedBox(height: 8),
+                    if (searched.isEmpty)
+                      Expanded(
+                        child:
+                            _searchQuery.isNotEmpty ||
+                                _filter != _SavedFilter.all ||
+                                _sort != _SavedSort.newest ||
+                                _groupFilter != 'All groups'
+                            ? const _EmptyState(
+                                title: 'No matching saved locations',
+                                subtitle:
+                                    'Try changing search text, filter, sort, or group.',
+                              )
+                            : const _EmptyState(),
+                      )
+                    else ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${searched.length} result${searched.length == 1 ? '' : 's'}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Colors.black54,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                          itemCount: searched.length,
+                          separatorBuilder: (_, _) =>
+                              SizedBox(height: _compactMode ? 8 : 12),
+                          itemBuilder: (context, index) {
+                            final item = searched[index];
+                            final id = _selectionKey(item);
+                            final isSelected = _selectedIds.contains(id);
+                            final isRemote = _isRemoteItem(item);
+                            return _SavedLocationCard(
+                              id: id,
+                              name:
+                                  item['name']?.toString() ??
+                                  item['place']?.toString() ??
+                                  'Saved location',
+                              group: _groupOf(item),
+                              createdAt: item['createdAt']?.toString(),
+                              updatedAt: item['updatedAt']?.toString(),
+                              points: _pointsCount(item),
+                              isCloudSynced: _isCloudSynced(item),
+                              viewMode: _viewMode,
+                              compactMode: _compactMode,
+                              selectionMode: _selectionMode,
+                              isSelected: isSelected,
+                              onTap: () {
+                                if (_selectionMode) {
+                                  _toggleSelection(id);
+                                  return;
+                                }
+                                if (isRemote) {
+                                  final remoteLand = _remoteLandFromItem(item);
+                                  if (remoteLand != null) {
+                                    _showRemoteLandDetails(remoteLand);
+                                    return;
+                                  }
+                                }
+                                final linkedCloudId = _linkedCloudId(item);
+                                if (linkedCloudId != null && canUseCloud) {
+                                  _openCloudDetailsById(
+                                    linkedCloudId,
+                                    fallbackName:
+                                        item['name']?.toString() ??
+                                        'Cloud land',
+                                  );
+                                  return;
+                                }
+                                _showDetails(context, item);
+                              },
+                              onLongPress: () {
+                                if (_selectionMode) {
+                                  _toggleSelection(id);
+                                  return;
+                                }
+                                _enterSelectionModeWith(id);
+                              },
+                              onMore: () {
+                                if (_selectionMode) {
+                                  _toggleSelection(id);
+                                  return;
+                                }
+                                _showActions(
+                                  context,
+                                  id,
+                                  item,
+                                  isRemote: isRemote,
+                                );
+                              },
+                            );
                           },
-                          onLongPress: () {
-                            if (_selectionMode) {
-                              _toggleSelection(id);
-                              return;
-                            }
-                            _enterSelectionModeWith(id);
-                          },
-                          onMore: () {
-                            if (_selectionMode) {
-                              _toggleSelection(id);
-                              return;
-                            }
-                            _showActions(context, id, item);
-                          },
-                        );
-                      },
-                    ),
-                  ),
+                        ),
+                      ),
                     ],
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
 
-  List<Map<String, dynamic>> _applyFilterAndSort(List<Map<String, dynamic>> src) {
+  List<Map<String, dynamic>> _applyFilterAndSort(
+    List<Map<String, dynamic>> src,
+  ) {
     final out = src.where((item) {
-      final points = (item['points'] as List?)?.length ?? 0;
+      final points = _pointsCount(item);
       if (_groupFilter != 'All groups' && _groupOf(item) != _groupFilter) {
         return false;
       }
@@ -453,27 +481,25 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     out.sort((a, b) {
       switch (_sort) {
         case _SavedSort.oldest:
-          return (a['createdAt'] ?? '')
-              .toString()
-              .compareTo((b['createdAt'] ?? '').toString());
+          return (a['createdAt'] ?? '').toString().compareTo(
+            (b['createdAt'] ?? '').toString(),
+          );
         case _SavedSort.nameAsc:
-          return (a['name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo((b['name'] ?? '').toString().toLowerCase());
+          return (a['name'] ?? '').toString().toLowerCase().compareTo(
+            (b['name'] ?? '').toString().toLowerCase(),
+          );
         case _SavedSort.nameDesc:
-          return (b['name'] ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo((a['name'] ?? '').toString().toLowerCase());
+          return (b['name'] ?? '').toString().toLowerCase().compareTo(
+            (a['name'] ?? '').toString().toLowerCase(),
+          );
         case _SavedSort.pointsDesc:
-          final aPoints = (a['points'] as List?)?.length ?? 0;
-          final bPoints = (b['points'] as List?)?.length ?? 0;
+          final aPoints = _pointsCount(a);
+          final bPoints = _pointsCount(b);
           return bPoints.compareTo(aPoints);
         case _SavedSort.newest:
-          return (b['createdAt'] ?? '')
-              .toString()
-              .compareTo((a['createdAt'] ?? '').toString());
+          return (b['createdAt'] ?? '').toString().compareTo(
+            (a['createdAt'] ?? '').toString(),
+          );
       }
     });
     return out;
@@ -484,10 +510,12 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final q = _searchQuery.toLowerCase();
     return src.where((item) {
       final name = item['name']?.toString().toLowerCase() ?? '';
+      final place = item['place']?.toString().toLowerCase() ?? '';
       final created = _formatDate(item['createdAt']?.toString()).toLowerCase();
-      final points = (item['points'] as List?)?.length ?? 0;
+      final points = _pointsCount(item);
       final group = _groupOf(item).toLowerCase();
       return name.contains(q) ||
+          place.contains(q) ||
           created.contains(q) ||
           '$points'.contains(q) ||
           group.contains(q);
@@ -495,8 +523,123 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   String _groupOf(Map<String, dynamic> item) {
+    if (_isRemoteItem(item)) {
+      return 'Cloud';
+    }
     final value = item['group']?.toString().trim() ?? '';
     return value.isEmpty ? 'General' : value;
+  }
+
+  bool _isCloudSynced(Map<String, dynamic> item) {
+    if (_isRemoteItem(item)) return true;
+
+    final syncStatus = item['syncStatus']?.toString().toLowerCase() ?? '';
+    if (syncStatus == 'synced') return true;
+
+    final cloudId = item['cloudId']?.toString().trim() ?? '';
+    if (cloudId.isNotEmpty) return true;
+
+    final lastSyncedAt = item['lastSyncedAt']?.toString().trim() ?? '';
+    return lastSyncedAt.isNotEmpty;
+  }
+
+  List<Map<String, dynamic>> _buildDisplayItems({
+    required List<Map<String, dynamic>> localItems,
+    required List<LandListItem> remoteItems,
+    required bool canUseCloud,
+  }) {
+    if (!canUseCloud || remoteItems.isEmpty) {
+      return localItems;
+    }
+
+    final remoteIds = remoteItems.map((e) => e.id).toSet();
+    final merged = <Map<String, dynamic>>[];
+
+    for (final remote in remoteItems) {
+      merged.add(_remoteLandToDisplayItem(remote));
+    }
+
+    for (final local in localItems) {
+      final cloudId = local['cloudId']?.toString().trim() ?? '';
+      final localId = local['id']?.toString().trim() ?? '';
+      if (cloudId.isNotEmpty && remoteIds.contains(cloudId)) {
+        continue;
+      }
+      if (localId.isNotEmpty && remoteIds.contains(localId)) {
+        continue;
+      }
+      merged.add(local);
+    }
+
+    return merged;
+  }
+
+  Map<String, dynamic> _remoteLandToDisplayItem(LandListItem remote) {
+    return {
+      'id': remote.id,
+      'entityType': 'land',
+      'name': remote.name,
+      'place': remote.place,
+      'phone': remote.phone,
+      'description': remote.description,
+      'createdAt': remote.createdAt,
+      'updatedAt': remote.updatedAt,
+      'pointsCount': remote.pointsCount,
+      'syncStatus': remote.syncStatus,
+      '__isRemote': true,
+    };
+  }
+
+  bool _isRemoteItem(Map<String, dynamic> item) {
+    return item['__isRemote'] == true;
+  }
+
+  String _selectionKey(Map<String, dynamic> item) {
+    final id = item['id']?.toString() ?? '';
+    return _isRemoteItem(item) ? 'remote:$id' : id;
+  }
+
+  int _pointsCount(Map<String, dynamic> item) {
+    final points = item['points'];
+    if (points is List) return points.length;
+    return (item['pointsCount'] as num?)?.toInt() ?? 0;
+  }
+
+  LandListItem? _remoteLandFromItem(Map<String, dynamic> item) {
+    if (!_isRemoteItem(item)) return null;
+    final id = item['id']?.toString() ?? '';
+    if (id.isEmpty) return null;
+
+    return LandListItem(
+      id: id,
+      userId: '',
+      name: item['name']?.toString() ?? '',
+      place: item['place']?.toString(),
+      phone: item['phone']?.toString(),
+      area: (item['area'] as num?)?.toDouble(),
+      perimeter: (item['perimeter'] as num?)?.toDouble(),
+      description: item['description']?.toString(),
+      syncStatus: item['syncStatus']?.toString() ?? 'synced',
+      lastSyncedAt: item['lastSyncedAt']?.toString(),
+      pointsCount: _pointsCount(item),
+      markersCount: (item['markersCount'] as num?)?.toInt() ?? 0,
+      mediaCount: (item['mediaCount'] as num?)?.toInt() ?? 0,
+      createdAt: item['createdAt']?.toString(),
+      updatedAt: item['updatedAt']?.toString(),
+    );
+  }
+
+  String? _linkedCloudId(Map<String, dynamic> item) {
+    final cloudId = item['cloudId']?.toString().trim() ?? '';
+    if (cloudId.isNotEmpty) return cloudId;
+
+    final syncStatus = item['syncStatus']?.toString().toLowerCase() ?? '';
+    if (syncStatus == 'synced') {
+      final id = item['id']?.toString().trim() ?? '';
+      if (id.isNotEmpty) return id;
+    }
+
+    return null;
   }
 
   List<String> _groupOptions(List<Map<String, dynamic>> items) {
@@ -675,7 +818,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
+              leading: const Icon(
+                Icons.delete_sweep_outlined,
+                color: Colors.red,
+              ),
               title: const Text('Delete all saved lands'),
               textColor: Colors.red,
               onTap: () {
@@ -694,7 +840,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete all saved lands?'),
-        content: const Text('Markers will be kept. This action cannot be undone.'),
+        content: const Text(
+          'Markers will be kept. This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -703,11 +851,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           ElevatedButton(
             onPressed: () async {
               final box = Hive.box('landbox');
-              final keysToDelete = box.toMap().entries.where((entry) {
-                final value = entry.value;
-                if (value is! Map) return false;
-                return value['entityType']?.toString() != 'marker';
-              }).map((e) => e.key).toList();
+              final keysToDelete = box
+                  .toMap()
+                  .entries
+                  .where((entry) {
+                    final value = entry.value;
+                    if (value is! Map) return false;
+                    return value['entityType']?.toString() != 'marker';
+                  })
+                  .map((e) => e.key)
+                  .toList();
               await box.deleteAll(keysToDelete);
               if (dialogContext.mounted) {
                 Navigator.pop(dialogContext);
@@ -848,7 +1001,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               if (!mounted) return;
               if (dialogContext.mounted) Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Group updated for selected items')),
+                const SnackBar(
+                  content: Text('Group updated for selected items'),
+                ),
               );
             },
             child: const Text('Save'),
@@ -861,8 +1016,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   void _showActions(
     BuildContext context,
     String id,
-    Map<String, dynamic> item,
-  ) {
+    Map<String, dynamic> item, {
+    required bool isRemote,
+  }) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -885,52 +1041,65 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   ),
                 ),
                 _ActionTile(
-                  icon: Icons.map_outlined,
-                  label: 'Open on map',
+                  icon: isRemote
+                      ? Icons.visibility_outlined
+                      : Icons.map_outlined,
+                  label: isRemote ? 'View cloud details' : 'Open on map',
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    _openSavedLandOnMap(context, item);
+                    if (isRemote) {
+                      final remoteLand = _remoteLandFromItem(item);
+                      if (remoteLand != null) {
+                        _showRemoteLandDetails(remoteLand);
+                      }
+                    } else {
+                      _openSavedLandOnMap(context, item);
+                    }
                   },
                 ),
-                _ActionTile(
-                  icon: Icons.edit,
-                  label: 'Rename',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _renameItem(context, id, item['name']?.toString() ?? '');
-                  },
-                ),
-                _ActionTile(
-                  icon: Icons.copy,
-                  label: 'Copy coordinates',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _copyCoordinates(context, item);
-                  },
-                ),
-                _ActionTile(
-                  icon: Icons.share,
-                  label: 'Share',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _shareItem(context, item);
-                  },
-                ),
-                _ActionTile(
-                  icon: Icons.folder_outlined,
-                  label: 'Set group',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _setGroupForItem(context, id, item);
-                  },
-                ),
+                if (!isRemote)
+                  _ActionTile(
+                    icon: Icons.edit,
+                    label: 'Rename',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _renameItem(context, id, item['name']?.toString() ?? '');
+                    },
+                  ),
+                if (!isRemote)
+                  _ActionTile(
+                    icon: Icons.copy,
+                    label: 'Copy coordinates',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _copyCoordinates(context, item);
+                    },
+                  ),
+                if (!isRemote)
+                  _ActionTile(
+                    icon: Icons.share,
+                    label: 'Share',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _shareItem(context, item);
+                    },
+                  ),
+                if (!isRemote)
+                  _ActionTile(
+                    icon: Icons.folder_outlined,
+                    label: 'Set group',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _setGroupForItem(context, id, item);
+                    },
+                  ),
                 _ActionTile(
                   icon: Icons.delete_outline,
                   label: 'Delete',
                   isDestructive: true,
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    _deleteItem(context, id);
+                    _deleteItem(context, id, item: item, isRemote: isRemote);
                   },
                 ),
               ],
@@ -962,190 +1131,178 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    item['name']?.toString() ?? 'Saved location',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${points.length} points',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Group: ${_groupOf(item)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Created: ${_formatDate(item['createdAt']?.toString())}',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-                  ),
-                ),
-                if ((item['updatedAt']?.toString().isNotEmpty ?? false))
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Updated: ${_formatDate(item['updatedAt']?.toString())}',
+                      item['name']?.toString() ?? 'Saved location',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${points.length} points',
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(color: Colors.black54),
                     ),
                   ),
-                const SizedBox(height: 16),
-                if (points.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      height: 180,
-                      child: FlutterMap(
-                        options: MapOptions(
-                          initialCenter: points.first,
-                          initialZoom: 17,
-                          interactionOptions: const InteractionOptions(
-                            flags: InteractiveFlag.none,
-                          ),
-                          cameraConstraint: CameraConstraint.contain(
-                            bounds: LatLngBounds.fromPoints(points),
-                          ),
-                        ),
-                        children: [
-                          TileLayer(
-                            urlTemplate:
-                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.example.geo_coordinates',
-                          ),
-                          if (points.length >= 2)
-                            PolylineLayer(
-                              polylines: [
-                                Polyline(
-                                  points: points,
-                                  strokeWidth: 3,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ],
-                            ),
-                          if (points.length >= 3)
-                            PolygonLayer(
-                              polygons: [
-                                Polygon(
-                                  points: points,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.16),
-                                  borderStrokeWidth: 2,
-                                  borderColor: Theme.of(
-                                    context,
-                                  ).colorScheme.primary,
-                                ),
-                              ],
-                            ),
-                          MarkerLayer(
-                            markers: points
-                                .map(
-                                  (p) => Marker(
-                                    width: 20,
-                                    height: 20,
-                                    point: p,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 2,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ],
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Group: ${_groupOf(item)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                if (points.isNotEmpty) const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      _openSavedLandOnMap(context, item);
-                    },
-                    icon: const Icon(Icons.map_outlined),
-                    label: const Text('Open on map'),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Created: ${_formatDate(item['createdAt']?.toString())}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                if (points.isEmpty)
-                  const Text('No points saved.')
-                else
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: points.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final p = points[index];
-                      return ListTile(
-                        dense: true,
-                        leading: Text('#${index + 1}'),
-                        title: Text('${p.latitude}, ${p.longitude}'),
-                      );
-                    },
+                  if ((item['updatedAt']?.toString().isNotEmpty ?? false))
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Updated: ${_formatDate(item['updatedAt']?.toString())}',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  if (points.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        height: 180,
+                        child: FlutterMap(
+                          options: MapOptions(
+                            initialCenter: points.first,
+                            initialZoom: 17,
+                            interactionOptions: const InteractionOptions(
+                              flags: InteractiveFlag.none,
+                            ),
+                            cameraConstraint: CameraConstraint.contain(
+                              bounds: LatLngBounds.fromPoints(points),
+                            ),
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate:
+                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName:
+                                  'com.example.geo_coordinates',
+                            ),
+                            if (points.length >= 2)
+                              PolylineLayer(
+                                polylines: [
+                                  Polyline(
+                                    points: points,
+                                    strokeWidth: 3,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                ],
+                              ),
+                            if (points.length >= 3)
+                              PolygonLayer(
+                                polygons: [
+                                  Polygon(
+                                    points: points,
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.16),
+                                    borderStrokeWidth: 2,
+                                    borderColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                ],
+                              ),
+                            MarkerLayer(
+                              markers: points
+                                  .map(
+                                    (p) => Marker(
+                                      width: 20,
+                                      height: 20,
+                                      point: p,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (points.isNotEmpty) const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(sheetContext);
+                        _openSavedLandOnMap(context, item);
+                      },
+                      icon: const Icon(Icons.map_outlined),
+                      label: const Text('Open on map'),
+                    ),
                   ),
+                  const SizedBox(height: 12),
+                  if (points.isEmpty)
+                    const Text('No points saved.')
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: points.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final p = points[index];
+                        return ListTile(
+                          dense: true,
+                          leading: Text('#${index + 1}'),
+                          title: Text('${p.latitude}, ${p.longitude}'),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),
           ),
         );
       },
-    );
-  }
-
-  void _showRemoteLandDetails(LandListItem land) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => _RemoteLandDetailSheet(
-        land: land,
-        onRemoteChanged: _fetchRemoteData,
-      ),
     );
   }
 
@@ -1261,7 +1418,62 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     );
   }
 
-  void _deleteItem(BuildContext context, String id) {
+  void _showRemoteLandDetails(LandListItem land) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) =>
+          _RemoteLandDetailSheet(land: land, onRemoteChanged: _fetchRemoteData),
+    );
+  }
+
+  void _openCloudDetailsById(String landId, {required String fallbackName}) {
+    final lands =
+        ref.read(remoteLandsProvider).asData?.value?.items ??
+        const <LandListItem>[];
+    LandListItem? matched;
+    for (final land in lands) {
+      if (land.id == landId) {
+        matched = land;
+        break;
+      }
+    }
+    if (matched != null) {
+      _showRemoteLandDetails(matched);
+      return;
+    }
+
+    _showRemoteLandDetails(
+      LandListItem(
+        id: landId,
+        userId: '',
+        name: fallbackName,
+        place: null,
+        phone: null,
+        area: null,
+        perimeter: null,
+        description: null,
+        syncStatus: 'synced',
+        lastSyncedAt: null,
+        pointsCount: 0,
+        markersCount: 0,
+        mediaCount: 0,
+        createdAt: null,
+        updatedAt: null,
+      ),
+    );
+  }
+
+  void _deleteItem(
+    BuildContext context,
+    String id, {
+    required Map<String, dynamic> item,
+    required bool isRemote,
+  }) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1274,14 +1486,61 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final box = Hive.box('landbox');
-              await box.delete(id);
+              if (isRemote) {
+                await _deleteCloudItem(item);
+              } else {
+                final linkedCloudId = _linkedCloudId(item);
+                if (linkedCloudId != null) {
+                  await _deleteCloudItem({
+                    'id': linkedCloudId,
+                    'name': item['name'],
+                  });
+                }
+                final box = Hive.box('landbox');
+                await box.delete(id);
+              }
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
             child: const Text('Delete'),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _deleteCloudItem(Map<String, dynamic> item) async {
+    final session = ref.read(authSessionProvider);
+    final token = session.token.trim();
+    final landId = item['id']?.toString().trim() ?? '';
+    if (token.isEmpty || landId.isEmpty) {
+      throw Exception('Cloud deletion requires a valid session and land id.');
+    }
+
+    await ref.read(landCloudServiceProvider).deleteLand(token, landId);
+
+    final box = Hive.box('landbox');
+    final localKeys = box
+        .toMap()
+        .entries
+        .where((entry) {
+          final value = entry.value;
+          if (value is! Map) return false;
+          final raw = Map<String, dynamic>.from(value);
+          final localId = raw['id']?.toString().trim() ?? '';
+          final cloudId = raw['cloudId']?.toString().trim() ?? '';
+          return localId == landId || cloudId == landId;
+        })
+        .map((entry) => entry.key)
+        .toList();
+
+    if (localKeys.isNotEmpty) {
+      await box.deleteAll(localKeys);
+    }
+    await _fetchRemoteData();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Land deleted from cloud and app')),
     );
   }
 
@@ -1317,15 +1576,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .map((p) => '${p['lat']},${p['lng']}')
         .toList()
         .join('\n');
-    final text = (StringBuffer()
-          ..writeln(name)
-          ..writeln('Group: $group')
-          ..writeln('Points: ${points.length}')
-          ..writeln('Created: $createdAt')
-          ..writeln(hasUpdated ? 'Updated: $updatedAt' : 'Updated: -')
-          ..writeln('')
-          ..writeln(coords))
-        .toString();
+    final text =
+        (StringBuffer()
+              ..writeln(name)
+              ..writeln('Group: $group')
+              ..writeln('Points: ${points.length}')
+              ..writeln('Created: $createdAt')
+              ..writeln(hasUpdated ? 'Updated: $updatedAt' : 'Updated: -')
+              ..writeln('')
+              ..writeln(coords))
+            .toString();
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
       ScaffoldMessenger.of(
@@ -1399,6 +1659,7 @@ class _SavedLocationCard extends StatelessWidget {
   final String? createdAt;
   final String? updatedAt;
   final int points;
+  final bool isCloudSynced;
   final _ViewMode viewMode;
   final bool compactMode;
   final bool selectionMode;
@@ -1414,6 +1675,7 @@ class _SavedLocationCard extends StatelessWidget {
     required this.createdAt,
     required this.updatedAt,
     required this.points,
+    required this.isCloudSynced,
     required this.viewMode,
     required this.compactMode,
     required this.selectionMode,
@@ -1537,6 +1799,15 @@ class _SavedLocationCard extends StatelessWidget {
             ],
           ),
         ),
+        if (isCloudSynced)
+          Padding(
+            padding: const EdgeInsets.only(right: 2),
+            child: Icon(
+              Icons.cloud_done,
+              size: 18,
+              color: theme.colorScheme.primary,
+            ),
+          ),
         if (!selectionMode)
           IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
       ],
@@ -1583,11 +1854,18 @@ class _SavedLocationCard extends StatelessWidget {
           child: Text(
             dateText,
             textAlign: TextAlign.right,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.black54,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
           ),
         ),
+        if (isCloudSynced)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Icon(
+              Icons.cloud_done,
+              size: 18,
+              color: theme.colorScheme.primary,
+            ),
+          ),
         if (!selectionMode) ...[
           SizedBox(width: compactMode ? 2 : 6),
           IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
@@ -1619,6 +1897,15 @@ class _SavedLocationCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (isCloudSynced)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(
+                  Icons.cloud_done,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
             if (!selectionMode)
               IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
           ],
@@ -1722,6 +2009,15 @@ class _SavedLocationCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (isCloudSynced)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(
+                  Icons.cloud_done,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
             if (!selectionMode)
               IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
           ],
@@ -1746,113 +2042,6 @@ class _SavedLocationCard extends StatelessWidget {
   }
 }
 
-class _RemoteLandsSection extends StatelessWidget {
-  final AsyncValue<PaginatedLands?> landsState;
-  final AsyncValue<LandSummary?> summaryState;
-  final bool compactMode;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<LandListItem> onOpenLand;
-
-  const _RemoteLandsSection({
-    required this.landsState,
-    required this.summaryState,
-    required this.compactMode,
-    required this.onRefresh,
-    required this.onOpenLand,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final summary = summaryState.asData?.value;
-    final lands = landsState.asData?.value?.items ?? const <LandListItem>[];
-    final isLoading = landsState.isLoading || summaryState.isLoading;
-    final error = landsState.hasError
-        ? landsState.error.toString()
-        : (summaryState.hasError ? summaryState.error.toString() : null);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.cloud_done_outlined, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Cloud lands',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              IconButton(
-                onPressed: isLoading ? null : onRefresh,
-                icon: const Icon(Icons.refresh, size: 20),
-              ),
-            ],
-          ),
-          if (summary != null) ...[
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _CloudPill(label: 'Total', value: '${summary.totalLands}'),
-                _CloudPill(label: 'Synced', value: '${summary.syncedCount}'),
-                _CloudPill(label: 'Pending', value: '${summary.pendingCount}'),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (error != null)
-            Text(
-              error,
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.red),
-            )
-          else if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (lands.isEmpty)
-            Text(
-              'No cloud lands found for this account.',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
-            )
-          else
-            SizedBox(
-              height: compactMode ? 170 : 190,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: lands.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 10),
-                itemBuilder: (context, index) => _RemoteLandCard(
-                  land: lands[index],
-                  compactMode: compactMode,
-                  onTap: () => onOpenLand(lands[index]),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _RemoteLandDetailSheet extends ConsumerStatefulWidget {
   final LandListItem land;
   final Future<void> Function() onRemoteChanged;
@@ -1867,7 +2056,8 @@ class _RemoteLandDetailSheet extends ConsumerStatefulWidget {
       _RemoteLandDetailSheetState();
 }
 
-class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> {
+class _RemoteLandDetailSheetState
+    extends ConsumerState<_RemoteLandDetailSheet> {
   bool _isDeleting = false;
   bool _isSyncing = false;
 
@@ -1881,35 +2071,45 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
         initialChildSize: 0.8,
         minChildSize: 0.5,
         maxChildSize: 0.94,
-        builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: detailState.when(
-            data: (detail) => _buildLoaded(context, detail),
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (error, _) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 36),
-                  const SizedBox(height: 12),
-                  Text(
-                    error.toString(),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => ref.invalidate(
-                      remoteLandDetailProvider(widget.land.id),
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: detailState.when(
+              data: (detail) => _buildLoaded(context, detail),
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (error, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 36,
                     ),
-                    child: const Text('Retry'),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(
+                      error.toString(),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => ref.invalidate(
+                        remoteLandDetailProvider(widget.land.id),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1919,8 +2119,9 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
   }
 
   Widget _buildLoaded(BuildContext context, LandDetail detail) {
+    final points = _extractRemoteLatLngPoints(detail.points);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Center(
           child: Container(
@@ -1933,64 +2134,177 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
             ),
           ),
         ),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                detail.name,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: () => ref.invalidate(
-                remoteLandDetailProvider(widget.land.id),
-              ),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            detail.name,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
         ),
         const SizedBox(height: 8),
-        _RemoteDetailRow(label: 'Place', value: detail.place ?? '—'),
-        _RemoteDetailRow(label: 'Phone', value: detail.phone ?? '—'),
-        _RemoteDetailRow(
-          label: 'Area',
-          value: detail.area == null ? '—' : detail.area!.toStringAsFixed(2),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            '${points.length} points',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ),
         ),
-        _RemoteDetailRow(
-          label: 'Perimeter',
-          value: detail.perimeter == null
-              ? '—'
-              : detail.perimeter!.toStringAsFixed(2),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Place: ${detail.place?.trim().isNotEmpty == true ? detail.place! : '—'}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
-        _RemoteDetailRow(label: 'Sync', value: detail.syncStatus),
-        _RemoteDetailRow(
-          label: 'Created',
-          value: _formatStaticDate(detail.createdAt),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Phone: ${detail.phone?.trim().isNotEmpty == true ? detail.phone! : '—'}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ),
         ),
-        _RemoteDetailRow(
-          label: 'Updated',
-          value: _formatStaticDate(detail.updatedAt),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Area: ${detail.area == null ? '—' : detail.area!.toStringAsFixed(2)}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Perimeter: ${detail.perimeter == null ? '—' : detail.perimeter!.toStringAsFixed(2)}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Created: ${_formatStaticDate(detail.createdAt)}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ),
+        ),
+        if ((detail.updatedAt ?? '').isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Updated: ${_formatStaticDate(detail.updatedAt)}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Sync: ${detail.syncStatus}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          ),
         ),
         if ((detail.description ?? '').trim().isNotEmpty) ...[
           const SizedBox(height: 10),
-          Text(
-            detail.description!,
-            style: Theme.of(context).textTheme.bodyMedium,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              detail.description!,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ),
         ],
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _CloudPill(label: 'Points', value: '${detail.points.length}'),
-            _CloudPill(label: 'Markers', value: '${detail.markers.length}'),
-            _CloudPill(label: 'Media', value: '${detail.media.length}'),
-          ],
-        ),
-        const SizedBox(height: 16),
+        if (points.isNotEmpty)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 180,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: points.first,
+                  initialZoom: 17,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.none,
+                  ),
+                  cameraConstraint: CameraConstraint.contain(
+                    bounds: LatLngBounds.fromPoints(points),
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.geo_coordinates',
+                  ),
+                  if (points.length >= 2)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: points,
+                          strokeWidth: 3,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                  if (points.length >= 3)
+                    PolygonLayer(
+                      polygons: [
+                        Polygon(
+                          points: points,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.16),
+                          borderStrokeWidth: 2,
+                          borderColor: Theme.of(context).colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                  MarkerLayer(
+                    markers: points
+                        .map(
+                          (p) => Marker(
+                            width: 20,
+                            height: 20,
+                            point: p,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (points.isNotEmpty) const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
@@ -2009,9 +2323,10 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _showEditMetadataSheet(detail),
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Edit'),
+                onPressed: () =>
+                    ref.invalidate(remoteLandDetailProvider(widget.land.id)),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh'),
               ),
             ),
           ],
@@ -2034,15 +2349,24 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
             ),
           ),
         ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _showEditMetadataSheet(detail),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit metadata'),
+          ),
+        ),
         const SizedBox(height: 20),
         Row(
           children: [
             Expanded(
               child: Text(
                 'Markers',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             TextButton.icon(
@@ -2053,11 +2377,32 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
           ],
         ),
         const SizedBox(height: 8),
+        if (points.isEmpty)
+          const Text('No points saved.')
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: points.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final p = points[index];
+              return ListTile(
+                dense: true,
+                leading: Text('#${index + 1}'),
+                title: Text('${p.latitude}, ${p.longitude}'),
+              );
+            },
+          ),
+        const SizedBox(height: 16),
         if (detail.markers.isEmpty)
-          Text(
-            'No cloud markers found for this land.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.black54,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'No cloud markers found for this land.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
             ),
           )
         else
@@ -2089,6 +2434,28 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
     );
   }
 
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  List<LatLng> _extractRemoteLatLngPoints(List<LandPoint> remotePoints) {
+    final points = <LatLng>[];
+    for (final point in remotePoints) {
+      final raw = point.raw;
+
+      final lat = _toDouble(raw['lat']) ?? _toDouble(raw['latitude']) ?? _toDouble(raw['y']);
+
+      final lng = _toDouble(raw['lng']) ?? _toDouble(raw['longitude']) ?? _toDouble(raw['x']);
+      
+      if (lat == null || lng == null) continue;
+      points.add(LatLng(lat, lng));
+    }
+    return points;
+  }
+
   Future<void> _markSynced(LandDetail detail) async {
     final session = ref.read(authSessionProvider);
     final token = session.token.trim();
@@ -2100,9 +2467,9 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
       ref.invalidate(remoteLandDetailProvider(detail.id));
       await widget.onRemoteChanged();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Land marked as synced')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Land marked as synced')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2176,10 +2543,7 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
     );
   }
 
-  Future<void> _showMarkerSheet(
-    LandDetail detail, {
-    LandMarker? marker,
-  }) async {
+  Future<void> _showMarkerSheet(LandDetail detail, {LandMarker? marker}) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -2226,9 +2590,9 @@ class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> 
       ref.invalidate(remoteLandDetailProvider(detail.id));
       await widget.onRemoteChanged();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Marker deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Marker deleted')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2242,10 +2606,7 @@ class _EditRemoteLandSheet extends ConsumerStatefulWidget {
   final LandDetail land;
   final Future<void> Function() onSaved;
 
-  const _EditRemoteLandSheet({
-    required this.land,
-    required this.onSaved,
-  });
+  const _EditRemoteLandSheet({required this.land, required this.onSaved});
 
   @override
   ConsumerState<_EditRemoteLandSheet> createState() =>
@@ -2287,7 +2648,9 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
 
     setState(() => _isSaving = true);
     try {
-      await ref.read(landCloudServiceProvider).updateLand(
+      await ref
+          .read(landCloudServiceProvider)
+          .updateLand(
             token,
             widget.land.id,
             UpdateLandRequest(
@@ -2300,9 +2663,9 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
       await widget.onSaved();
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Land metadata updated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Land metadata updated')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2348,17 +2711,13 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
                   const SizedBox(height: 14),
                   const Text(
                     'Edit cloud land',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 18),
                   TextFormField(
                     controller: _nameController,
                     decoration: const InputDecoration(labelText: 'Name'),
-                    validator: (value) =>
-                        value == null || value.trim().isEmpty
+                    validator: (value) => value == null || value.trim().isEmpty
                         ? 'Name is required'
                         : null,
                   ),
@@ -2422,7 +2781,8 @@ class _EditRemoteMarkerSheet extends ConsumerStatefulWidget {
       _EditRemoteMarkerSheetState();
 }
 
-class _EditRemoteMarkerSheetState extends ConsumerState<_EditRemoteMarkerSheet> {
+class _EditRemoteMarkerSheetState
+    extends ConsumerState<_EditRemoteMarkerSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
@@ -2482,7 +2842,9 @@ class _EditRemoteMarkerSheetState extends ConsumerState<_EditRemoteMarkerSheet> 
     setState(() => _isSaving = true);
     try {
       if (widget.marker == null) {
-        await ref.read(landCloudServiceProvider).createMarker(
+        await ref
+            .read(landCloudServiceProvider)
+            .createMarker(
               token,
               widget.land.id,
               LandMarkerRequest(
@@ -2496,7 +2858,9 @@ class _EditRemoteMarkerSheetState extends ConsumerState<_EditRemoteMarkerSheet> 
               ),
             );
       } else {
-        await ref.read(landCloudServiceProvider).updateMarker(
+        await ref
+            .read(landCloudServiceProvider)
+            .updateMarker(
               token,
               widget.land.id,
               widget.marker!.id,
@@ -2577,8 +2941,7 @@ class _EditRemoteMarkerSheetState extends ConsumerState<_EditRemoteMarkerSheet> 
                   TextFormField(
                     controller: _nameController,
                     decoration: const InputDecoration(labelText: 'Name'),
-                    validator: (value) =>
-                        value == null || value.trim().isEmpty
+                    validator: (value) => value == null || value.trim().isEmpty
                         ? 'Name is required'
                         : null,
                   ),
@@ -2710,193 +3073,6 @@ class _EditRemoteMarkerSheetState extends ConsumerState<_EditRemoteMarkerSheet> 
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _RemoteLandCard extends StatelessWidget {
-  final LandListItem land;
-  final bool compactMode;
-  final VoidCallback onTap;
-
-  const _RemoteLandCard({
-    required this.land,
-    required this.compactMode,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: compactMode ? 220 : 250,
-        padding: EdgeInsets.all(compactMode ? 12 : 14),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.cloud_outlined,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  land.syncStatus,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              land.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              land.place ?? 'No place',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-            const Spacer(),
-            Text(
-              '${land.pointsCount} pts · ${land.markersCount} markers',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              _formatStaticDate(land.updatedAt ?? land.createdAt),
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CloudPill extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _CloudPill({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$label: $value',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _CloudInfoBanner extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String actionLabel;
-  final VoidCallback onTap;
-
-  const _CloudInfoBanner({
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFE2B8)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, color: Color(0xFFB26A00)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-          TextButton(onPressed: onTap, child: Text(actionLabel)),
-        ],
-      ),
-    );
-  }
-}
-
-class _RemoteDetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _RemoteDetailRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.black54,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
       ),
     );
   }
