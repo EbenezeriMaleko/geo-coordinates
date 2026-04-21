@@ -1,9 +1,8 @@
-import 'dart:convert';
-
 import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/network/api_client.dart';
+import '../models/land_api_models.dart';
+import 'land_cloud_service.dart';
 
 class LandSyncResult {
   final int attempted;
@@ -19,12 +18,15 @@ class LandSyncResult {
 
 class LandSyncService {
   final Box box;
+  final LandCloudService cloudService;
 
-  const LandSyncService(this.box);
+  LandSyncService(this.box, {LandCloudService? cloudService})
+    : cloudService = cloudService ?? LandCloudService();
 
   Future<LandSyncResult> syncPendingLands({int limit = 10}) async {
     final token = (box.get('auth_token')?.toString() ?? '').trim();
-    if (token.isEmpty) {
+    final isVerified = box.get('auth_is_verified') as bool? ?? false;
+    if (token.isEmpty || !isVerified) {
       return const LandSyncResult(attempted: 0, synced: 0, failed: 0);
     }
 
@@ -107,30 +109,16 @@ class LandSyncService {
     final payload = _buildPayload(land, points);
 
     try {
-      final response = await ApiClient.postJson(
-        '/lands',
-        body: payload,
-        bearerToken: bearerToken,
-        tag: 'land_background_sync',
+      final created = await cloudService.createLand(
+        bearerToken,
+        payload,
       );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final responseBody = _safeDecode(response.body);
-        final remoteId = (responseBody['data'] is Map<String, dynamic>)
-            ? (responseBody['data'] as Map<String, dynamic>)['id']
-            : null;
-        await _markSynced(key, land, remoteId);
-        return null;
-      }
-
-      final err = _extractApiError(
-        response.body,
-        'Server rejected sync (${response.statusCode}).',
-      );
-      await _markSyncFailed(key, land, err);
-      return err;
-    } catch (_) {
-      const err = 'Failed to sync land to server.';
+      await _markSynced(key, land, created.id);
+      return null;
+    } catch (error) {
+      final err = error.toString().trim().isEmpty
+          ? 'Failed to sync land to server.'
+          : error.toString();
       await _markSyncFailed(key, land, err);
       return err;
     }
@@ -149,7 +137,7 @@ class LandSyncService {
     return points;
   }
 
-  Map<String, dynamic> _buildPayload(
+  CreateLandRequest _buildPayload(
     Map<String, dynamic> land,
     List<LatLng> points,
   ) {
@@ -161,35 +149,32 @@ class LandSyncService {
       lastName,
     ].where((name) => name.isNotEmpty).join(' ').trim();
 
-    final payload = <String, dynamic>{
-      'name': (land['name']?.toString() ?? '').trim().isEmpty
+    return CreateLandRequest(
+      name: (land['name']?.toString() ?? '').trim().isEmpty
           ? 'Land ${DateTime.now().toIso8601String()}'
           : land['name'].toString().trim(),
-      'phone': (box.get('submit_phone')?.toString() ?? '').trim(),
-      'description': owner.isEmpty && email.isEmpty
-          ? null
-          : 'Captured by ${owner.isNotEmpty ? owner : email}',
-      'coordinates': points.map(_latLngToServerCoordinate).toList(),
-    };
-
-    payload.removeWhere(
-      (key, value) =>
-          value == null || (value is String && value.trim().isEmpty),
+      place: land['place']?.toString(),
+      phone: (land['phone']?.toString() ?? box.get('submit_phone')?.toString())
+          ?.trim(),
+      description: (land['description']?.toString() ?? '').trim().isNotEmpty
+          ? land['description']?.toString()
+          : (owner.isEmpty && email.isEmpty
+                ? null
+                : 'Captured by ${owner.isNotEmpty ? owner : email}'),
+      coordinates: points.map(_latLngToServerCoordinate).toList(),
     );
-
-    return payload;
   }
 
-  Map<String, dynamic> _latLngToServerCoordinate(LatLng point) {
+  LandCoordinateRequest _latLngToServerCoordinate(LatLng point) {
     final zone = _utmZone(point.latitude, point.longitude);
-    return {
-      'x': point.longitude,
-      'y': point.latitude,
-      'z': 0,
-      'zone': zone.toString(),
-      'band': _utmBand(point.latitude),
-      'hemisphere': point.latitude >= 0 ? 'N' : 'S',
-    };
+    return LandCoordinateRequest(
+      x: point.longitude,
+      y: point.latitude,
+      z: 0,
+      zone: zone.toString(),
+      band: _utmBand(point.latitude),
+      hemisphere: point.latitude >= 0 ? 'N' : 'S',
+    );
   }
 
   int _utmZone(double latitude, double longitude) {
@@ -246,29 +231,4 @@ class LandSyncService {
     await box.put(key, updated);
   }
 
-  Map<String, dynamic> _safeDecode(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-    } catch (_) {}
-    return const <String, dynamic>{};
-  }
-
-  String _extractApiError(String rawBody, String fallback) {
-    final decoded = _safeDecode(rawBody);
-    final topLevel = decoded['message'] as String?;
-    final errors = decoded['errors'];
-    if (errors is Map && errors.isNotEmpty) {
-      final firstValue = errors.values.first;
-      if (firstValue is List && firstValue.isNotEmpty) {
-        return firstValue.first.toString();
-      }
-    }
-    if (topLevel != null && topLevel.trim().isNotEmpty) {
-      return topLevel;
-    }
-    return fallback;
-  }
 }

@@ -5,6 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../auth/models/auth_models.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../auth/ui/account_page.dart';
+import '../models/land_api_models.dart';
+import '../providers/land_cloud_provider.dart';
 import '../state/land_map_notifier.dart';
 
 enum _ViewMode { combined, basic, text, photo }
@@ -33,17 +38,36 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   final Set<String> _selectedIds = <String>{};
   String _groupFilter = 'All groups';
   bool _compactMode = false;
+  ProviderSubscription<AuthSession>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
     _restoreDisplayPreferences();
+    _authSubscription = ref.listenManual(authSessionProvider, (previous, next) {
+      if (next.isLoggedIn && next.isVerified) {
+        _fetchRemoteData();
+        return;
+      }
+    });
+
+    Future.microtask(_fetchRemoteData);
   }
 
   @override
   void dispose() {
+    _authSubscription?.close();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchRemoteData() async {
+    final session = ref.read(authSessionProvider);
+    if (!session.isLoggedIn || !session.isVerified) return;
+    await ref.read(remoteLandsProvider.notifier).fetch(
+      search: _searchQuery.isEmpty ? null : _searchQuery,
+    );
+    await ref.read(remoteLandSummaryProvider.notifier).fetch();
   }
 
   void _restoreDisplayPreferences() {
@@ -82,6 +106,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   @override
   Widget build(BuildContext context) {
     final box = Hive.box('landbox');
+    final authSession = ref.watch(authSessionProvider);
+    final remoteLandsState = ref.watch(remoteLandsProvider);
+    final remoteSummaryState = ref.watch(remoteLandSummaryProvider);
+    final canUseCloud = authSession.isLoggedIn && authSession.isVerified;
 
     return Container(
       color: Colors.white70,
@@ -293,6 +321,34 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       ),
                     ),
                   if (groups.length > 1) const SizedBox(height: 8),
+                  if (authSession.isLoggedIn && !authSession.isVerified)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: _CloudInfoBanner(
+                        title: 'Cloud sync is locked',
+                        subtitle:
+                            'Verify your email to load lands from the server.',
+                        actionLabel: 'Account',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AccountPage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  if (canUseCloud)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: _RemoteLandsSection(
+                        landsState: remoteLandsState,
+                        summaryState: remoteSummaryState,
+                        compactMode: _compactMode,
+                        onRefresh: _fetchRemoteData,
+                        onOpenLand: _showRemoteLandDetails,
+                      ),
+                    ),
                   if (searched.isEmpty)
                     Expanded(
                       child: _searchQuery.isNotEmpty ||
@@ -1079,6 +1135,20 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     );
   }
 
+  void _showRemoteLandDetails(LandListItem land) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => _RemoteLandDetailSheet(
+        land: land,
+        onRemoteChanged: _fetchRemoteData,
+      ),
+    );
+  }
+
   void _openSavedLandOnMap(BuildContext context, Map<String, dynamic> item) {
     final points = _extractLatLngPoints(item);
     if (points.isEmpty) {
@@ -1674,6 +1744,1172 @@ class _SavedLocationCard extends StatelessWidget {
     final dd = parsed.day.toString().padLeft(2, '0');
     return '$dd/$mm/$yyyy';
   }
+}
+
+class _RemoteLandsSection extends StatelessWidget {
+  final AsyncValue<PaginatedLands?> landsState;
+  final AsyncValue<LandSummary?> summaryState;
+  final bool compactMode;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<LandListItem> onOpenLand;
+
+  const _RemoteLandsSection({
+    required this.landsState,
+    required this.summaryState,
+    required this.compactMode,
+    required this.onRefresh,
+    required this.onOpenLand,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final summary = summaryState.asData?.value;
+    final lands = landsState.asData?.value?.items ?? const <LandListItem>[];
+    final isLoading = landsState.isLoading || summaryState.isLoading;
+    final error = landsState.hasError
+        ? landsState.error.toString()
+        : (summaryState.hasError ? summaryState.error.toString() : null);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cloud_done_outlined, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Cloud lands',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: isLoading ? null : onRefresh,
+                icon: const Icon(Icons.refresh, size: 20),
+              ),
+            ],
+          ),
+          if (summary != null) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _CloudPill(label: 'Total', value: '${summary.totalLands}'),
+                _CloudPill(label: 'Synced', value: '${summary.syncedCount}'),
+                _CloudPill(label: 'Pending', value: '${summary.pendingCount}'),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (error != null)
+            Text(
+              error,
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.red),
+            )
+          else if (isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (lands.isEmpty)
+            Text(
+              'No cloud lands found for this account.',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+            )
+          else
+            SizedBox(
+              height: compactMode ? 170 : 190,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: lands.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, index) => _RemoteLandCard(
+                  land: lands[index],
+                  compactMode: compactMode,
+                  onTap: () => onOpenLand(lands[index]),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RemoteLandDetailSheet extends ConsumerStatefulWidget {
+  final LandListItem land;
+  final Future<void> Function() onRemoteChanged;
+
+  const _RemoteLandDetailSheet({
+    required this.land,
+    required this.onRemoteChanged,
+  });
+
+  @override
+  ConsumerState<_RemoteLandDetailSheet> createState() =>
+      _RemoteLandDetailSheetState();
+}
+
+class _RemoteLandDetailSheetState extends ConsumerState<_RemoteLandDetailSheet> {
+  bool _isDeleting = false;
+  bool _isSyncing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final detailState = ref.watch(remoteLandDetailProvider(widget.land.id));
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.8,
+        minChildSize: 0.5,
+        maxChildSize: 0.94,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: detailState.when(
+            data: (detail) => _buildLoaded(context, detail),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 36),
+                  const SizedBox(height: 12),
+                  Text(
+                    error.toString(),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => ref.invalidate(
+                      remoteLandDetailProvider(widget.land.id),
+                    ),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoaded(BuildContext context, LandDetail detail) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                detail.name,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () => ref.invalidate(
+                remoteLandDetailProvider(widget.land.id),
+              ),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _RemoteDetailRow(label: 'Place', value: detail.place ?? '—'),
+        _RemoteDetailRow(label: 'Phone', value: detail.phone ?? '—'),
+        _RemoteDetailRow(
+          label: 'Area',
+          value: detail.area == null ? '—' : detail.area!.toStringAsFixed(2),
+        ),
+        _RemoteDetailRow(
+          label: 'Perimeter',
+          value: detail.perimeter == null
+              ? '—'
+              : detail.perimeter!.toStringAsFixed(2),
+        ),
+        _RemoteDetailRow(label: 'Sync', value: detail.syncStatus),
+        _RemoteDetailRow(
+          label: 'Created',
+          value: _formatStaticDate(detail.createdAt),
+        ),
+        _RemoteDetailRow(
+          label: 'Updated',
+          value: _formatStaticDate(detail.updatedAt),
+        ),
+        if ((detail.description ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            detail.description!,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _CloudPill(label: 'Points', value: '${detail.points.length}'),
+            _CloudPill(label: 'Markers', value: '${detail.markers.length}'),
+            _CloudPill(label: 'Media', value: '${detail.media.length}'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _isSyncing ? null : () => _markSynced(detail),
+                icon: _isSyncing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_done_outlined),
+                label: const Text('Mark synced'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _showEditMetadataSheet(detail),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _isDeleting ? null : () => _deleteLand(detail),
+            icon: _isDeleting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.delete_outline, color: Colors.red),
+            label: const Text(
+              'Delete land',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Markers',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _showMarkerSheet(detail),
+              icon: const Icon(Icons.add),
+              label: const Text('Add marker'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (detail.markers.isEmpty)
+          Text(
+            'No cloud markers found for this land.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.black54,
+            ),
+          )
+        else
+          ...detail.markers.map(
+            (marker) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.place_outlined),
+              title: Text(marker.name),
+              subtitle: Text(
+                '${marker.latitude?.toStringAsFixed(6) ?? '—'}, ${marker.longitude?.toStringAsFixed(6) ?? '—'}',
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _showMarkerSheet(detail, marker: marker),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _deleteMarker(detail, marker),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _markSynced(LandDetail detail) async {
+    final session = ref.read(authSessionProvider);
+    final token = session.token.trim();
+    if (token.isEmpty) return;
+
+    setState(() => _isSyncing = true);
+    try {
+      await ref.read(landCloudServiceProvider).markLandSynced(token, detail.id);
+      ref.invalidate(remoteLandDetailProvider(detail.id));
+      await widget.onRemoteChanged();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Land marked as synced')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  Future<void> _deleteLand(LandDetail detail) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete cloud land?'),
+        content: Text('This will delete "${detail.name}" from the server.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final session = ref.read(authSessionProvider);
+    final token = session.token.trim();
+    if (token.isEmpty) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      await ref.read(landCloudServiceProvider).deleteLand(token, detail.id);
+      await widget.onRemoteChanged();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cloud land deleted')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _isDeleting = false);
+      }
+    }
+  }
+
+  Future<void> _showEditMetadataSheet(LandDetail detail) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditRemoteLandSheet(
+        land: detail,
+        onSaved: () async {
+          ref.invalidate(remoteLandDetailProvider(detail.id));
+          await widget.onRemoteChanged();
+        },
+      ),
+    );
+  }
+
+  Future<void> _showMarkerSheet(
+    LandDetail detail, {
+    LandMarker? marker,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditRemoteMarkerSheet(
+        land: detail,
+        marker: marker,
+        onSaved: () async {
+          ref.invalidate(remoteLandDetailProvider(detail.id));
+          await widget.onRemoteChanged();
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteMarker(LandDetail detail, LandMarker marker) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete marker?'),
+        content: Text('This will delete marker "${marker.name}".'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final token = ref.read(authSessionProvider).token.trim();
+    if (token.isEmpty) return;
+
+    try {
+      await ref
+          .read(landCloudServiceProvider)
+          .deleteMarker(token, detail.id, marker.id);
+      ref.invalidate(remoteLandDetailProvider(detail.id));
+      await widget.onRemoteChanged();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Marker deleted')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+}
+
+class _EditRemoteLandSheet extends ConsumerStatefulWidget {
+  final LandDetail land;
+  final Future<void> Function() onSaved;
+
+  const _EditRemoteLandSheet({
+    required this.land,
+    required this.onSaved,
+  });
+
+  @override
+  ConsumerState<_EditRemoteLandSheet> createState() =>
+      _EditRemoteLandSheetState();
+}
+
+class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _placeController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _descriptionController;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.land.name);
+    _placeController = TextEditingController(text: widget.land.place ?? '');
+    _phoneController = TextEditingController(text: widget.land.phone ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.land.description ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _placeController.dispose();
+    _phoneController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    final token = ref.read(authSessionProvider).token.trim();
+    if (token.isEmpty) return;
+
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(landCloudServiceProvider).updateLand(
+            token,
+            widget.land.id,
+            UpdateLandRequest(
+              name: _nameController.text.trim(),
+              place: _placeController.text.trim(),
+              phone: _phoneController.text.trim(),
+              description: _descriptionController.text.trim(),
+            ),
+          );
+      await widget.onSaved();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Land metadata updated')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomInset + 12),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Edit cloud land',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    validator: (value) =>
+                        value == null || value.trim().isEmpty
+                        ? 'Name is required'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _placeController,
+                    decoration: const InputDecoration(labelText: 'Place'),
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(labelText: 'Phone'),
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _descriptionController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _submit,
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Save changes'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditRemoteMarkerSheet extends ConsumerStatefulWidget {
+  final LandDetail land;
+  final LandMarker? marker;
+  final Future<void> Function() onSaved;
+
+  const _EditRemoteMarkerSheet({
+    required this.land,
+    required this.onSaved,
+    this.marker,
+  });
+
+  @override
+  ConsumerState<_EditRemoteMarkerSheet> createState() =>
+      _EditRemoteMarkerSheetState();
+}
+
+class _EditRemoteMarkerSheetState extends ConsumerState<_EditRemoteMarkerSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _latitudeController;
+  late final TextEditingController _longitudeController;
+  late final TextEditingController _altitudeController;
+  late final TextEditingController _propertiesController;
+  String _markerType = 'pin';
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final marker = widget.marker;
+    _nameController = TextEditingController(text: marker?.name ?? '');
+    _descriptionController = TextEditingController(
+      text: marker?.description ?? '',
+    );
+    _latitudeController = TextEditingController(
+      text: marker?.latitude?.toString() ?? '',
+    );
+    _longitudeController = TextEditingController(
+      text: marker?.longitude?.toString() ?? '',
+    );
+    _altitudeController = TextEditingController(
+      text: marker?.altitude?.toString() ?? '',
+    );
+    _propertiesController = TextEditingController(
+      text: marker?.properties ?? '',
+    );
+    _markerType = (marker?.markerType ?? 'pin').trim().isEmpty
+        ? 'pin'
+        : marker!.markerType!;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _latitudeController.dispose();
+    _longitudeController.dispose();
+    _altitudeController.dispose();
+    _propertiesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    final token = ref.read(authSessionProvider).token.trim();
+    if (token.isEmpty) return;
+
+    final latitude = double.tryParse(_latitudeController.text.trim());
+    final longitude = double.tryParse(_longitudeController.text.trim());
+    final altitude = double.tryParse(_altitudeController.text.trim());
+    if (latitude == null || longitude == null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      if (widget.marker == null) {
+        await ref.read(landCloudServiceProvider).createMarker(
+              token,
+              widget.land.id,
+              LandMarkerRequest(
+                name: _nameController.text.trim(),
+                description: _descriptionController.text.trim(),
+                latitude: latitude,
+                longitude: longitude,
+                altitude: altitude,
+                markerType: _markerType,
+                properties: _propertiesController.text.trim(),
+              ),
+            );
+      } else {
+        await ref.read(landCloudServiceProvider).updateMarker(
+              token,
+              widget.land.id,
+              widget.marker!.id,
+              UpdateLandMarkerRequest(
+                name: _nameController.text.trim(),
+                description: _descriptionController.text.trim(),
+                latitude: latitude,
+                longitude: longitude,
+                altitude: altitude,
+                markerType: _markerType,
+                properties: _propertiesController.text.trim(),
+              ),
+            );
+      }
+      await widget.onSaved();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.marker == null
+                ? 'Marker created successfully'
+                : 'Marker updated successfully',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomInset + 12),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    widget.marker == null ? 'Add marker' : 'Edit marker',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    validator: (value) =>
+                        value == null || value.trim().isEmpty
+                        ? 'Name is required'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _latitudeController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Latitude',
+                          ),
+                          validator: (value) {
+                            final parsed = double.tryParse(value?.trim() ?? '');
+                            if (parsed == null) return 'Required';
+                            if (parsed < -90 || parsed > 90) {
+                              return '-90 to 90';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _longitudeController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Longitude',
+                          ),
+                          validator: (value) {
+                            final parsed = double.tryParse(value?.trim() ?? '');
+                            if (parsed == null) return 'Required';
+                            if (parsed < -180 || parsed > 180) {
+                              return '-180 to 180';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _altitudeController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Altitude',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _markerType,
+                          decoration: const InputDecoration(
+                            labelText: 'Marker type',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'pin', child: Text('Pin')),
+                            DropdownMenuItem(
+                              value: 'waypoint',
+                              child: Text('Waypoint'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'checkpoint',
+                              child: Text('Checkpoint'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _markerType = value);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _propertiesController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Properties JSON',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _submit,
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              widget.marker == null
+                                  ? 'Create marker'
+                                  : 'Save marker',
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoteLandCard extends StatelessWidget {
+  final LandListItem land;
+  final bool compactMode;
+  final VoidCallback onTap;
+
+  const _RemoteLandCard({
+    required this.land,
+    required this.compactMode,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: compactMode ? 220 : 250,
+        padding: EdgeInsets.all(compactMode ? 12 : 14),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.cloud_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  land.syncStatus,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              land.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              land.place ?? 'No place',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ),
+            const Spacer(),
+            Text(
+              '${land.pointsCount} pts · ${land.markersCount} markers',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _formatStaticDate(land.updatedAt ?? land.createdAt),
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CloudPill extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _CloudPill({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _CloudInfoBanner extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onTap;
+
+  const _CloudInfoBanner({
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFE2B8)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: Color(0xFFB26A00)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: onTap, child: Text(actionLabel)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RemoteDetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _RemoteDetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.black54,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatStaticDate(String? iso) {
+  if (iso == null || iso.isEmpty) return 'Unknown';
+  final parsed = DateTime.tryParse(iso);
+  if (parsed == null) return 'Unknown';
+  final yyyy = parsed.year.toString().padLeft(4, '0');
+  final mm = parsed.month.toString().padLeft(2, '0');
+  final dd = parsed.day.toString().padLeft(2, '0');
+  return '$dd/$mm/$yyyy';
 }
 
 class _ActionTile extends StatelessWidget {

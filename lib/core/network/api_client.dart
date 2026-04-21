@@ -6,9 +6,17 @@ class ApiClient {
   static const String baseUrl = 'https://ardhi.co.tz/api/v1';
   static const Duration timeout = Duration(seconds: 30);
 
-  static Uri uri(String path) {
+  static Uri uri(String path, {Map<String, dynamic>? queryParameters}) {
     final normalizedPath = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$baseUrl$normalizedPath');
+    final uri = Uri.parse('$baseUrl$normalizedPath');
+    if (queryParameters == null || queryParameters.isEmpty) {
+      return uri;
+    }
+    return uri.replace(
+      queryParameters: queryParameters.map(
+        (key, value) => MapEntry(key, value.toString()),
+      ),
+    );
   }
 
   static Map<String, String> jsonHeaders({String? bearerToken}) {
@@ -68,9 +76,10 @@ class ApiClient {
     String path, {
     String? bearerToken,
     String? tag,
+    Map<String, dynamic>? queryParameters,
   }) async {
     final requestTag = tag?.trim().isNotEmpty == true ? tag!.trim() : path;
-    final requestUri = uri(path);
+    final requestUri = uri(path, queryParameters: queryParameters);
 
     print('[API][$requestTag] REQUEST GET $requestUri');
 
@@ -110,6 +119,34 @@ class ApiClient {
             requestUri,
             headers: jsonHeaders(bearerToken: bearerToken),
             body: encodedBody,
+          )
+          .timeout(timeout);
+
+      print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
+      print('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      return response;
+    } catch (error) {
+      print('[API][$requestTag] ERROR $error');
+      rethrow;
+    }
+  }
+
+  static Future<http.Response> deleteJson(
+    String path, {
+    String? bearerToken,
+    String? tag,
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final requestTag = tag?.trim().isNotEmpty == true ? tag!.trim() : path;
+    final requestUri = uri(path, queryParameters: queryParameters);
+
+    print('[API][$requestTag] REQUEST DELETE $requestUri');
+
+    try {
+      final response = await http
+          .delete(
+            requestUri,
+            headers: jsonHeaders(bearerToken: bearerToken),
           )
           .timeout(timeout);
 
