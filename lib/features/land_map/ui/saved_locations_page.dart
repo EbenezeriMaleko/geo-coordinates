@@ -305,11 +305,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 final localItems = box.values
                     .whereType<Map>()
                     .map((e) => Map<String, dynamic>.from(e))
-                    .where((e) {
-                      final entityType = e['entityType']?.toString();
-                      if (entityType == 'marker') return false;
-                      return true;
-                    })
                     .toList();
 
                 final remoteItems =
@@ -533,14 +528,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   bool _isCloudSynced(Map<String, dynamic> item) {
     if (_isRemoteItem(item)) return true;
 
-    final syncStatus = item['syncStatus']?.toString().toLowerCase() ?? '';
-    if (syncStatus == 'synced') return true;
-
     final cloudId = item['cloudId']?.toString().trim() ?? '';
-    if (cloudId.isNotEmpty) return true;
-
-    final lastSyncedAt = item['lastSyncedAt']?.toString().trim() ?? '';
-    return lastSyncedAt.isNotEmpty;
+    return cloudId.isNotEmpty;
   }
 
   List<Map<String, dynamic>> _buildDisplayItems({
@@ -577,15 +566,19 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   Map<String, dynamic> _remoteLandToDisplayItem(LandListItem remote) {
     return {
       'id': remote.id,
-      'entityType': 'land',
+      'entityType': remote.type,
+      'type': remote.type,
       'name': remote.name,
       'place': remote.place,
       'phone': remote.phone,
       'description': remote.description,
       'createdAt': remote.createdAt,
       'updatedAt': remote.updatedAt,
+      'area': remote.area,
+      'perimeter': remote.perimeter,
       'pointsCount': remote.pointsCount,
-      'syncStatus': remote.syncStatus,
+      'markersCount': remote.markersCount,
+      'mediaCount': remote.mediaCount,
       '__isRemote': true,
     };
   }
@@ -602,6 +595,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   int _pointsCount(Map<String, dynamic> item) {
     final points = item['points'];
     if (points is List) return points.length;
+    final lat = item['lat'];
+    final lng = item['lng'];
+    if (lat is num && lng is num) return 1;
     return (item['pointsCount'] as num?)?.toInt() ?? 0;
   }
 
@@ -613,14 +609,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     return LandListItem(
       id: id,
       userId: '',
+      type: item['type']?.toString() ?? item['entityType']?.toString() ?? 'polygon',
       name: item['name']?.toString() ?? '',
       place: item['place']?.toString(),
       phone: item['phone']?.toString(),
       area: (item['area'] as num?)?.toDouble(),
       perimeter: (item['perimeter'] as num?)?.toDouble(),
       description: item['description']?.toString(),
-      syncStatus: item['syncStatus']?.toString() ?? 'synced',
-      lastSyncedAt: item['lastSyncedAt']?.toString(),
       pointsCount: _pointsCount(item),
       markersCount: (item['markersCount'] as num?)?.toInt() ?? 0,
       mediaCount: (item['mediaCount'] as num?)?.toInt() ?? 0,
@@ -632,12 +627,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   String? _linkedCloudId(Map<String, dynamic> item) {
     final cloudId = item['cloudId']?.toString().trim() ?? '';
     if (cloudId.isNotEmpty) return cloudId;
-
-    final syncStatus = item['syncStatus']?.toString().toLowerCase() ?? '';
-    if (syncStatus == 'synced') {
-      final id = item['id']?.toString().trim() ?? '';
-      if (id.isNotEmpty) return id;
-    }
 
     return null;
   }
@@ -1378,6 +1367,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       if (lat == null || lng == null) continue;
       points.add(LatLng(lat, lng));
     }
+    if (points.isEmpty) {
+      final lat = (item['lat'] as num?)?.toDouble();
+      final lng = (item['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null) {
+        points.add(LatLng(lat, lng));
+      }
+    }
     return points;
   }
 
@@ -1451,14 +1447,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       LandListItem(
         id: landId,
         userId: '',
+        type: 'polygon',
         name: fallbackName,
         place: null,
         phone: null,
         area: null,
         perimeter: null,
         description: null,
-        syncStatus: 'synced',
-        lastSyncedAt: null,
         pointsCount: 0,
         markersCount: 0,
         mediaCount: 0,
@@ -2059,7 +2054,6 @@ class _RemoteLandDetailSheet extends ConsumerStatefulWidget {
 class _RemoteLandDetailSheetState
     extends ConsumerState<_RemoteLandDetailSheet> {
   bool _isDeleting = false;
-  bool _isSyncing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -2147,7 +2141,7 @@ class _RemoteLandDetailSheetState
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            '${points.length} points',
+            '${points.length} points · ${detail.type}',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: Colors.black54),
@@ -2217,7 +2211,7 @@ class _RemoteLandDetailSheetState
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Sync: ${detail.syncStatus}',
+            'Type: ${detail.type}',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: Colors.black54),
@@ -2266,7 +2260,7 @@ class _RemoteLandDetailSheetState
                         ),
                       ],
                     ),
-                  if (points.length >= 3)
+                  if (detail.type == 'polygon' && points.length >= 3)
                     PolygonLayer(
                       polygons: [
                         Polygon(
@@ -2305,31 +2299,14 @@ class _RemoteLandDetailSheetState
             ),
           ),
         if (points.isNotEmpty) const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _isSyncing ? null : () => _markSynced(detail),
-                icon: _isSyncing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.cloud_done_outlined),
-                label: const Text('Mark synced'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    ref.invalidate(remoteLandDetailProvider(widget.land.id)),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh'),
-              ),
-            ),
-          ],
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () =>
+                ref.invalidate(remoteLandDetailProvider(widget.land.id)),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Refresh'),
+          ),
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -2454,32 +2431,6 @@ class _RemoteLandDetailSheetState
       points.add(LatLng(lat, lng));
     }
     return points;
-  }
-
-  Future<void> _markSynced(LandDetail detail) async {
-    final session = ref.read(authSessionProvider);
-    final token = session.token.trim();
-    if (token.isEmpty) return;
-
-    setState(() => _isSyncing = true);
-    try {
-      await ref.read(landCloudServiceProvider).markLandSynced(token, detail.id);
-      ref.invalidate(remoteLandDetailProvider(detail.id));
-      await widget.onRemoteChanged();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Land marked as synced')));
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
-    } finally {
-      if (mounted) {
-        setState(() => _isSyncing = false);
-      }
-    }
   }
 
   Future<void> _deleteLand(LandDetail detail) async {

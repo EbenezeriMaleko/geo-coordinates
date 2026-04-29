@@ -195,14 +195,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         box.values
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
-            .where((e) => e['entityType'] == 'marker')
+            .where((e) {
+              final entityType = e['entityType']?.toString();
+              return entityType == 'marker' || entityType == 'point';
+            })
             .map(
               (e) => _PlacedMarker(
                 id: e['id'].toString(),
-                point: LatLng(
-                  (e['lat'] as num).toDouble(),
-                  (e['lng'] as num).toDouble(),
-                ),
+                point: _extractMarkerPoint(e),
                 createdAt: DateTime.tryParse(e['createdAt']?.toString() ?? ''),
               ),
             )
@@ -219,24 +219,54 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     });
   }
 
+  LatLng _extractMarkerPoint(Map<String, dynamic> item) {
+    final points = (item['points'] as List?) ?? const [];
+    if (points.isNotEmpty && points.first is Map) {
+      final first = Map<String, dynamic>.from(points.first as Map);
+      final lat = (first['lat'] as num?)?.toDouble();
+      final lng = (first['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null) {
+        return LatLng(lat, lng);
+      }
+    }
+
+    return LatLng(
+      (item['lat'] as num).toDouble(),
+      (item['lng'] as num).toDouble(),
+    );
+  }
+
   Future<void> _addMarkerAt(LatLng point) async {
     if (_isMarkerSaving) return;
     setState(() => _isMarkerSaving = true);
     try {
+      final result = await _createLandRecordOnServer(
+        type: 'point',
+        name: 'Location ${DateTime.now().toIso8601String()}',
+        points: [point],
+      );
       final box = Hive.box('landbox');
       final id = const Uuid().v4();
       final payload = {
         'id': id,
-        'entityType': 'marker',
-        'name': 'Marker ${DateTime.now().toIso8601String()}',
-        'lat': point.latitude,
-        'lng': point.longitude,
+        'entityType': 'point',
+        'type': 'point',
+        'name': 'Location ${DateTime.now().toIso8601String()}',
+        'points': [
+          {'order': 0, 'lat': point.latitude, 'lng': point.longitude},
+        ],
+        if (result.cloudId != null) 'cloudId': result.cloudId,
+        if (result.error != null) 'syncError': result.error,
         'createdAt': DateTime.now().toIso8601String(),
       };
       await box.put(id, payload);
       if (!mounted) return;
       await _loadSavedMarkers();
-      _snack('Marker added');
+      _snack(
+        result.error == null
+            ? 'Location saved'
+            : 'Location saved locally. Cloud sync pending: ${result.error}',
+      );
     } finally {
       if (mounted) {
         setState(() => _isMarkerSaving = false);
@@ -269,6 +299,65 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     setState(() {
       _distancePoints = const [];
     });
+  }
+
+  Future<void> _saveDistanceRecord({
+    required String name,
+    String? place,
+    String? phone,
+    String? description,
+  }) async {
+    final points = List<LatLng>.from(_distancePoints);
+    if (points.length < 2) {
+      _snack('Add at least 2 points to save a distance.');
+      return;
+    }
+
+    final result = await _createLandRecordOnServer(
+      type: 'polyline',
+      name: name,
+      place: place,
+      phone: phone,
+      description: description,
+      points: points,
+    );
+
+    final box = Hive.box('landbox');
+    final id = const Uuid().v4();
+    final now = DateTime.now().toIso8601String();
+    await box.put(id, {
+      'id': id,
+      'entityType': 'polyline',
+      'type': 'polyline',
+      'name': name,
+      if ((place ?? '').trim().isNotEmpty) 'place': place!.trim(),
+      if ((phone ?? '').trim().isNotEmpty) 'phone': phone!.trim(),
+      if ((description ?? '').trim().isNotEmpty) 'description': description!.trim(),
+      'points': points
+          .asMap()
+          .entries
+          .map((entry) => {
+                'order': entry.key,
+                'lat': entry.value.latitude,
+                'lng': entry.value.longitude,
+              })
+          .toList(),
+      if (result.cloudId != null) 'cloudId': result.cloudId,
+      if (result.error != null) 'syncError': result.error,
+      'createdAt': now,
+      'updatedAt': now,
+    });
+
+    if (!mounted) return;
+    setState(() {
+      _distancePoints = const [];
+      _activeTool = _MapTool.none;
+    });
+    _snack(
+      result.error == null
+          ? 'Distance saved'
+          : 'Distance saved locally. Cloud sync pending: ${result.error}',
+    );
   }
 
   double _totalDistanceMeters() {
@@ -479,21 +568,25 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }
   }
 
-  Future<String?> _submitFieldPayload({
+  Future<_LandSubmitResult> _createLandRecordOnServer({
+    required String type,
     required String name,
     String? place,
     String? phone,
     String? description,
     required List<LatLng> points,
   }) async {
-    if (points.length < 3) {
-      return 'Not enough points to submit.';
+    final minimumPoints = type == 'point' ? 1 : (type == 'polyline' ? 2 : 3);
+    if (points.length < minimumPoints) {
+      return const _LandSubmitResult(error: 'Not enough points to submit.');
     }
 
     final box = Hive.box('landbox');
     final authToken = _stringOrFallback(box.get('auth_token'), '');
     if (authToken.isEmpty) {
-      return 'Sign in is required before cloud sync.';
+      return const _LandSubmitResult(
+        error: 'Sign in is required before cloud sync.',
+      );
     }
 
     final firstName = _stringOrFallback(box.get('auth_first_name'), '');
@@ -513,6 +606,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         (ownerName.isEmpty ? null : 'Captured by $ownerName');
 
     final payload = <String, dynamic>{
+      'type': type,
       'name': name,
       'place': _optionalTrim(place),
       'phone': normalizedPhone,
@@ -536,14 +630,23 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return _extractApiError(
-          response.body,
-          'Server rejected payload (${response.statusCode}).',
+        return _LandSubmitResult(
+          error: _extractApiError(
+            response.body,
+            'Server rejected payload (${response.statusCode}).',
+          ),
         );
       }
-      return null;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          final data = (decoded['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+          return _LandSubmitResult(cloudId: data['id']?.toString());
+        }
+      } catch (_) {}
+      return const _LandSubmitResult();
     } catch (_) {
-      return 'Failed to send payload to server.';
+      return const _LandSubmitResult(error: 'Failed to send payload to server.');
     }
   }
 
@@ -1152,6 +1255,15 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                             : _addCurrentPointToDistance,
                         child: const Text(
                           'Mark GPS',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _distancePoints.length < 2
+                            ? null
+                            : _showDistanceDialog,
+                        child: const Text(
+                          'Save',
                           style: TextStyle(color: Colors.white),
                         ),
                       ),
@@ -1851,8 +1963,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               SnackBar(content: Text(err)),
                                             );
                                           } else {
-                                            final submitErr =
-                                                await _submitFieldPayload(
+                                            final submitResult =
+                                                await _createLandRecordOnServer(
+                                                  type: 'polygon',
                                                   name: effectiveName,
                                                   place: enteredPlace,
                                                   phone: enteredPhone,
@@ -1869,9 +1982,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                 mapState.activeFieldId != null
                                                 ? 'Field updated offline successfully'
                                                 : 'Field saved offline successfully';
-                                            final fullMessage = submitErr == null
+                                            final fullMessage = submitResult.error == null
                                                 ? '$baseMessage and sent to server'
-                                                : '$baseMessage. Sync pending: $submitErr';
+                                                : '$baseMessage. Sync pending: ${submitResult.error}';
 
                                             ScaffoldMessenger.of(sheetContext)
                                                 .showSnackBar(
@@ -1923,6 +2036,144 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           );
         },
       ),
+    );
+  }
+
+  void _showDistanceDialog() {
+    _placeController.clear();
+    _phoneController.text =
+        _optionalTrim(Hive.box('landbox').get('submit_phone')?.toString()) ?? '';
+    _descriptionController.clear();
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+        final totalDistance = _totalDistanceMeters();
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, bottomInset + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 46,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Save Distance',
+                    style: GoogleFonts.inter(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Store this measured line locally and send it to the server as a distance record.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text('Place', style: _sheetLabelStyle()),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _placeController,
+                    decoration: _sheetInputDecoration(
+                      hint: 'Distance name or place',
+                      icon: Icons.place_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Phone', style: _sheetLabelStyle()),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: _sheetInputDecoration(
+                      hint: 'Contact phone',
+                      icon: Icons.phone_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Description', style: _sheetLabelStyle()),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _descriptionController,
+                    maxLines: 3,
+                    decoration: _sheetInputDecoration(
+                      hint: 'Notes about this distance',
+                      icon: Icons.notes_outlined,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${_distancePoints.length} points captured • Distance: ${_formatDistance(totalDistance)}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final place = _placeController.text.trim();
+                        if (place.isEmpty) {
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            const SnackBar(content: Text('Place is required.')),
+                          );
+                          return;
+                        }
+
+                        await _saveDistanceRecord(
+                          name: place,
+                          place: place,
+                          phone: _phoneController.text.trim(),
+                          description: _descriptionController.text.trim(),
+                        );
+                        if (!sheetContext.mounted) return;
+                        _placeController.clear();
+                        _phoneController.clear();
+                        _descriptionController.clear();
+                        Navigator.pop(sheetContext);
+                      },
+                      child: const Text('Save distance'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -2289,6 +2540,13 @@ class _PlacedMarker {
     required this.point,
     required this.createdAt,
   });
+}
+
+class _LandSubmitResult {
+  final String? cloudId;
+  final String? error;
+
+  const _LandSubmitResult({this.cloudId, this.error});
 }
 
 class CompassWidget extends StatefulWidget {

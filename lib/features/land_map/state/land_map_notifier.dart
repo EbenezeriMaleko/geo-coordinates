@@ -192,7 +192,8 @@ class LandMapNotifier extends Notifier<LandMapState> {
         final updated = {
           ...existing,
           'id': state.activeFieldId,
-          'entityType': 'land',
+          'entityType': 'polygon',
+          'type': 'polygon',
           'name': displayName,
           'updatedAt': now.toIso8601String(),
           'syncStatus': 'pending',
@@ -220,7 +221,8 @@ class LandMapNotifier extends Notifier<LandMapState> {
             : name;
         final payload = {
           'id': id,
-          'entityType': 'land',
+          'entityType': 'polygon',
+          'type': 'polygon',
           'name': displayName,
           'createdAt': now.toIso8601String(),
           'syncStatus': 'pending',

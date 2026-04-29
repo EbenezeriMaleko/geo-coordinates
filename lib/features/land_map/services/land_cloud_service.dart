@@ -103,22 +103,6 @@ class LandCloudService {
     return LandMessageResponse.fromJson(body);
   }
 
-  Future<SyncLandResult> markLandSynced(
-    String bearerToken,
-    String landId,
-  ) async {
-    final body = await _requestJson(
-      () => ApiClient.postJsonNoBody(
-        '/lands/$landId/sync',
-        bearerToken: bearerToken,
-        tag: 'land_mark_synced',
-      ),
-      fallbackError: 'Failed to mark land as synced.',
-    );
-    final data = (body['data'] as Map?)?.cast<String, dynamic>() ?? const {};
-    return SyncLandResult.fromJson(data);
-  }
-
   Future<PaginatedMarkers> listMarkers(
     String bearerToken,
     String landId, {

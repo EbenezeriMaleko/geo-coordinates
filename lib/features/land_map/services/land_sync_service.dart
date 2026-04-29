@@ -70,9 +70,16 @@ class LandSyncService {
           ),
         )
         .where(
-          (entry) =>
-              (entry.value['entityType']?.toString() ?? '') == 'land' &&
-              (entry.value['syncStatus']?.toString() ?? 'pending') == 'pending',
+          (entry) {
+            final entityType = entry.value['entityType']?.toString() ?? '';
+            final isSupported =
+                entityType == 'land' ||
+                entityType == 'polygon' ||
+                entityType == 'polyline' ||
+                entityType == 'point';
+            return isSupported &&
+                (entry.value['syncStatus']?.toString() ?? 'pending') == 'pending';
+          },
         )
         .toList();
 
@@ -100,7 +107,10 @@ class LandSyncService {
     required String bearerToken,
   }) async {
     final points = _extractPoints(land);
-    if (points.length < 3) {
+    final type = _normalizeLandType(land);
+    final minimumPoints = type == 'point' ? 1 : (type == 'polyline' ? 2 : 3);
+
+    if (points.length < minimumPoints) {
       final err = 'Not enough points to sync.';
       await _markSyncFailed(key, land, err);
       return err;
@@ -150,6 +160,7 @@ class LandSyncService {
     ].where((name) => name.isNotEmpty).join(' ').trim();
 
     return CreateLandRequest(
+      type: _normalizeLandType(land),
       name: (land['name']?.toString() ?? '').trim().isEmpty
           ? 'Land ${DateTime.now().toIso8601String()}'
           : land['name'].toString().trim(),
@@ -163,6 +174,19 @@ class LandSyncService {
                 : 'Captured by ${owner.isNotEmpty ? owner : email}'),
       coordinates: points.map(_latLngToServerCoordinate).toList(),
     );
+  }
+
+  String _normalizeLandType(Map<String, dynamic> land) {
+    final rawType = (land['type']?.toString() ?? land['entityType']?.toString() ?? 'polygon')
+        .trim()
+        .toLowerCase();
+    if (rawType == 'point' || rawType == 'polyline' || rawType == 'polygon') {
+        return rawType;
+    }
+    if (rawType == 'land') {
+      return 'polygon';
+    }
+    return 'polygon';
   }
 
   LandCoordinateRequest _latLngToServerCoordinate(LatLng point) {
