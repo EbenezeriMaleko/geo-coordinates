@@ -52,7 +52,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   _MapTool _activeTool = _MapTool.none;
   final Distance _distanceCalculator = const Distance();
   List<LatLng> _distancePoints = const [];
-  bool _isFabExpanded = false;
   bool _isLocating = false;
   bool _isMarkerSaving = false;
   bool _isAutoFieldCapture = false;
@@ -332,15 +331,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       'name': name,
       if ((place ?? '').trim().isNotEmpty) 'place': place!.trim(),
       if ((phone ?? '').trim().isNotEmpty) 'phone': phone!.trim(),
-      if ((description ?? '').trim().isNotEmpty) 'description': description!.trim(),
+      if ((description ?? '').trim().isNotEmpty)
+        'description': description!.trim(),
       'points': points
           .asMap()
           .entries
-          .map((entry) => {
-                'order': entry.key,
-                'lat': entry.value.latitude,
-                'lng': entry.value.longitude,
-              })
+          .map(
+            (entry) => {
+              'order': entry.key,
+              'lat': entry.value.latitude,
+              'lng': entry.value.longitude,
+            },
+          )
           .toList(),
       if (result.cloudId != null) 'cloudId': result.cloudId,
       if (result.error != null) 'syncError': result.error,
@@ -600,7 +602,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         : _stringOrFallback(box.get('auth_email'), 'Unknown');
 
     final normalizedPhone =
-        _optionalTrim(phone) ?? _optionalTrim(box.get('submit_phone')?.toString());
+        _optionalTrim(phone) ??
+        _optionalTrim(box.get('submit_phone')?.toString());
     final normalizedDescription =
         _optionalTrim(description) ??
         (ownerName.isEmpty ? null : 'Captured by $ownerName');
@@ -614,7 +617,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       'coordinates': points.map(_latLngToServerCoordinate).toList(),
     };
     payload.removeWhere(
-      (key, value) => value == null || (value is String && value.trim().isEmpty),
+      (key, value) =>
+          value == null || (value is String && value.trim().isEmpty),
     );
 
     if (normalizedPhone != null) {
@@ -640,13 +644,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       try {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
-          final data = (decoded['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+          final data =
+              (decoded['data'] as Map?)?.cast<String, dynamic>() ?? const {};
           return _LandSubmitResult(cloudId: data['id']?.toString());
         }
       } catch (_) {}
       return const _LandSubmitResult();
     } catch (_) {
-      return const _LandSubmitResult(error: 'Failed to send payload to server.');
+      return const _LandSubmitResult(
+        error: 'Failed to send payload to server.',
+      );
     }
   }
 
@@ -688,7 +695,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       if (raw is Map) {
         final existing = Map<String, dynamic>.from(raw);
         _placeController.text =
-            (existing['place']?.toString() ?? existing['name']?.toString() ?? '')
+            (existing['place']?.toString() ??
+                    existing['name']?.toString() ??
+                    '')
                 .trim();
         _phoneController.text = (existing['phone']?.toString() ?? '').trim();
         _descriptionController.text =
@@ -827,7 +836,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   Widget build(BuildContext context) {
     super.build(context);
     final st = ref.watch(landMapProvider);
-    final notifier = ref.read(landMapProvider.notifier);
     final coordinateFormat = ref.watch(coordinateFormatProvider);
     final referenceEllipsoid = ref.watch(referenceEllipsoidProvider);
     final utmText = st.current == null
@@ -838,9 +846,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             referenceEllipsoid,
           );
     final bottomFabOffset = widget.bottomInset + 16;
-    final bottomZoomOffset = widget.bottomInset + 140;
-    final toolBannerTop = _locationError == null ? 92.0 : 202.0;
-    final totalDistanceMeters = _totalDistanceMeters();
 
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
 
@@ -1010,6 +1015,24 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (st.current != null)
+                          Text(
+                            utmText ?? 'UTM unavailable',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+
+                              color: Colors.black87,
+                            ),
+                          ),
+                        if (st.current != null)
+                          Text(
+                            '${referenceEllipsoid.displayName} • Accuracy: ${(st.accuracyMeters ?? 0).toStringAsFixed(1)}m',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
                         Text(
                           st.current == null
                               ? (_isLocating
@@ -1022,28 +1045,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   st.current!.longitude,
                                   coordinateFormat,
                                 ),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
                           ),
                         ),
-                        if (st.current != null)
-                          Text(
-                            utmText ?? 'UTM unavailable',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        if (st.current != null)
-                          Text(
-                            '${referenceEllipsoid.displayName} • Accuracy: ${(st.accuracyMeters ?? 0).toStringAsFixed(1)}m',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
                       ],
                     ),
                   ),
@@ -1130,183 +1136,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             ),
           ),
 
-        if (st.activeFieldId != null && !_isFullscreen)
+        if (!_isFullscreen &&
+            (_activeTool != _MapTool.none || st.activeFieldId != null))
           Positioned(
             top: _locationError == null ? 92 : 202,
             left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.green.shade700.withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.edit_location_alt,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Editing: ${st.activeFieldName ?? 'Saved field'}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      notifier.exitEditingMode();
-                      _snack('Exited edit mode');
-                    },
-                    child: const Text(
-                      'Exit',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: _buildStatusPill(st),
           ),
-
-        if (_activeTool == _MapTool.marker && !_isFullscreen)
-          Positioned(
-            top: st.activeFieldId != null ? toolBannerTop + 52 : toolBannerTop,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF001F3F).withValues(alpha: 0.95),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.push_pin, color: Colors.white, size: 16),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Marker mode: long-press map to place marker',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        setState(() => _activeTool = _MapTool.none),
-                    child: const Text(
-                      'Exit',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-        if (_activeTool == _MapTool.distance && !_isFullscreen)
-          Positioned(
-            top: st.activeFieldId != null ? toolBannerTop + 52 : toolBannerTop,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade800.withValues(alpha: 0.96),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.straighten,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Distance mode: ${_formatDistance(totalDistanceMeters)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: _isLocating
-                            ? null
-                            : _addCurrentPointToDistance,
-                        child: const Text(
-                          'Mark GPS',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _distancePoints.length < 2
-                            ? null
-                            : _showDistanceDialog,
-                        child: const Text(
-                          'Save',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _distancePoints.isEmpty
-                            ? null
-                            : _undoDistancePoint,
-                        child: const Text(
-                          'Undo',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _distancePoints.isEmpty
-                            ? null
-                            : _clearDistancePoints,
-                        child: const Text(
-                          'Clear',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () =>
-                            setState(() => _activeTool = _MapTool.none),
-                        child: const Text(
-                          'Exit',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-        // Compass (Top Right)
-        // Positioned(
-        //   right: 16,
-        //   top: _isFullscreen ? 20 : 90,
-        //   child: const CompassWidget(),
-        // ),
 
         // Map Controls (Right side)
         Positioned(
@@ -1337,117 +1173,87 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           ),
         ),
 
-        // Zoom Controls
         Positioned(
           left: 16,
-          bottom: bottomZoomOffset,
-          child: Column(
-            children: [
-              _MapControlButton(
-                icon: Icons.add,
-                enabled: !_isLocating && _currentZoom < _maxZoom,
-                onPressed: () {
-                  final nextZoom = _clampZoom(_mapController.camera.zoom + 1);
-                  _mapController.move(_mapController.camera.center, nextZoom);
-                },
-              ),
-              const SizedBox(height: 8),
-              _MapControlButton(
-                icon: Icons.remove,
-                enabled: !_isLocating && _currentZoom > _minZoom,
-                onPressed: () {
-                  final nextZoom = _clampZoom(_mapController.camera.zoom - 1);
-                  _mapController.move(_mapController.camera.center, nextZoom);
-                },
-              ),
-            ],
-          ),
-        ),
-
-        // Floating Action Button
-        Positioned(
-          right: 16,
           bottom: bottomFabOffset,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (_isFabExpanded) ...[
-                _FabOption(
-                  label: 'Field',
-                  icon: SvgPicture.asset(
-                    'lib/assets/icons/golf-hole.svg',
-                    width: 20,
-                    height: 20,
+              _ToolButton(
+                label: 'Area',
+                icon: SvgPicture.asset(
+                  'lib/assets/icons/golf-hole.svg',
+                  width: 20,
+                  height: 20,
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFF001F3F),
+                    BlendMode.srcIn,
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _isFabExpanded = false;
-                      _activeTool = _MapTool.none;
-                    });
-                    _showFieldDialog();
-                  },
                 ),
-                const SizedBox(height: 12),
-                _FabOption(
-                  label: 'Distance',
-                  icon: SvgPicture.asset(
-                    'lib/assets/icons/map-location-track.svg',
-                    width: 20,
-                    height: 20,
+                isActive: false,
+                onPressed: () {
+                  setState(() => _activeTool = _MapTool.none);
+                  _showFieldDialog();
+                },
+              ),
+              const SizedBox(height: 10),
+              _ToolButton(
+                label: 'Distance',
+                icon: SvgPicture.asset(
+                  'lib/assets/icons/map-location-track.svg',
+                  width: 20,
+                  height: 20,
+                  colorFilter: ColorFilter.mode(
+                    _activeTool == _MapTool.distance
+                        ? Colors.white
+                        : const Color(0xFF001F3F),
+                    BlendMode.srcIn,
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _isFabExpanded = false;
-                      _showDistanceLayer = true;
-                      _activeTool = _activeTool == _MapTool.distance
-                          ? _MapTool.none
-                          : _MapTool.distance;
-                    });
-                    _snack(
-                      _activeTool == _MapTool.distance
-                          ? 'Distance mode enabled'
-                          : 'Distance mode disabled',
-                    );
-                  },
                 ),
-                const SizedBox(height: 12),
-                _FabOption(
-                  label: 'Marker',
-                  icon: SvgPicture.asset(
-                    'lib/assets/icons/marker.svg',
-                    width: 20,
-                    height: 20,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _isFabExpanded = false;
-                      _showMarkerLayer = true;
-                      _activeTool = _activeTool == _MapTool.marker
-                          ? _MapTool.none
-                          : _MapTool.marker;
-                    });
-                    _snack(
-                      _activeTool == _MapTool.marker
-                          ? 'Marker mode enabled'
-                          : 'Marker mode disabled',
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-              ],
-              FloatingActionButton(
-                heroTag: 'map_main_fab',
+                isActive: _activeTool == _MapTool.distance,
                 onPressed: () {
                   setState(() {
-                    _isFabExpanded = !_isFabExpanded;
+                    _showDistanceLayer = true;
+                    _activeTool = _activeTool == _MapTool.distance
+                        ? _MapTool.none
+                        : _MapTool.distance;
                   });
+                  _snack(
+                    _activeTool == _MapTool.distance
+                        ? 'Distance mode enabled'
+                        : 'Distance mode disabled',
+                  );
                 },
-                backgroundColor: Colors.white,
-                child: AnimatedRotation(
-                  turns: _isFabExpanded ? 0.125 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(_isFabExpanded ? Icons.close : Icons.add),
+              ),
+
+              const SizedBox(height: 10),
+              _ToolButton(
+                label: 'Marker',
+                icon: SvgPicture.asset(
+                  'lib/assets/icons/marker.svg',
+                  width: 20,
+                  height: 20,
+                  colorFilter: ColorFilter.mode(
+                    _activeTool == _MapTool.marker
+                        ? Colors.white
+                        : const Color(0xFF001F3F),
+                    BlendMode.srcIn,
+                  ),
                 ),
+                isActive: _activeTool == _MapTool.marker,
+                onPressed: () {
+                  setState(() {
+                    _showMarkerLayer = true;
+                    _activeTool = _activeTool == _MapTool.marker
+                        ? _MapTool.none
+                        : _MapTool.marker;
+                  });
+                  _snack(
+                    _activeTool == _MapTool.marker
+                        ? 'Marker mode enabled'
+                        : 'Marker mode disabled',
+                  );
+                },
               ),
             ],
           ),
@@ -1803,8 +1609,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               onPressed: mapState.isSaving
                                   ? null
                                   : () async {
-                                      final err =
-                                          await notifier.addPointFromCurrent();
+                                      final err = await notifier
+                                          .addPointFromCurrent();
                                       if (err != null && sheetContext.mounted) {
                                         ScaffoldMessenger.of(
                                           sheetContext,
@@ -1925,13 +1731,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 onPressed: mapState.isSaving
                                     ? null
                                     : () async {
-                                        final pointsSnapshot = List<LatLng>.from(
-                                          mapState.points,
-                                        );
-                                        final enteredPlace =
-                                            _placeController.text.trim();
-                                        final enteredPhone =
-                                            _phoneController.text.trim();
+                                        final pointsSnapshot =
+                                            List<LatLng>.from(mapState.points);
+                                        final enteredPlace = _placeController
+                                            .text
+                                            .trim();
+                                        final enteredPhone = _phoneController
+                                            .text
+                                            .trim();
                                         final enteredDescription =
                                             _descriptionController.text.trim();
 
@@ -1941,7 +1748,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                             sheetContext,
                                           ).showSnackBar(
                                             const SnackBar(
-                                              content: Text('Place is required.'),
+                                              content: Text(
+                                                'Place is required.',
+                                              ),
                                             ),
                                           );
                                           return;
@@ -1982,16 +1791,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                 mapState.activeFieldId != null
                                                 ? 'Field updated offline successfully'
                                                 : 'Field saved offline successfully';
-                                            final fullMessage = submitResult.error == null
+                                            final fullMessage =
+                                                submitResult.error == null
                                                 ? '$baseMessage and sent to server'
                                                 : '$baseMessage. Sync pending: ${submitResult.error}';
 
-                                            ScaffoldMessenger.of(sheetContext)
-                                                .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(fullMessage),
-                                                  ),
-                                                );
+                                            ScaffoldMessenger.of(
+                                              sheetContext,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(fullMessage),
+                                              ),
+                                            );
                                             Navigator.pop(sheetContext);
                                           }
                                         }
@@ -2042,7 +1853,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   void _showDistanceDialog() {
     _placeController.clear();
     _phoneController.text =
-        _optionalTrim(Hive.box('landbox').get('submit_phone')?.toString()) ?? '';
+        _optionalTrim(Hive.box('landbox').get('submit_phone')?.toString()) ??
+        '';
     _descriptionController.clear();
 
     showModalBottomSheet<void>(
@@ -2176,6 +1988,101 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       },
     );
   }
+
+  Widget _buildStatusPill(LandMapState st) {
+    final Color bg;
+    final Color textColor;
+    final IconData icon;
+    final String label;
+    VoidCallback? onDismiss;
+
+    if (st.activeFieldId != null) {
+      bg = Colors.green.shade700;
+      textColor = Colors.white;
+      icon = Icons.edit_location_alt;
+      label = 'Editing: ${st.activeFieldName ?? 'Saved field'}';
+      onDismiss = () {
+        ref.read(landMapProvider.notifier).exitEditingMode();
+        _snack('Exited edit mode');
+      };
+    } else if (_activeTool == _MapTool.marker) {
+      bg = const Color(0xFF001F3F);
+      textColor = Colors.white;
+      icon = Icons.push_pin;
+      label = 'Marker — long-press to place';
+      onDismiss = () => setState(() => _activeTool = _MapTool.none);
+    } else {
+      // distance
+      bg = Colors.orange.shade800;
+      textColor = Colors.white;
+      icon = Icons.straighten;
+      label = _distancePoints.isEmpty
+          ? 'Distance — tap map or Mark GPS'
+          : _formatDistance(_totalDistanceMeters());
+      onDismiss = () => setState(() => _activeTool = _MapTool.none);
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: textColor, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            // Distance-specific actions
+            if (_activeTool == _MapTool.distance &&
+                _distancePoints.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              _PillAction(
+                label: 'GPS',
+                onTap: _isLocating ? null : _addCurrentPointToDistance,
+              ),
+              if (_distancePoints.length >= 2)
+                _PillAction(label: 'Save', onTap: _showDistanceDialog),
+              _PillAction(label: 'Undo', onTap: _undoDistancePoint),
+              _PillAction(label: 'Clear', onTap: _clearDistancePoints),
+            ],
+            // Distance GPS button when no points yet
+            if (_activeTool == _MapTool.distance && _distancePoints.isEmpty)
+              _PillAction(
+                label: 'GPS',
+                onTap: _isLocating ? null : _addCurrentPointToDistance,
+              ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onDismiss,
+              child: Icon(
+                Icons.close,
+                color: textColor.withValues(alpha: 0.75),
+                size: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _formatMapUtm(
@@ -2232,56 +2139,6 @@ class _MapControlButton extends StatelessWidget {
         color: enabled ? const Color(0xFF001F3F) : Colors.grey,
         iconSize: 22,
       ),
-    );
-  }
-}
-
-class _FabOption extends StatelessWidget {
-  final String label;
-  final Widget icon;
-  final VoidCallback onPressed;
-
-  const _FabOption({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 4,
-              ),
-            ],
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF001F3F),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        FloatingActionButton(
-          heroTag: 'map_tool_${label.toLowerCase().replaceAll(' ', '_')}',
-          mini: true,
-          onPressed: onPressed,
-          backgroundColor: Colors.white,
-          child: icon,
-        ),
-      ],
     );
   }
 }
@@ -2347,6 +2204,91 @@ class _MapTypeOption extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ToolButton extends StatelessWidget {
+  final String label;
+  final Widget icon;
+  final bool isActive;
+  final VoidCallback onPressed;
+
+  const _ToolButton({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: isActive ? const Color(0xFF001F3F) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isActive ? 0.25 : 0.10),
+                  blurRadius: isActive ? 8 : 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+              border: isActive
+                  ? null
+                  : Border.all(color: Colors.grey.shade200, width: 1),
+            ),
+            child: Center(child: icon),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: isActive ? const Color(0xFF001F3F) : Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PillAction extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+
+  const _PillAction({required this.label, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(left: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: onTap != null ? 0.20 : 0.08),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: onTap != null ? 1.0 : 0.4),
+          ),
+        ),
       ),
     );
   }
