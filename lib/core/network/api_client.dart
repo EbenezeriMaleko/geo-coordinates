@@ -31,6 +31,17 @@ class ApiClient {
     return headers;
   }
 
+  static Map<String, String> multipartHeaders({String? bearerToken}) {
+    final headers = <String, String>{'Accept': 'application/json'};
+    final token = bearerToken?.trim() ?? '';
+    if (token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
+  static String originUrl() => Uri.parse(baseUrl).origin;
+
   static Future<http.Response> postJson(
     String path, {
     required Map<String, dynamic> body,
@@ -57,10 +68,7 @@ class ApiClient {
 
     try {
       final response = await http
-          .post(
-            requestUri,
-            headers: jsonHeaders(bearerToken: bearerToken),
-          )
+          .post(requestUri, headers: jsonHeaders(bearerToken: bearerToken))
           .timeout(timeout);
 
       print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
@@ -85,10 +93,7 @@ class ApiClient {
 
     try {
       final response = await http
-          .get(
-            requestUri,
-            headers: jsonHeaders(bearerToken: bearerToken),
-          )
+          .get(requestUri, headers: jsonHeaders(bearerToken: bearerToken))
           .timeout(timeout);
 
       print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
@@ -144,10 +149,7 @@ class ApiClient {
 
     try {
       final response = await http
-          .delete(
-            requestUri,
-            headers: jsonHeaders(bearerToken: bearerToken),
-          )
+          .delete(requestUri, headers: jsonHeaders(bearerToken: bearerToken))
           .timeout(timeout);
 
       print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');

@@ -11,11 +11,17 @@ import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../auth/providers/auth_provider.dart';
+import '../../auth/services/auth_service.dart';
 import '../models/coordinate_format.dart';
+import '../models/location_media_models.dart';
 import '../models/reference_ellipsoid.dart';
+import '../services/location_media_service.dart';
 import '../services/utm_converter.dart';
 import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
+import 'location_media_page.dart';
+import 'package:video_player/video_player.dart';
 
 class MyLocationPage extends ConsumerStatefulWidget {
   const MyLocationPage({super.key});
@@ -27,6 +33,7 @@ class MyLocationPage extends ConsumerStatefulWidget {
 class _MyLocationPageState extends ConsumerState<MyLocationPage>
     with AutomaticKeepAliveClientMixin {
   static const String _latestPhotoKey = 'my_location_latest_photo';
+  static const String _recentMediaKey = 'my_location_recent_media';
   static const String _photosDirName = 'geo_photos';
 
   StreamSubscription<Position>? _locationSubscription;
@@ -39,13 +46,14 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
   String? _errorMessage;
   bool _isCapturingPhoto = false;
   _GeoTaggedPhoto? _latestPhoto;
+  List<_GeoTaggedPhoto> _recentMedia = <_GeoTaggedPhoto>[];
 
   @override
   void initState() {
     super.initState();
     _landMapNotifier = ref.read(landMapProvider.notifier);
     Future.microtask(() async {
-      await _restoreLatestPhoto();
+      await _restoreRecentMedia();
       await _initializeTracking();
     });
   }
@@ -203,14 +211,16 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       if (!mounted || capture == null) return;
 
       final persistedCapture = await _persistCapturedPhoto(capture);
+      await _syncCapturedMediaToServer(persistedCapture);
       final saveToGallery = ref.read(saveToGalleryProvider);
       if (saveToGallery) {
-        await _saveImageToGallery(persistedCapture.imagePath);
+        await _saveMediaToGallery(persistedCapture);
       }
 
       setState(() {
         _latestPhoto = persistedCapture;
       });
+      await _saveRecentMedia(persistedCapture);
       _showCaptureDetails(persistedCapture);
     } on PlatformException catch (e) {
       if (!mounted) return;
@@ -237,22 +247,100 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     }
   }
 
-  Future<void> _restoreLatestPhoto() async {
+  Future<void> _restoreRecentMedia() async {
     final box = Hive.box('landbox');
-    final raw = box.get(_latestPhotoKey);
-    if (raw is! Map) return;
+    final rawRecent = box.get(_recentMediaKey);
+    final restoredRecent = <_GeoTaggedPhoto>[];
 
-    final data = Map<String, dynamic>.from(raw);
-    final imagePath = data['imagePath']?.toString() ?? '';
-    if (imagePath.isEmpty) return;
-    if (!await File(imagePath).exists()) return;
+    if (rawRecent is List) {
+      for (final item in rawRecent.whereType<Map>()) {
+        final restored = _GeoTaggedPhoto.fromMap(
+          Map<String, dynamic>.from(item),
+        );
+        if (restored == null) continue;
+        if (!await File(restored.imagePath).exists()) continue;
+        restoredRecent.add(restored);
+      }
+    }
 
-    final restored = _GeoTaggedPhoto.fromMap(data);
-    if (restored == null || !mounted) return;
+    if (restoredRecent.isEmpty) {
+      final rawLatest = box.get(_latestPhotoKey);
+      if (rawLatest is Map) {
+        final restored = _GeoTaggedPhoto.fromMap(
+          Map<String, dynamic>.from(rawLatest),
+        );
+        if (restored != null && await File(restored.imagePath).exists()) {
+          restoredRecent.add(restored);
+        }
+      }
+    }
 
+    if (!mounted) return;
     setState(() {
-      _latestPhoto = restored;
+      _recentMedia = restoredRecent;
+      _latestPhoto = restoredRecent.isNotEmpty ? restoredRecent.first : null;
     });
+  }
+
+  Future<void> _saveRecentMedia(_GeoTaggedPhoto capture) async {
+    final next = <_GeoTaggedPhoto>[
+      capture,
+      ..._recentMedia.where((item) => item.imagePath != capture.imagePath),
+    ].take(8).toList();
+
+    final box = Hive.box('landbox');
+    await box.put(_latestPhotoKey, capture.toMap());
+    await box.put(_recentMediaKey, next.map((item) => item.toMap()).toList());
+
+    if (!mounted) return;
+    setState(() {
+      _recentMedia = next;
+    });
+  }
+
+  Future<void> _syncCapturedMediaToServer(_GeoTaggedPhoto capture) async {
+    final session = ref.read(authSessionProvider);
+    if (!session.isLoggedIn || !session.isVerified) return;
+
+    final position = capture.position;
+    final locationService = LocationMediaService();
+
+    try {
+      final location = await locationService.createLocation(
+        session.token,
+        CreateLocationRequest(
+          name: capture.name.trim().isEmpty
+              ? 'GPS Capture'
+              : capture.name.trim(),
+          description: _formatPlacemark(capture.placemark),
+          latitude: position?.latitude,
+          longitude: position?.longitude,
+        ),
+      );
+      
+      final mediaTypeName = capture.mediaType == 'video' ? 'Video' : 'Photo';
+      await locationService.uploadLocationMedia(
+        session.token,
+        location.id,
+        capture.imagePath,
+        capture.mediaType,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$mediaTypeName uploaded to cloud')),
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved locally: ${error.message}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final mediaTypeName = capture.mediaType == 'video' ? 'Video' : 'Photo';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$mediaTypeName saved locally. Cloud upload failed.')),
+      );
+    }
   }
 
   Future<_GeoTaggedPhoto> _persistCapturedPhoto(_GeoTaggedPhoto capture) async {
@@ -287,22 +375,33 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     return persisted;
   }
 
-  Future<void> _saveImageToGallery(String imagePath) async {
+  Future<void> _saveMediaToGallery(_GeoTaggedPhoto capture) async {
     try {
-      final saved = await GallerySaver.saveImage(
-        imagePath,
-        albumName: 'GeoCoordinates',
-      );
+      final saved = capture.mediaType == 'video'
+          ? await GallerySaver.saveVideo(
+              capture.imagePath,
+              albumName: 'GeoCoordinates',
+            )
+          : await GallerySaver.saveImage(
+              capture.imagePath,
+              albumName: 'GeoCoordinates',
+            );
       if (!mounted) return;
       if (saved == true) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Photo saved to gallery')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              capture.mediaType == 'video'
+                  ? 'Video saved to gallery'
+                  : 'Photo saved to gallery',
+            ),
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Could not save photo to gallery. Check permissions.',
+              'Could not save media to gallery. Check permissions.',
             ),
           ),
         );
@@ -311,7 +410,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not save photo to gallery. Check permissions.'),
+          content: Text('Could not save media to gallery. Check permissions.'),
         ),
       );
     }
@@ -383,7 +482,6 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     super.build(context);
     final theme = Theme.of(context);
     final st = ref.watch(landMapProvider);
-    final format = ref.watch(coordinateFormatProvider);
     final ellipsoid = ref.watch(referenceEllipsoidProvider);
     final unit = ref.watch(distanceUnitProvider);
     final viewState = _viewState();
@@ -393,9 +491,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
     final latText = lat != null ? lat.toStringAsFixed(6) : '--';
     final lonText = lon != null ? lon.toStringAsFixed(6) : '--';
-    final formatted = (lat != null && lon != null)
-        ? CoordinateFormatter.format(lat, lon, format)
-        : 'Waiting for GPS...';
+    
     final utmText = (lat != null && lon != null)
         ? _formatUtmCoordinate(lat, lon, ellipsoid)
         : 'Waiting for UTM...';
@@ -510,14 +606,14 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        formatted,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
+                      // Text(
+                      //   formatted,
+                      //   textAlign: TextAlign.center,
+                      //   style: theme.textTheme.bodySmall?.copyWith(
+                      //     color: Colors.white70,
+                      //   ),
+                      // ),
+                      // const SizedBox(height: 4),
                       Text(
                         'Reference ellipsoid: ${ellipsoid.displayName}',
                         textAlign: TextAlign.center,
@@ -610,19 +706,36 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                 ),
               ),
             ),
-            if (_latestPhoto != null) ...[
+            if (_recentMedia.isNotEmpty) ...[
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _LatestCaptureCard(
-                  capture: _latestPhoto!,
-                  unit: unit,
-                  coordinateFormat: format,
-                  referenceEllipsoid: ellipsoid,
-                  onViewDetails: () => _showCaptureDetails(_latestPhoto!),
+                child: _RecentMediaStrip(
+                  media: _recentMedia,
+                  onViewMore: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const LocationMediaPage(),
+                      ),
+                    );
+                  },
+                  onOpenItem: (capture) => _showCaptureDetails(capture),
                 ),
               ),
             ],
+            // if (_latestPhoto != null) ...[
+            //   const SizedBox(height: 12),
+            //   Padding(
+            //     padding: const EdgeInsets.symmetric(horizontal: 16),
+            //     child: _LatestCaptureCard(
+            //       capture: _latestPhoto!,
+            //       unit: unit,
+            //       coordinateFormat: format,
+            //       referenceEllipsoid: ellipsoid,
+            //       onViewDetails: () => _showCaptureDetails(_latestPhoto!),
+            //     ),
+            //   ),
+            //   ],
             const SizedBox(height: 24),
           ],
         ),
@@ -716,6 +829,7 @@ class _GeoTaggedPhoto {
   final Placemark? placemark;
   final String? locationError;
   final String name;
+  final String mediaType;
 
   const _GeoTaggedPhoto({
     required this.imagePath,
@@ -724,6 +838,7 @@ class _GeoTaggedPhoto {
     required this.placemark,
     required this.locationError,
     required this.name,
+    this.mediaType = 'image',
   });
 
   _GeoTaggedPhoto copyWith({
@@ -733,6 +848,7 @@ class _GeoTaggedPhoto {
     Placemark? placemark,
     String? locationError,
     String? name,
+    String? mediaType,
   }) {
     return _GeoTaggedPhoto(
       imagePath: imagePath ?? this.imagePath,
@@ -741,6 +857,7 @@ class _GeoTaggedPhoto {
       placemark: placemark ?? this.placemark,
       locationError: locationError ?? this.locationError,
       name: name ?? this.name,
+      mediaType: mediaType ?? this.mediaType,
     );
   }
 
@@ -752,6 +869,7 @@ class _GeoTaggedPhoto {
       'placemark': _placemarkToMap(placemark),
       'locationError': locationError,
       'name': name,
+      'mediaType': mediaType,
     };
   }
 
@@ -772,134 +890,9 @@ class _GeoTaggedPhoto {
       placemark: _placemarkFromMap(raw['placemark']),
       locationError: raw['locationError']?.toString(),
       name: raw['name']?.toString() ?? '',
-    );
-  }
-}
-
-class _LatestCaptureCard extends StatelessWidget {
-  final _GeoTaggedPhoto capture;
-  final DistanceUnit unit;
-  final CoordinateFormat coordinateFormat;
-  final ReferenceEllipsoid referenceEllipsoid;
-  final VoidCallback onViewDetails;
-
-  const _LatestCaptureCard({
-    required this.capture,
-    required this.unit,
-    required this.coordinateFormat,
-    required this.referenceEllipsoid,
-    required this.onViewDetails,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final pos = capture.position;
-
-    final coordinateText = pos == null
-        ? 'Coordinates unavailable'
-        : CoordinateFormatter.format(
-            pos.latitude,
-            pos.longitude,
-            coordinateFormat,
-          );
-    final utmText = pos == null
-        ? 'UTM unavailable'
-        : _formatUtmCoordinate(
-            pos.latitude,
-            pos.longitude,
-            referenceEllipsoid,
-          );
-    final accuracyText = pos == null
-        ? '—'
-        : _formatDistance(pos.accuracy, unit);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  capture.name.isEmpty ? 'Latest GPS Photo' : capture.name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: onViewDetails,
-                  child: const Text('View details'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: 200,
-                width: double.infinity,
-                child: _GeoPhotoCanvas(
-                  imagePath: capture.imagePath,
-                  name: capture.name,
-                  lines: _buildOverlayLines(
-                    capture: capture,
-                    coordinateFormat: coordinateFormat,
-                    referenceEllipsoid: referenceEllipsoid,
-                    unit: unit,
-                  ),
-                  dense: true,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              coordinateText,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Ellipsoid: ${referenceEllipsoid.displayName}',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              utmText,
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Accuracy: $accuracyText',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-            if (capture.locationError != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                capture.locationError!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFFC65D12),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+      mediaType: raw['mediaType']?.toString().trim().isEmpty == true
+          ? 'image'
+          : raw['mediaType']?.toString() ?? 'image',
     );
   }
 }
@@ -930,11 +923,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}';
     final utmText = pos == null
         ? '—'
-        : _formatUtmCoordinate(
-            pos.latitude,
-            pos.longitude,
-            referenceEllipsoid,
-          );
+        : _formatUtmCoordinate(pos.latitude, pos.longitude, referenceEllipsoid);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -953,7 +942,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            capture.name.isEmpty ? 'GPS Photo Details' : capture.name,
+            capture.name.isEmpty ? 'GPS media details' : capture.name,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -967,6 +956,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
               child: _GeoPhotoCanvas(
                 imagePath: capture.imagePath,
                 name: capture.name,
+                mediaType: capture.mediaType,
                 lines: _buildOverlayLines(
                   capture: capture,
                   coordinateFormat: coordinateFormat,
@@ -984,6 +974,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
           ),
           _DetailRow(label: 'Coordinates', value: formattedCoordinates),
           _DetailRow(label: 'UTM', value: utmText),
+          _DetailRow(label: 'Media type', value: capture.mediaType),
           _DetailRow(label: 'Latitude', value: _formatNumber(pos?.latitude)),
           _DetailRow(label: 'Longitude', value: _formatNumber(pos?.longitude)),
           _DetailRow(
@@ -1036,6 +1027,8 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
   final TextEditingController _nameController = TextEditingController();
   bool _isInitializing = true;
   bool _isTakingPhoto = false;
+  bool _isRecordingVideo = false;
+  bool _videoMode = false;
   String? _setupError;
   String? _locationError;
   Position? _livePosition;
@@ -1045,6 +1038,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
   DateTime? _capturedAt;
   Position? _capturedPosition;
   Placemark? _capturedPlacemark;
+  String _capturedMediaType = 'image';
 
   @override
   void initState() {
@@ -1167,11 +1161,12 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
         );
   }
 
-  Future<void> _takePhoto() async {
+  Future<void> _captureMedia() async {
     final controller = _cameraController;
     if (controller == null ||
         !controller.value.isInitialized ||
-        _isTakingPhoto) {
+        _isTakingPhoto ||
+        _isRecordingVideo) {
       return;
     }
 
@@ -1180,7 +1175,54 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
     });
 
     try {
-      final file = await controller.takePicture();
+      if (_videoMode) {
+        await controller.startVideoRecording();
+        if (!mounted) return;
+        setState(() {
+          _isRecordingVideo = true;
+        });
+      } else {
+        final file = await controller.takePicture();
+        if (!mounted) return;
+
+        final captureTime = DateTime.now();
+        final position = _livePosition;
+        Placemark? placemark = _livePlacemark;
+        if (position != null && placemark == null) {
+          placemark = await _reverseGeocode(position);
+        }
+
+        if (!mounted) return;
+        setState(() {
+          _capturedPhoto = file;
+          _capturedAt = captureTime;
+          _capturedPosition = position;
+          _capturedPlacemark = placemark;
+          _capturedMediaType = 'image';
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to capture photo.')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTakingPhoto = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopVideoRecording() async {
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isRecordingVideo) {
+      return;
+    }
+
+    try {
+      final file = await controller.stopVideoRecording();
       if (!mounted) return;
 
       final captureTime = DateTime.now();
@@ -1196,15 +1238,17 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
         _capturedAt = captureTime;
         _capturedPosition = position;
         _capturedPlacemark = placemark;
+        _capturedMediaType = 'video';
       });
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to capture photo.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to stop video recording.')),
+      );
     } finally {
       if (mounted) {
         setState(() {
+          _isRecordingVideo = false;
           _isTakingPhoto = false;
         });
       }
@@ -1217,6 +1261,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
       _capturedAt = null;
       _capturedPosition = null;
       _capturedPlacemark = null;
+      _capturedMediaType = 'image';
     });
   }
 
@@ -1234,6 +1279,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
         placemark: _capturedPlacemark,
         locationError: _locationError,
         name: _nameController.text.trim(),
+        mediaType: _capturedMediaType,
       ),
     );
   }
@@ -1248,9 +1294,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
             controller: _nameController,
             autofocus: true,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              hintText: 'Enter place name',
-            ),
+            decoration: const InputDecoration(hintText: 'Enter place name'),
           ),
           actions: [
             TextButton(
@@ -1287,6 +1331,9 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
         placemark: _capturedPhoto == null ? _livePlacemark : _capturedPlacemark,
         locationError: _locationError,
         name: _nameController.text.trim(),
+        mediaType: _capturedPhoto == null
+            ? (_videoMode ? 'video' : 'image')
+            : _capturedMediaType,
       ),
       coordinateFormat: widget.coordinateFormat,
       referenceEllipsoid: widget.referenceEllipsoid,
@@ -1328,8 +1375,9 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                   Positioned.fill(
                     child: _capturedPhoto == null
                         ? _buildCameraPreview()
-                        : _GeoPhotoCanvas(
-                            imagePath: _capturedPhoto!.path,
+                        : _CapturedMediaPreview(
+                            filePath: _capturedPhoto!.path,
+                            mediaType: _capturedMediaType,
                             name: _nameController.text.trim(),
                             lines: previewLines,
                           ),
@@ -1405,8 +1453,64 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              ChoiceChip(
+                                label: const Text('Photo'),
+                                selected: !_videoMode,
+                                onSelected: (_) {
+                                  if (_isRecordingVideo) return;
+                                  setState(() => _videoMode = false);
+                                },
+                                selectedColor: Colors.white,
+                                labelStyle: TextStyle(
+                                  color: !_videoMode
+                                      ? Colors.black87
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.14,
+                                ),
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              ChoiceChip(
+                                label: const Text('Video'),
+                                selected: _videoMode,
+                                onSelected: (_) {
+                                  if (_isRecordingVideo) return;
+                                  setState(() => _videoMode = true);
+                                },
+                                selectedColor: Colors.white,
+                                labelStyle: TextStyle(
+                                  color: _videoMode
+                                      ? Colors.black87
+                                      : Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.14,
+                                ),
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                ),
+                              ),
+                            ],
+                          ),
+                        if (_capturedPhoto == null) const SizedBox(height: 18),
+                        if (_capturedPhoto == null)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
                               GestureDetector(
-                                onTap: _isTakingPhoto ? null : _takePhoto,
+                                onTap: _isTakingPhoto
+                                    ? null
+                                    : (_videoMode
+                                          ? (_isRecordingVideo
+                                                ? _stopVideoRecording
+                                                : _captureMedia)
+                                          : _captureMedia),
                                 child: Container(
                                   width: 86,
                                   height: 86,
@@ -1432,7 +1536,27 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                                                 strokeWidth: 2.5,
                                               ),
                                             )
-                                          : null,
+                                          : _isRecordingVideo
+                                          ? Center(
+                                            child: Container(
+                                                width: 26,
+                                                height: 26,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFC94835),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                              ),
+                                          )
+                                          : Icon(
+                                              _videoMode
+                                                  ? Icons.videocam
+                                                  : Icons.photo_camera,
+                                              color: _videoMode
+                                                  ? const Color(0xFFC94835)
+                                                  : Colors.black87,
+                                              size: 30,
+                                            ),
                                     ),
                                   ),
                                 ),
@@ -1507,6 +1631,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                     placemark: _livePlacemark,
                     locationError: _locationError,
                     name: _nameController.text.trim(),
+                    mediaType: _videoMode ? 'video' : 'image',
                   ),
                   coordinateFormat: widget.coordinateFormat,
                   referenceEllipsoid: widget.referenceEllipsoid,
@@ -1625,12 +1750,14 @@ Placemark? _placemarkFromMap(dynamic raw) {
 class _GeoPhotoCanvas extends StatelessWidget {
   final String imagePath;
   final String name;
+  final String mediaType;
   final List<String> lines;
   final bool dense;
 
   const _GeoPhotoCanvas({
     required this.imagePath,
     required this.name,
+    required this.mediaType,
     required this.lines,
     this.dense = false,
   });
@@ -1640,7 +1767,19 @@ class _GeoPhotoCanvas extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.file(File(imagePath), fit: BoxFit.cover),
+        if (mediaType == 'video')
+          Container(
+            color: Colors.black,
+            child: const Center(
+              child: Icon(
+                Icons.play_circle_fill,
+                color: Colors.white,
+                size: 74,
+              ),
+            ),
+          )
+        else
+          Image.file(File(imagePath), fit: BoxFit.cover),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -1739,6 +1878,247 @@ class _TopIconButton extends StatelessWidget {
   }
 }
 
+class _CapturedMediaPreview extends StatefulWidget {
+  final String filePath;
+  final String mediaType;
+  final String name;
+  final List<String> lines;
+
+  const _CapturedMediaPreview({
+    required this.filePath,
+    required this.mediaType,
+    required this.name,
+    required this.lines,
+  });
+
+  @override
+  State<_CapturedMediaPreview> createState() => _CapturedMediaPreviewState();
+}
+
+class _CapturedMediaPreviewState extends State<_CapturedMediaPreview> {
+  VideoPlayerController? _videoController;
+  bool _videoInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.mediaType == 'video') {
+      _initVideo();
+    }
+  }
+
+  Future<void> _initVideo() async {
+    final controller = VideoPlayerController.file(File(widget.filePath));
+    _videoController = controller;
+    await controller.initialize();
+    if (!mounted) return;
+    setState(() => _videoInitialized = true);
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlayPause() {
+    final controller = _videoController;
+    if (controller == null) return;
+    setState(() {
+      controller.value.isPlaying ? controller.pause() : controller.play();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.mediaType != 'video') {
+      return _GeoPhotoCanvas(
+        imagePath: widget.filePath,
+        name: widget.name,
+        mediaType: widget.mediaType,
+        lines: widget.lines,
+      );
+    }
+
+    final controller = _videoController;
+    final isPlaying = controller?.value.isPlaying ?? false;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Video or loading placeholder
+        if (_videoInitialized && controller != null)
+          GestureDetector(
+            onTap: _togglePlayPause,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: controller.value.aspectRatio,
+                child: VideoPlayer(controller),
+              ),
+            ),
+          )
+        else
+          const ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          ),
+
+        // Play/pause overlay icon (fades out while playing)
+        if (_videoInitialized)
+          GestureDetector(
+            onTap: _togglePlayPause,
+            child: AnimatedOpacity(
+              opacity: isPlaying ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              child: const ColoredBox(
+                color: Colors.transparent,
+                child: Center(
+                  child: Icon(
+                    Icons.play_circle_fill,
+                    color: Colors.white,
+                    size: 74,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // Progress bar at the bottom
+        if (_videoInitialized && controller != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 100, // sits above the Save/Retake buttons
+            child: VideoProgressIndicator(
+              controller,
+              allowScrubbing: true,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              colors: const VideoProgressColors(
+                playedColor: Colors.white,
+                bufferedColor: Colors.white38,
+                backgroundColor: Colors.white12,
+              ),
+            ),
+          ),
+
+        // Overlay text block (coordinates etc.)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 20, 116),
+          child: Align(
+            alignment: Alignment.bottomRight,
+            child: _OverlayTextBlock(title: widget.name, lines: widget.lines),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentMediaStrip extends StatelessWidget {
+  final List<_GeoTaggedPhoto> media;
+  final VoidCallback onViewMore;
+  final ValueChanged<_GeoTaggedPhoto> onOpenItem;
+
+  const _RecentMediaStrip({
+    required this.media,
+    required this.onViewMore,
+    required this.onOpenItem,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleItems = media.take(3).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Recent media',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const Spacer(),
+            TextButton(onPressed: onViewMore, child: const Text('View more')),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 118,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: visibleItems.length,
+            separatorBuilder: (_context, index) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final capture = visibleItems[index];
+              return InkWell(
+                onTap: () => onOpenItem(capture),
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  width: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _GeoPhotoCanvas(
+                          imagePath: capture.imagePath,
+                          name: capture.name,
+                          mediaType: capture.mediaType,
+                          lines: const [],
+                          dense: true,
+                        ),
+                        Positioned(
+                          left: 8,
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.42),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              capture.mediaType == 'video' ? 'Video' : 'Photo',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
@@ -1822,14 +2202,6 @@ List<String> _buildOverlayLines({
     return const ['Waiting for GPS details'];
   }
   return lines;
-}
-
-String _formatDistance(double meters, DistanceUnit unit) {
-  if (unit == DistanceUnit.feet) {
-    final feet = meters * 3.28084;
-    return '${feet.toStringAsFixed(1)} ft';
-  }
-  return '${meters.toStringAsFixed(1)} m';
 }
 
 String _formatCaptureDateTime(DateTime value) {
