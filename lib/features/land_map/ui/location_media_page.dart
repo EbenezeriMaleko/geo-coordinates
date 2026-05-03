@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/location_media_models.dart';
 import '../services/location_media_service.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 class LocationMediaPage extends ConsumerStatefulWidget {
   final String? initialType;
@@ -79,11 +80,35 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Location media'),
+        title: const Text(
+          'Location media',
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+
+        backgroundColor: Colors.white,
         actions: [
-          IconButton(onPressed: _loadMedia, icon: const Icon(Icons.refresh)),
+          IconButton(
+            onPressed: _loadMedia,
+            icon: HugeIcon(
+              icon: HugeIcons.strokeRoundedRefresh,
+              size: 20,
+              color: Colors.black87,
+            ),
+          ),
         ],
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: HugeIcon(
+            icon: HugeIcons.strokeRoundedArrowLeft01,
+            color: Colors.black87,
+          ),
+        ),
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -353,7 +378,24 @@ class _LocationMediaViewerPageState extends State<LocationMediaViewerPage> {
     final theme = Theme.of(context);
     final item = widget.item;
     return Scaffold(
-      appBar: AppBar(title: Text(item.fileName)),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          item.fileName,
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01, color: Colors.black87,),
+        ),
+
+        backgroundColor: Colors.white,
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
