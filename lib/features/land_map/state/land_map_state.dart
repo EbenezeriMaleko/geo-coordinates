@@ -1,5 +1,17 @@
 import 'package:latlong2/latlong.dart';
 
+class LandNavigationTarget {
+  final LatLng point;
+  final String label;
+  final String kind;
+
+  const LandNavigationTarget({
+    required this.point,
+    required this.label,
+    required this.kind,
+  });
+}
+
 class LandMapState {
   final LatLng? current;
   final double? accuracyMeters;
@@ -9,6 +21,7 @@ class LandMapState {
   final bool isSaving;
   final String? activeFieldId;
   final String? activeFieldName;
+  final LandNavigationTarget? navigationTarget;
 
   const LandMapState({
     required this.current,
@@ -19,6 +32,7 @@ class LandMapState {
     required this.isSaving,
     required this.activeFieldId,
     required this.activeFieldName,
+    required this.navigationTarget,
   });
 
   factory LandMapState.initial() => const LandMapState(
@@ -30,6 +44,7 @@ class LandMapState {
     isSaving: false,
     activeFieldId: null,
     activeFieldName: null,
+    navigationTarget: null,
   );
 
   LandMapState copyWith({
@@ -41,7 +56,9 @@ class LandMapState {
     bool? isSaving,
     String? activeFieldId,
     String? activeFieldName,
+    LandNavigationTarget? navigationTarget,
     bool clearActiveField = false,
+    bool clearNavigationTarget = false,
   }) {
     return LandMapState(
       current: current ?? this.current,
@@ -56,6 +73,9 @@ class LandMapState {
       activeFieldName: clearActiveField
           ? null
           : (activeFieldName ?? this.activeFieldName),
+      navigationTarget: clearNavigationTarget
+          ? null
+          : (navigationTarget ?? this.navigationTarget),
     );
   }
 }

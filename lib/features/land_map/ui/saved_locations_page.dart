@@ -10,6 +10,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../models/land_api_models.dart';
 import '../providers/land_cloud_provider.dart';
 import '../state/land_map_notifier.dart';
+import '../state/land_map_state.dart';
 
 enum _ViewMode { combined, basic, text, photo }
 
@@ -609,7 +610,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     return LandListItem(
       id: id,
       userId: '',
-      type: item['type']?.toString() ?? item['entityType']?.toString() ?? 'polygon',
+      type:
+          item['type']?.toString() ??
+          item['entityType']?.toString() ??
+          'polygon',
       name: item['name']?.toString() ?? '',
       place: item['place']?.toString(),
       phone: item['phone']?.toString(),
@@ -1033,7 +1037,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   icon: isRemote
                       ? Icons.visibility_outlined
                       : Icons.map_outlined,
-                  label: isRemote ? 'View cloud details' : 'Open on map',
+                  label: isRemote ? 'View cloud details' : 'Go to',
                   onTap: () {
                     Navigator.pop(sheetContext);
                     if (isRemote) {
@@ -1042,7 +1046,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         _showRemoteLandDetails(remoteLand);
                       }
                     } else {
-                      _openSavedLandOnMap(context, item);
+                      _goToSavedItem(context, item);
                     }
                   },
                 ),
@@ -1262,10 +1266,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(sheetContext);
-                        _openSavedLandOnMap(context, item);
+                        _goToSavedItem(context, item);
                       },
                       icon: const Icon(Icons.map_outlined),
-                      label: const Text('Open on map'),
+                      label: const Text('Go to'),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1295,23 +1299,50 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     );
   }
 
-  void _openSavedLandOnMap(BuildContext context, Map<String, dynamic> item) {
-    final points = _extractLatLngPoints(item);
-    if (points.isEmpty) {
+  void _goToSavedItem(BuildContext context, Map<String, dynamic> item) {
+    final target = _buildNavigationTarget(item);
+    if (target == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No points found for this land')),
+        const SnackBar(content: Text('No points found for guidance')),
       );
       return;
     }
 
-    ref
-        .read(landMapProvider.notifier)
-        .loadSavedFieldPoints(
-          points,
-          fieldId: item['id']?.toString(),
-          fieldName: item['name']?.toString(),
-        );
+    ref.read(landMapProvider.notifier).setNavigationTarget(target);
     widget.onOpenMapRequested?.call();
+  }
+
+  LandNavigationTarget? _buildNavigationTarget(Map<String, dynamic> item) {
+    final points = _extractLatLngPoints(item);
+    if (points.isEmpty) return null;
+
+    final representative = _representativePoint(points);
+    final label = item['name']?.toString().trim().isNotEmpty == true
+        ? item['name'].toString().trim()
+        : 'Saved location';
+    final kind = item['entityType']?.toString().trim().isNotEmpty == true
+        ? item['entityType'].toString().trim()
+        : item['type']?.toString().trim().isNotEmpty == true
+        ? item['type'].toString().trim()
+        : 'land';
+
+    return LandNavigationTarget(
+      point: representative,
+      label: label,
+      kind: kind,
+    );
+  }
+
+  LatLng _representativePoint(List<LatLng> points) {
+    if (points.length == 1) return points.first;
+
+    final lat =
+        points.fold<double>(0, (sum, point) => sum + point.latitude) /
+        points.length;
+    final lng =
+        points.fold<double>(0, (sum, point) => sum + point.longitude) /
+        points.length;
+    return LatLng(lat, lng);
   }
 
   void _setGroupForItem(
@@ -1422,8 +1453,11 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (_) =>
-          _RemoteLandDetailSheet(land: land, onRemoteChanged: _fetchRemoteData),
+      builder: (_) => _RemoteLandDetailSheet(
+        land: land,
+        onRemoteChanged: _fetchRemoteData,
+        onOpenMapRequested: widget.onOpenMapRequested,
+      ),
     );
   }
 
@@ -2040,10 +2074,12 @@ class _SavedLocationCard extends StatelessWidget {
 class _RemoteLandDetailSheet extends ConsumerStatefulWidget {
   final LandListItem land;
   final Future<void> Function() onRemoteChanged;
+  final VoidCallback? onOpenMapRequested;
 
   const _RemoteLandDetailSheet({
     required this.land,
     required this.onRemoteChanged,
+    this.onOpenMapRequested,
   });
 
   @override
@@ -2299,6 +2335,25 @@ class _RemoteLandDetailSheetState
             ),
           ),
         if (points.isNotEmpty) const SizedBox(height: 16),
+        if (points.isNotEmpty)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () {
+                final target = LandNavigationTarget(
+                  point: _representativePoint(points),
+                  label: detail.name,
+                  kind: detail.type,
+                );
+                ref.read(landMapProvider.notifier).setNavigationTarget(target);
+                Navigator.of(context).pop();
+                widget.onOpenMapRequested?.call();
+              },
+              icon: const Icon(Icons.navigation_outlined),
+              label: const Text('Go to'),
+            ),
+          ),
+        if (points.isNotEmpty) const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
@@ -2423,14 +2478,32 @@ class _RemoteLandDetailSheetState
     for (final point in remotePoints) {
       final raw = point.raw;
 
-      final lat = _toDouble(raw['lat']) ?? _toDouble(raw['latitude']) ?? _toDouble(raw['y']);
+      final lat =
+          _toDouble(raw['lat']) ??
+          _toDouble(raw['latitude']) ??
+          _toDouble(raw['y']);
 
-      final lng = _toDouble(raw['lng']) ?? _toDouble(raw['longitude']) ?? _toDouble(raw['x']);
-      
+      final lng =
+          _toDouble(raw['lng']) ??
+          _toDouble(raw['longitude']) ??
+          _toDouble(raw['x']);
+
       if (lat == null || lng == null) continue;
       points.add(LatLng(lat, lng));
     }
     return points;
+  }
+
+  LatLng _representativePoint(List<LatLng> points) {
+    if (points.length == 1) return points.first;
+
+    final lat =
+        points.fold<double>(0, (sum, point) => sum + point.latitude) /
+        points.length;
+    final lng =
+        points.fold<double>(0, (sum, point) => sum + point.longitude) /
+        points.length;
+    return LatLng(lat, lng);
   }
 
   Future<void> _deleteLand(LandDetail detail) async {

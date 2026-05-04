@@ -22,6 +22,14 @@ class LandMapNotifier extends Notifier<LandMapState> {
     return LandMapState.initial();
   }
 
+  void setNavigationTarget(LandNavigationTarget target) {
+    state = state.copyWith(navigationTarget: target);
+  }
+
+  void clearNavigationTarget() {
+    state = state.copyWith(clearNavigationTarget: true);
+  }
+
   Future<String?> initLocation() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) return 'Please enable location services.';

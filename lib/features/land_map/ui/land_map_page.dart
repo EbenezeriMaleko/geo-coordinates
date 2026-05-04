@@ -71,8 +71,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     super.initState();
     _restoreMapTypePreference();
     _landMapSubscription = ref.listenManual(landMapProvider, (previous, next) {
+      final targetChanged = previous?.navigationTarget != next.navigationTarget;
+      final currentChanged = previous?.current != next.current;
       final prevLen = previous?.points.length ?? 0;
       final nextLen = next.points.length;
+
+      if (next.navigationTarget != null) {
+        if (targetChanged || currentChanged) {
+          _focusOnNavigationTarget(next);
+        }
+        return;
+      }
+
       if (nextLen == 0) return;
 
       final pointsChanged = previous == null || previous.points != next.points;
@@ -477,6 +487,42 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _mapController.move(center, _clampZoom(zoom));
   }
 
+  void _focusOnNavigationTarget(LandMapState st) {
+    final target = st.navigationTarget;
+    if (target == null) return;
+
+    final current = st.current;
+    if (current == null) {
+      _mapController.move(target.point, _clampZoom(17));
+      return;
+    }
+
+    _focusOnPoints([current, target.point]);
+  }
+
+  double _bearingDegrees(LatLng from, LatLng to) {
+    final fromLat = from.latitude * pi / 180.0;
+    final fromLng = from.longitude * pi / 180.0;
+    final toLat = to.latitude * pi / 180.0;
+    final toLng = to.longitude * pi / 180.0;
+
+    final y = sin(toLng - fromLng) * cos(toLat);
+    final x =
+        cos(fromLat) * sin(toLat) -
+        sin(fromLat) * cos(toLat) * cos(toLng - fromLng);
+    return (atan2(y, x) * 180.0 / pi + 360.0) % 360.0;
+  }
+
+  String _bearingLabel(double bearing) {
+    const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    final index = ((bearing + 22.5) / 45.0).floor() % labels.length;
+    return labels[index];
+  }
+
+  void _clearNavigationTarget() {
+    ref.read(landMapProvider.notifier).clearNavigationTarget();
+  }
+
   double _calculatePerimeterMeters(List<LatLng> points) {
     if (points.length < 2) return 0;
     double perimeter = 0;
@@ -848,6 +894,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final bottomFabOffset = widget.bottomInset + 16;
 
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
+    final navigationTarget = st.navigationTarget;
 
     final markers = <Marker>[
       if (_showFieldLayer)
@@ -877,6 +924,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               child: const _SavedMarkerPin(),
             ),
           ),
+      if (navigationTarget != null)
+        Marker(
+          width: 46,
+          height: 46,
+          point: navigationTarget.point,
+          child: const _NavigationTargetMarker(),
+        ),
       if (_showDistanceLayer)
         for (int i = 0; i < _distancePoints.length; i++)
           Marker(
@@ -909,6 +963,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           points: _distancePoints,
           strokeWidth: 4,
           color: Colors.orange.shade700,
+        ),
+      if (navigationTarget != null && st.current != null)
+        Polyline(
+          points: [st.current!, navigationTarget.point],
+          strokeWidth: 4,
+          color: Colors.teal.shade700,
         ),
     ];
 
@@ -1137,11 +1197,25 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           ),
 
         if (!_isFullscreen &&
-            (_activeTool != _MapTool.none || st.activeFieldId != null))
+            (_activeTool != _MapTool.none ||
+                st.activeFieldId != null ||
+                navigationTarget != null))
           Positioned(
             top: _locationError == null ? 92 : 202,
             left: 16,
-            child: _buildStatusPill(st),
+            right: 16,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_activeTool != _MapTool.none || st.activeFieldId != null)
+                  _buildStatusPill(st),
+                if ((_activeTool != _MapTool.none ||
+                        st.activeFieldId != null) &&
+                    navigationTarget != null)
+                  const SizedBox(height: 8),
+                if (navigationTarget != null) _buildNavigationBanner(st),
+              ],
+            ),
           ),
 
         // Map Controls (Right side)
@@ -2083,6 +2157,67 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       ),
     );
   }
+
+  Widget _buildNavigationBanner(LandMapState st) {
+    final target = st.navigationTarget;
+    if (target == null) return const SizedBox.shrink();
+
+    final current = st.current;
+    final distanceText = current == null
+        ? 'Waiting for location'
+        : _formatDistance(
+            _distanceCalculator.as(LengthUnit.Meter, current, target.point),
+          );
+    final bearingText = current == null
+        ? ''
+        : ' · ${_bearingLabel(_bearingDegrees(current, target.point))}';
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.teal.shade700,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.navigation, color: Colors.white, size: 14),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '${target.label} · $distanceText$bearingText',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: _clearNavigationTarget,
+              child: Icon(
+                Icons.close,
+                color: Colors.white.withValues(alpha: 0.75),
+                size: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _formatMapUtm(
@@ -2442,6 +2577,44 @@ class _SavedMarkerPin extends StatelessWidget {
         ],
       ),
       child: const Icon(Icons.push_pin, color: Colors.white, size: 20),
+    );
+  }
+}
+
+class _NavigationTargetMarker extends StatelessWidget {
+  const _NavigationTargetMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.teal.withValues(alpha: 0.18),
+          ),
+        ),
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.teal.shade700,
+            border: Border.all(color: Colors.white, width: 2.4),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.near_me, color: Colors.white, size: 14),
+        ),
+      ],
     );
   }
 }
