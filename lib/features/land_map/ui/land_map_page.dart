@@ -1272,7 +1272,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               ),
               const SizedBox(height: 10),
               _ToolButton(
-                label: 'Distance',
+                label: 'Root',
                 icon: SvgPicture.asset(
                   'lib/assets/icons/map-location-track.svg',
                   width: 20,

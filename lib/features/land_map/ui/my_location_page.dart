@@ -10,6 +10,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/services/auth_service.dart';
@@ -317,7 +318,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           longitude: position?.longitude,
         ),
       );
-      
+
       final mediaTypeName = capture.mediaType == 'video' ? 'Video' : 'Photo';
       await locationService.uploadLocationMedia(
         session.token,
@@ -338,7 +339,9 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       if (!mounted) return;
       final mediaTypeName = capture.mediaType == 'video' ? 'Video' : 'Photo';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$mediaTypeName saved locally. Cloud upload failed.')),
+        SnackBar(
+          content: Text('$mediaTypeName saved locally. Cloud upload failed.'),
+        ),
       );
     }
   }
@@ -463,6 +466,38 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     );
   }
 
+  void _copyCoordinates(
+    String easting,
+    String northing,
+    String lat,
+    String lon,
+  ) {
+    final coordinateText = 'UTM: $easting E, $northing N\nLat/Lon: $lat, $lon';
+    Clipboard.setData(ClipboardData(text: coordinateText));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Coordinates copied to clipboard')),
+    );
+  }
+
+  void _shareLocation(
+    String easting,
+    String northing,
+    String lat,
+    String lon,
+    String utmZone,
+  ) {
+    final text =
+        'UTM Coordinates\n'
+        'Zone: $utmZone\n'
+        'Easting: $easting\n'
+        'Northing: $northing\n\n'
+        'Latitude/Longitude\n'
+        'Lat: $lat\n'
+        'Lon: $lon\n\n'
+        'Shared from Geo Coordinates app';
+    Share.share(text);
+  }
+
   _LocationViewState _viewState() {
     if (_isInitializing) return _LocationViewState.loading;
     if (_serviceDisabled) return _LocationViewState.serviceDisabled;
@@ -491,10 +526,20 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
     final latText = lat != null ? lat.toStringAsFixed(6) : '--';
     final lonText = lon != null ? lon.toStringAsFixed(6) : '--';
-    
-    final utmText = (lat != null && lon != null)
-        ? _formatUtmCoordinate(lat, lon, ellipsoid)
-        : 'Waiting for UTM...';
+
+    final utmData = (lat != null && lon != null)
+        ? UtmConverter.fromLatLng(lat, lon, ellipsoid)
+        : null;
+
+    final eastingText = utmData != null
+        ? utmData.easting.toStringAsFixed(1)
+        : 'Waiting...';
+    final northingText = utmData != null
+        ? utmData.northing.toStringAsFixed(1)
+        : 'Waiting...';
+    final utmZoneText = utmData != null
+        ? '${utmData.zoneNumber}${utmData.zoneLetter}'
+        : '--';
 
     final ageText = _formatAge(st.locationTimestamp);
     final altitudeText = _formatDistanceValue(st.altitudeMeters, unit);
@@ -540,7 +585,6 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                                 size: 22,
                               ),
                             ),
-                            const Spacer(),
                           ],
                         ),
                       ),
@@ -561,7 +605,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                       if (viewState != _LocationViewState.ready)
                         const SizedBox(height: 12),
                       Text(
-                        'Latitude',
+                        'Eastings',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.white70,
                           fontWeight: FontWeight.w600,
@@ -573,8 +617,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                         transitionBuilder: (child, animation) =>
                             FadeTransition(opacity: animation, child: child),
                         child: Text(
-                          latText,
-                          key: ValueKey(latText),
+                          eastingText,
+                          key: ValueKey(eastingText),
                           style: theme.textTheme.displaySmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -584,7 +628,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Longitude',
+                        'Northings',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.white70,
                           fontWeight: FontWeight.w600,
@@ -596,8 +640,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                         transitionBuilder: (child, animation) =>
                             FadeTransition(opacity: animation, child: child),
                         child: Text(
-                          lonText,
-                          key: ValueKey(lonText),
+                          northingText,
+                          key: ValueKey(northingText),
                           style: theme.textTheme.displaySmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -606,16 +650,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                         ),
                       ),
                       const SizedBox(height: 10),
-                      // Text(
-                      //   formatted,
-                      //   textAlign: TextAlign.center,
-                      //   style: theme.textTheme.bodySmall?.copyWith(
-                      //     color: Colors.white70,
-                      //   ),
-                      // ),
-                      // const SizedBox(height: 4),
                       Text(
-                        'Reference ellipsoid: ${ellipsoid.displayName}',
+                        'UTM Zone: $utmZoneText | Lat/Lon: $latText / $lonText',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white70,
@@ -624,7 +660,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        utmText,
+                        'Reference ellipsoid: ${ellipsoid.displayName}',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white70,
@@ -1538,16 +1574,18 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                                             )
                                           : _isRecordingVideo
                                           ? Center(
-                                            child: Container(
+                                              child: Container(
                                                 width: 26,
                                                 height: 26,
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFC94835),
+                                                  color: const Color(
+                                                    0xFFC94835,
+                                                  ),
                                                   borderRadius:
                                                       BorderRadius.circular(6),
                                                 ),
                                               ),
-                                          )
+                                            )
                                           : Icon(
                                               _videoMode
                                                   ? Icons.videocam

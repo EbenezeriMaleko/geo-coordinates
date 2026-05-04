@@ -13,6 +13,7 @@ import '../services/land_sync_service.dart';
 import 'settings_page.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../state/land_map_notifier.dart';
+import 'package:share_plus/share_plus.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -122,14 +123,7 @@ class _MainNavigationState extends State<MainNavigation> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Current point saved')));
         return;
-      case _MyLocationAction.copyLat:
-        if (current == null) return;
-        await _copyText(current.latitude.toStringAsFixed(6), 'Latitude');
-        return;
-      case _MyLocationAction.copyLon:
-        if (current == null) return;
-        await _copyText(current.longitude.toStringAsFixed(6), 'Longitude');
-        return;
+
       case _MyLocationAction.copyBoth:
         if (current == null) return;
         await _copyText(
@@ -147,7 +141,7 @@ class _MainNavigationState extends State<MainNavigation> {
           ..writeln(
             'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
           );
-        await _copyText(payload.toString(), 'Share location text');
+        await SharePlus.instance.share(ShareParams(text: payload.toString()));
         return;
     }
   }
@@ -198,14 +192,6 @@ class _MainNavigationState extends State<MainNavigation> {
                     PopupMenuItem(
                       value: _MyLocationAction.savePoint,
                       child: Text('Save current point'),
-                    ),
-                    PopupMenuItem(
-                      value: _MyLocationAction.copyLat,
-                      child: Text('Copy latitude'),
-                    ),
-                    PopupMenuItem(
-                      value: _MyLocationAction.copyLon,
-                      child: Text('Copy longitude'),
                     ),
                     PopupMenuItem(
                       value: _MyLocationAction.copyBoth,
@@ -274,7 +260,7 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 }
 
-enum _MyLocationAction { savePoint, copyLat, copyLon, copyBoth, share }
+enum _MyLocationAction { savePoint, copyBoth, share }
 
 class _BottomNavItem extends StatelessWidget {
   final String label;

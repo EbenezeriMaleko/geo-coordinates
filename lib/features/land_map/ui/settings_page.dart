@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -33,7 +35,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final accountSubtitle = _accountSubtitle(session);
 
     return ColoredBox(
-      color:Colors.white,
+      color: Colors.white,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -83,17 +85,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           _sectionHeader('Units', theme),
           _item(
-            title: 'Altitude units',
-            subtitle: unitLabel,
-            onTap: _showDistanceUnitSelector,
-          ),
-          _item(
-            title: 'Accuracy units',
-            subtitle: unitLabel,
-            onTap: _showDistanceUnitSelector,
-          ),
-          _item(
-            title: 'Distance units',
+            title: 'Units',
             subtitle: unitLabel,
             onTap: _showDistanceUnitSelector,
           ),
@@ -143,6 +135,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           _sectionHeader('Other', theme),
           _item(title: 'Privacy policy', onTap: _comingSoon('Privacy policy')),
+          _sectionDivider(),
+
+          _sectionHeader('Cache', theme),
+          _item(
+            title: 'Clear cache',
+            subtitle: 'Remove cached data and temporary files',
+            onTap: _clearCache,
+          ),
           _sectionDivider(),
 
           _sectionHeader('Information', theme),
@@ -273,6 +273,88 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     };
   }
 
+  void _clearCache() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear cache?'),
+        content: const Text(
+          'This will remove cached images and temporary files. Your saved locations will not be affected.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+
+              try {
+                // Clear Flutter image cache
+                imageCache.clear();
+                imageCache.clearLiveImages();
+
+                // Clear app temporary directory
+                final tempDir = await getTemporaryDirectory();
+                if (tempDir.existsSync()) {
+                  tempDir.deleteSync(recursive: true);
+                  tempDir.createSync(recursive: true);
+                }
+
+                // Calculate freed space
+                int freedBytes = 0;
+                try {
+                  final cacheDir = await getApplicationCacheDirectory();
+                  if (cacheDir.existsSync()) {
+                    final cacheSize = _getTotalSize(cacheDir);
+                    cacheDir.deleteSync(recursive: true);
+                    cacheDir.createSync(recursive: true);
+                    freedBytes += cacheSize;
+                  }
+                } catch (_) {}
+
+                if (!mounted) return;
+
+                final freedMB = (freedBytes / (1024 * 1024)).toStringAsFixed(2);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      freedBytes > 0
+                          ? 'Cache cleared successfully (~$freedMB MB freed)'
+                          : 'Cache cleared successfully',
+                    ),
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error clearing cache: $e')),
+                );
+              }
+            },
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to calculate total size of directory
+  int _getTotalSize(Directory dir) {
+    int totalSize = 0;
+    try {
+      if (dir.existsSync()) {
+        dir.listSync(recursive: true).forEach((file) {
+          if (file is File) {
+            totalSize += file.lengthSync();
+          }
+        });
+      }
+    } catch (_) {}
+    return totalSize;
+  }
+
   String _accountSubtitle(AuthSession session) {
     final user = session.user;
     final fullName = user?.name.trim() ?? '';
@@ -291,11 +373,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _openAccountPage() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const AccountPage(),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute<void>(builder: (_) => const AccountPage()));
   }
 
   void _showCoordinateFormatSelector() {
