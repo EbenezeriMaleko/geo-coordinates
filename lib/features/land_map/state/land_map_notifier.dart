@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
@@ -255,5 +256,46 @@ class LandMapNotifier extends Notifier<LandMapState> {
     } finally {
       state = state.copyWith(isSaving: false);
     }
+  }
+
+  /// Transform all coordinates in the land map state
+  /// Used when changing the reference ellipsoid
+  void transformAllCoordinates(LatLng Function(LatLng) coordinateTransformer) {
+    // Transform all points with debug logging
+    final transformedPoints = <LatLng>[];
+    for (var i = 0; i < state.points.length; i++) {
+      final old = state.points[i];
+      final updated = coordinateTransformer(old);
+      try {
+        debugPrint(
+          'LandMapNotifier: point #$i: '
+          '${old.latitude.toStringAsFixed(6)},${old.longitude.toStringAsFixed(6)} '
+          '-> ${updated.latitude.toStringAsFixed(6)},${updated.longitude.toStringAsFixed(6)}',
+        );
+      } catch (_) {}
+      transformedPoints.add(updated);
+    }
+
+    // Transform current location if available with debug logging
+    final transformedCurrent = state.current != null
+        ? (() {
+            final old = state.current!;
+            final updated = coordinateTransformer(old);
+            try {
+              debugPrint(
+                'LandMapNotifier: current: '
+                '${old.latitude.toStringAsFixed(6)},${old.longitude.toStringAsFixed(6)} '
+                '-> ${updated.latitude.toStringAsFixed(6)},${updated.longitude.toStringAsFixed(6)}',
+              );
+            } catch (_) {}
+            return updated;
+          })()
+        : null;
+
+    // Update state with transformed coordinates
+    state = state.copyWith(
+      points: transformedPoints,
+      current: transformedCurrent,
+    );
   }
 }

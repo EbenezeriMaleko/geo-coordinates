@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
@@ -9,6 +10,8 @@ import '../../auth/ui/account_page.dart';
 import '../models/coordinate_format.dart';
 import '../models/reference_ellipsoid.dart';
 import '../state/settings_provider.dart';
+import '../state/land_map_notifier.dart';
+import '../services/coordinate_converter.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -279,7 +282,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       builder: (context) => AlertDialog(
         title: const Text('Clear cache?'),
         content: const Text(
-          'This will remove cached images and temporary files. Your saved locations will not be affected.',
+          'This will clear all cached data including images, '
+          'temporary files, and app cache storage. '
+          'Your saved locations will not be affected.',
         ),
         actions: [
           TextButton(
@@ -290,34 +295,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onPressed: () async {
               Navigator.pop(context);
 
+              final messenger = ScaffoldMessenger.of(context);
+
               try {
                 // Clear Flutter image cache
                 imageCache.clear();
                 imageCache.clearLiveImages();
 
-                // Clear app temporary directory
-                final tempDir = await getTemporaryDirectory();
-                if (tempDir.existsSync()) {
-                  tempDir.deleteSync(recursive: true);
-                  tempDir.createSync(recursive: true);
-                }
-
                 // Calculate freed space
                 int freedBytes = 0;
+
+                final tempDir = await getTemporaryDirectory();
+                if (tempDir.existsSync()) {
+                  freedBytes += _getTotalSize(tempDir);
+                  await tempDir.delete(recursive: true);
+                  await tempDir.create(recursive: true);
+                }
+
                 try {
                   final cacheDir = await getApplicationCacheDirectory();
                   if (cacheDir.existsSync()) {
-                    final cacheSize = _getTotalSize(cacheDir);
-                    cacheDir.deleteSync(recursive: true);
-                    cacheDir.createSync(recursive: true);
-                    freedBytes += cacheSize;
+                    freedBytes += _getTotalSize(cacheDir);
+                    await cacheDir.delete(recursive: true);
+                    await cacheDir.create(recursive: true);
                   }
                 } catch (_) {}
 
                 if (!mounted) return;
 
                 final freedMB = (freedBytes / (1024 * 1024)).toStringAsFixed(2);
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(
                     content: Text(
                       freedBytes > 0
@@ -328,7 +335,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 );
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(content: Text('Error clearing cache: $e')),
                 );
               }
@@ -471,6 +478,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -503,11 +511,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 color: Color(0xFF0C8A8C),
                               )
                             : const Icon(Icons.circle_outlined),
-                        onTap: () {
-                          ref
-                              .read(referenceEllipsoidProvider.notifier)
-                              .setEllipsoid(ellipsoid);
-                          Navigator.pop(context);
+                        onTap: () async {
+                          final popContext = Navigator.of(context);
+                          // Handle ellipsoid change with coordinate transformation
+                          if (ellipsoid != current) {
+                            await _handleEllipsoidChange(ellipsoid);
+                          }
+                          popContext.pop();
                         },
                       );
                     }),
@@ -520,6 +530,65 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
     );
+  }
+
+  /// Handle ellipsoid change and transform all coordinates
+  Future<void> _handleEllipsoidChange(ReferenceEllipsoid newEllipsoid) async {
+    try {
+      final ellipsoidNotifier = ref.read(referenceEllipsoidProvider.notifier);
+      final currentEllipsoid = ref.read(referenceEllipsoidProvider);
+
+      // If no change, return early
+      if (newEllipsoid == currentEllipsoid) {
+        return;
+      }
+
+      // Get the land map notifier
+      final landMapNotifier = ref.read(landMapProvider.notifier);
+
+      // Create a conversion function using the coordinate converter
+      LatLng conversionFunction(LatLng coord) {
+        return CoordinateConverter.convertCoordinates(
+          coord,
+          currentEllipsoid,
+          newEllipsoid,
+        );
+      }
+
+      // Debug: report ellipsoid change and point count
+      try {
+        final pointCount = ref.read(landMapProvider).points.length;
+        debugPrint(
+          'SettingsPage: changing ellipsoid from '
+          '${currentEllipsoid.name} to ${newEllipsoid.name}; points=$pointCount',
+        );
+      } catch (_) {}
+
+      // Transform all coordinates in the land map
+      landMapNotifier.transformAllCoordinates(conversionFunction);
+
+      // Update the ellipsoid setting
+      await ellipsoidNotifier.setEllipsoid(newEllipsoid);
+
+      // Show confirmation
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Coordinates transformed to ${newEllipsoid.displayName}',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error transforming coordinates: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   String _getFormatExample(CoordinateFormat format) {

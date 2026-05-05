@@ -148,14 +148,20 @@ class PhotoCaptureModeNotifier extends Notifier<PhotoCaptureMode> {
 }
 
 class ReferenceEllipsoidNotifier extends Notifier<ReferenceEllipsoid> {
+  ReferenceEllipsoid _previousEllipsoid = ReferenceEllipsoid.wgs84;
+
   @override
   ReferenceEllipsoid build() {
     final box = Hive.box('landbox');
     final raw = box.get(_referenceEllipsoidKey)?.toString();
-    return ReferenceEllipsoid.fromRaw(raw);
+    _previousEllipsoid = ReferenceEllipsoid.fromRaw(raw);
+    return _previousEllipsoid;
   }
 
+  ReferenceEllipsoid getPreviousEllipsoid() => _previousEllipsoid;
+
   Future<void> setEllipsoid(ReferenceEllipsoid ellipsoid) async {
+    _previousEllipsoid = state;
     state = ellipsoid;
     final box = Hive.box('landbox');
     await box.put(_referenceEllipsoidKey, ellipsoid.name);

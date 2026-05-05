@@ -10,7 +10,6 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/services/auth_service.dart';
@@ -466,37 +465,6 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     );
   }
 
-  void _copyCoordinates(
-    String easting,
-    String northing,
-    String lat,
-    String lon,
-  ) {
-    final coordinateText = 'UTM: $easting E, $northing N\nLat/Lon: $lat, $lon';
-    Clipboard.setData(ClipboardData(text: coordinateText));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Coordinates copied to clipboard')),
-    );
-  }
-
-  void _shareLocation(
-    String easting,
-    String northing,
-    String lat,
-    String lon,
-    String utmZone,
-  ) {
-    final text =
-        'UTM Coordinates\n'
-        'Zone: $utmZone\n'
-        'Easting: $easting\n'
-        'Northing: $northing\n\n'
-        'Latitude/Longitude\n'
-        'Lat: $lat\n'
-        'Lon: $lon\n\n'
-        'Shared from Geo Coordinates app';
-    Share.share(text);
-  }
 
   _LocationViewState _viewState() {
     if (_isInitializing) return _LocationViewState.loading;
@@ -1011,8 +979,6 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
           _DetailRow(label: 'Coordinates', value: formattedCoordinates),
           _DetailRow(label: 'UTM', value: utmText),
           _DetailRow(label: 'Media type', value: capture.mediaType),
-          _DetailRow(label: 'Latitude', value: _formatNumber(pos?.latitude)),
-          _DetailRow(label: 'Longitude', value: _formatNumber(pos?.longitude)),
           _DetailRow(
             label: 'Accuracy',
             value: pos == null ? '—' : '${pos.accuracy.toStringAsFixed(1)} m',
@@ -2089,7 +2055,7 @@ class _RecentMediaStrip extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: visibleItems.length,
-            separatorBuilder: (_context, index) => const SizedBox(width: 10),
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final capture = visibleItems[index];
               return InkWell(
@@ -2195,10 +2161,6 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-String _formatNumber(double? value) {
-  if (value == null) return '—';
-  return value.toStringAsFixed(6);
-}
 
 String _formatUtmCoordinate(
   double latitude,

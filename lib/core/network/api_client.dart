@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class ApiClient {
@@ -64,18 +65,18 @@ class ApiClient {
     final requestTag = tag?.trim().isNotEmpty == true ? tag!.trim() : path;
     final requestUri = uri(path);
 
-    print('[API][$requestTag] REQUEST POST $requestUri');
+    debugPrint('[API][$requestTag] REQUEST POST $requestUri');
 
     try {
       final response = await http
           .post(requestUri, headers: jsonHeaders(bearerToken: bearerToken))
           .timeout(timeout);
 
-      print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      print('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
+      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
       return response;
     } catch (error) {
-      print('[API][$requestTag] ERROR $error');
+      debugPrint('[API][$requestTag] ERROR $error');
       rethrow;
     }
   }
@@ -89,18 +90,18 @@ class ApiClient {
     final requestTag = tag?.trim().isNotEmpty == true ? tag!.trim() : path;
     final requestUri = uri(path, queryParameters: queryParameters);
 
-    print('[API][$requestTag] REQUEST GET $requestUri');
+    debugPrint('[API][$requestTag] REQUEST GET $requestUri');
 
     try {
       final response = await http
           .get(requestUri, headers: jsonHeaders(bearerToken: bearerToken))
           .timeout(timeout);
 
-      print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      print('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
+      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
       return response;
     } catch (error) {
-      print('[API][$requestTag] ERROR $error');
+      debugPrint('[API][$requestTag] ERROR $error');
       rethrow;
     }
   }
@@ -115,8 +116,8 @@ class ApiClient {
     final requestUri = uri(path);
     final encodedBody = jsonEncode(body);
 
-    print('[API][$requestTag] REQUEST PUT $requestUri');
-    print('[API][$requestTag] REQUEST BODY ${_truncate(encodedBody)}');
+    debugPrint('[API][$requestTag] REQUEST PUT $requestUri');
+    debugPrint('[API][$requestTag] REQUEST BODY ${_truncate(encodedBody)}');
 
     try {
       final response = await http
@@ -127,11 +128,11 @@ class ApiClient {
           )
           .timeout(timeout);
 
-      print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      print('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
+      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
       return response;
     } catch (error) {
-      print('[API][$requestTag] ERROR $error');
+      debugPrint('[API][$requestTag] ERROR $error');
       rethrow;
     }
   }
@@ -145,18 +146,18 @@ class ApiClient {
     final requestTag = tag?.trim().isNotEmpty == true ? tag!.trim() : path;
     final requestUri = uri(path, queryParameters: queryParameters);
 
-    print('[API][$requestTag] REQUEST DELETE $requestUri');
+    debugPrint('[API][$requestTag] REQUEST DELETE $requestUri');
 
     try {
       final response = await http
           .delete(requestUri, headers: jsonHeaders(bearerToken: bearerToken))
           .timeout(timeout);
 
-      print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      print('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
+      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
       return response;
     } catch (error) {
-      print('[API][$requestTag] ERROR $error');
+      debugPrint('[API][$requestTag] ERROR $error');
       rethrow;
     }
   }
@@ -171,8 +172,8 @@ class ApiClient {
     final requestUri = uri(path);
     final encodedBody = jsonEncode(body);
 
-    print('[API][$requestTag] REQUEST POST $requestUri');
-    print('[API][$requestTag] REQUEST BODY ${_truncate(encodedBody)}');
+    debugPrint('[API][$requestTag] REQUEST POST $requestUri');
+    debugPrint('[API][$requestTag] REQUEST BODY ${_truncate(encodedBody)}');
 
     try {
       final response = await http
@@ -183,11 +184,11 @@ class ApiClient {
           )
           .timeout(timeout);
 
-      print('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      print('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
+      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
       return response;
     } catch (error) {
-      print('[API][$requestTag] ERROR $error');
+      debugPrint('[API][$requestTag] ERROR $error');
       rethrow;
     }
   }
