@@ -22,6 +22,8 @@ import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
+import '../services/map_tile_cache.dart';
 
 enum MapType { normal, satellite, terrain, hybrid }
 
@@ -67,6 +69,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   bool _showMarkerLayer = true;
   ProviderSubscription<LandMapState>? _landMapSubscription;
   DateTime? _lastNavigationCameraMove;
+  bool _userIsInteracting = false;
+  Timer? _interactionCooldownTimer;
 
   @override
   void initState() {
@@ -111,6 +115,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   @override
   void dispose() {
+    _interactionCooldownTimer?.cancel();
     _landMapSubscription?.close();
     _fieldTrackingSubscription?.cancel();
     _navigationTrackingSubscription?.cancel();
@@ -499,6 +504,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   void _focusOnNavigationTarget(LandMapState st) {
+    if (_userIsInteracting) return;
     final target = st.navigationTarget;
     if (target == null) return;
 
@@ -1156,6 +1162,23 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           options: MapOptions(
             initialCenter: center,
             initialZoom: _defaultMapZoom,
+            onMapEvent: (event) {
+              if (event is MapEventMoveStart ||
+                  event is MapEventFlingAnimationStart) {
+                _interactionCooldownTimer?.cancel();
+                setState(() => _userIsInteracting = true);
+              }
+              if (event is MapEventMoveEnd ||
+                  event is MapEventFlingAnimationEnd) {
+                _interactionCooldownTimer?.cancel();
+                _interactionCooldownTimer = Timer(
+                  const Duration(seconds: 2),
+                  () {
+                    if (mounted) setState(() => _userIsInteracting = false);
+                  },
+                );
+              }
+            },
             onPositionChanged: (position, _) {
               final zoom = position.zoom;
               if (zoom != _currentZoom && mounted) {
@@ -1513,46 +1536,54 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   List<Widget> _buildMapTileLayers() {
+    final cacheStore = MapTileCache.store;
+
+    TileLayer cachedTile(
+      String urlTemplate, {
+      List<String> subdomains = const [],
+      double maxZoom = 20,
+    }) {
+      return TileLayer(
+        urlTemplate: urlTemplate,
+        userAgentPackageName: 'com.example.landmapper',
+        subdomains: subdomains,
+        maxZoom: maxZoom,
+        tileProvider: CachedTileProvider(
+          maxStale: const Duration(days: 30),
+          store: cacheStore,
+        ),
+      );
+    }
+
     switch (_currentMapType) {
       case MapType.normal:
         return [
-          TileLayer(
-            urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.landmapper',
-            subdomains: const ['a', 'b', 'c'],
-            maxZoom: _maxZoom,
+          cachedTile(
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            subdomains: ['a', 'b', 'c'],
           ),
         ];
       case MapType.satellite:
         return [
-          TileLayer(
-            urlTemplate:
-                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            userAgentPackageName: 'com.example.landmapper',
-            maxZoom: _maxZoom,
+          cachedTile(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           ),
         ];
       case MapType.terrain:
         return [
-          TileLayer(
-            urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.landmapper',
-            subdomains: const ['a', 'b', 'c'],
+          cachedTile(
+            'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+            subdomains: ['a', 'b', 'c'],
             maxZoom: 17,
           ),
         ];
       case MapType.hybrid:
         return [
-          TileLayer(
-            urlTemplate:
-                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            userAgentPackageName: 'com.example.landmapper',
-            maxZoom: _maxZoom,
+          cachedTile(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           ),
-          TileLayer(
-            urlTemplate:
-                'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.example.landmapper',
+          cachedTile(
+            'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png',
             subdomains: ['a', 'b', 'c', 'd'],
           ),
         ];

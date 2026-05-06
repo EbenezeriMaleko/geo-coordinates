@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geo_coordinates/features/land_map/services/map_tile_cache.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -9,6 +10,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('landbox');
+  await MapTileCache.init();
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -27,8 +29,8 @@ class MyApp extends StatelessWidget {
           seedColor: const Color(0xFF001F3F), // Navy Blue
           primary: const Color(0xFF001F3F),
           secondary: const Color(0xFF0074D9),
-          surface: Colors.white.withValues(alpha:0.7),
-         surfaceBright: const Color(0xFFF5F5F5),
+          surface: Colors.white.withValues(alpha: 0.7),
+          surfaceBright: const Color(0xFFF5F5F5),
         ),
         textTheme: GoogleFonts.interTextTheme(),
         appBarTheme: AppBarTheme(
@@ -65,7 +67,7 @@ class MyApp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white.withValues(alpha:0.9),
+          fillColor: Colors.white.withValues(alpha: 0.9),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: Colors.grey.shade300),
