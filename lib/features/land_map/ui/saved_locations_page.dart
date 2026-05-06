@@ -18,6 +18,20 @@ enum _SavedSort { newest, oldest, nameAsc, nameDesc, pointsDesc }
 
 enum _SavedFilter { all, threePlusPoints, updatedOnly }
 
+String _navigationKind(String rawKind, int pointsCount) {
+  final kind = rawKind.toLowerCase().trim();
+  if (kind == 'marker' || kind == 'point') return 'point';
+  if (kind == 'distance' || kind == 'line' || kind == 'polyline') {
+    return 'polyline';
+  }
+  if (kind == 'field' || kind == 'area' || kind == 'polygon') {
+    return 'polygon';
+  }
+  if (pointsCount >= 3) return 'polygon';
+  if (pointsCount == 2) return 'polyline';
+  return 'point';
+}
+
 class SavedLocationsPage extends ConsumerStatefulWidget {
   final VoidCallback? onOpenMapRequested;
 
@@ -1328,8 +1342,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
     return LandNavigationTarget(
       point: representative,
+      points: points,
       label: label,
-      kind: kind,
+      kind: _navigationKind(kind, points.length),
     );
   }
 
@@ -2342,8 +2357,9 @@ class _RemoteLandDetailSheetState
               onPressed: () {
                 final target = LandNavigationTarget(
                   point: _representativePoint(points),
+                  points: points,
                   label: detail.name,
-                  kind: detail.type,
+                  kind: _navigationKind(detail.type, points.length),
                 );
                 ref.read(landMapProvider.notifier).setNavigationTarget(target);
                 Navigator.of(context).pop();

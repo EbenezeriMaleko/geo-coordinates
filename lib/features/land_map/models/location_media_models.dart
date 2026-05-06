@@ -3,12 +3,18 @@ import '../../../core/network/api_client.dart';
 class LocationMediaLocationSummary {
   final String id;
   final String name;
+  final String? place;
+  final String? address;
+  final String? description;
   final double? latitude;
   final double? longitude;
 
   const LocationMediaLocationSummary({
     required this.id,
     required this.name,
+    required this.place,
+    required this.address,
+    required this.description,
     required this.latitude,
     required this.longitude,
   });
@@ -17,6 +23,9 @@ class LocationMediaLocationSummary {
     return LocationMediaLocationSummary(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Saved location',
+      place: json['place']?.toString(),
+      address: json['address']?.toString(),
+      description: json['description']?.toString(),
       latitude: double.tryParse(json['latitude']?.toString() ?? ''),
       longitude: double.tryParse(json['longitude']?.toString() ?? ''),
     );

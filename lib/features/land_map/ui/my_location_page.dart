@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -352,13 +354,21 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
     if (await source.exists()) {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final ext = _fileExtension(capture.imagePath);
+      final ext = capture.mediaType == 'video'
+          ? _fileExtension(capture.imagePath)
+          : '.png';
       final safeName = _safeFileName(capture.name);
       final fileName = safeName.isEmpty
           ? 'gps_$timestamp$ext'
           : '${safeName}_$timestamp$ext';
       final destination = File('${photosDir.path}/$fileName');
-      final copied = await source.copy(destination.path);
+      final copied = capture.mediaType == 'video'
+          ? await source.copy(destination.path)
+          : await _copyImageWithLocationOverlay(
+              source: source,
+              destination: destination,
+              capture: capture,
+            );
       storedPath = copied.path;
 
       final keepOriginal = ref.read(saveOriginalPhotoProvider);
@@ -418,6 +428,145 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     }
   }
 
+  Future<File> _copyImageWithLocationOverlay({
+    required File source,
+    required File destination,
+    required _GeoTaggedPhoto capture,
+  }) async {
+    try {
+      final bytes = await source.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final size = Size(image.width.toDouble(), image.height.toDouble());
+
+      canvas.drawImage(image, Offset.zero, Paint());
+      _paintPersistedLocationOverlay(
+        canvas: canvas,
+        size: size,
+        capture: capture,
+      );
+
+      final picture = recorder.endRecording();
+      final rendered = await picture.toImage(image.width, image.height);
+      final data = await rendered.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      rendered.dispose();
+      picture.dispose();
+
+      if (data == null) return source.copy(destination.path);
+      await destination.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      return destination;
+    } catch (_) {
+      return source.copy(destination.path);
+    }
+  }
+
+  void _paintPersistedLocationOverlay({
+    required Canvas canvas,
+    required Size size,
+    required _GeoTaggedPhoto capture,
+  }) {
+    final format = ref.read(coordinateFormatProvider);
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
+    final unit = ref.read(distanceUnitProvider);
+    final lines = _buildOverlayLines(
+      capture: capture,
+      coordinateFormat: format,
+      referenceEllipsoid: ellipsoid,
+      unit: unit,
+    );
+    final textScale = (size.shortestSide / 900).clamp(1.0, 2.4);
+    final padding = 34.0 * textScale;
+    final maxWidth = min(size.width * 0.72, 520.0 * textScale);
+    final titleSize = 22.0 * textScale;
+    final lineSize = 17.0 * textScale;
+    final spacing = 8.0 * textScale;
+    final painters = <TextPainter>[];
+
+    if (capture.name.trim().isNotEmpty) {
+      painters.add(
+        _overlayPainter(
+          capture.name.trim(),
+          fontSize: titleSize,
+          weight: FontWeight.w800,
+          maxWidth: maxWidth,
+        ),
+      );
+    }
+    for (final line in lines) {
+      painters.add(
+        _overlayPainter(
+          line,
+          fontSize: lineSize,
+          weight: FontWeight.w700,
+          maxWidth: maxWidth,
+        ),
+      );
+    }
+    if (painters.isEmpty) return;
+
+    final blockHeight =
+        painters.fold<double>(0, (sum, painter) => sum + painter.height) +
+        spacing * (painters.length - 1);
+    final blockWidth = painters.fold<double>(
+      0,
+      (maxWidth, painter) => max(maxWidth, painter.width),
+    );
+    final backgroundRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        size.width - blockWidth - padding * 1.45,
+        size.height - blockHeight - padding * 1.35,
+        blockWidth + padding * 0.8,
+        blockHeight + padding * 0.7,
+      ),
+      Radius.circular(18 * textScale),
+    );
+    canvas.drawRRect(
+      backgroundRect,
+      Paint()..color = Colors.black.withValues(alpha: 0.34),
+    );
+
+    var y = size.height - padding - blockHeight;
+    for (final painter in painters) {
+      painter.paint(canvas, Offset(size.width - padding - painter.width, y));
+      y += painter.height + spacing;
+    }
+  }
+
+  TextPainter _overlayPainter(
+    String text, {
+    required double fontSize,
+    required FontWeight weight,
+    required double maxWidth,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: fontSize,
+          fontWeight: weight,
+          height: 1.22,
+          shadows: [
+            Shadow(
+              color: Colors.black.withValues(alpha: 0.86),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+      ),
+      textAlign: TextAlign.right,
+      textDirection: TextDirection.ltr,
+      maxLines: 2,
+      ellipsis: '...',
+    )..layout(maxWidth: maxWidth);
+    return painter;
+  }
+
   Future<Directory> _getPhotosDirectory() async {
     final appDir = await getApplicationDocumentsDirectory();
     final photosDir = Directory('${appDir.path}/$_photosDirName');
@@ -464,7 +613,6 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       },
     );
   }
-
 
   _LocationViewState _viewState() {
     if (_isInitializing) return _LocationViewState.loading;
@@ -2161,7 +2309,6 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-
 String _formatUtmCoordinate(
   double latitude,
   double longitude,
@@ -2182,6 +2329,7 @@ List<String> _buildOverlayLines({
   bool includeLocationNote = true,
 }) {
   final placemark = capture.placemark;
+  final position = capture.position;
   final street = (placemark?.street ?? '').trim();
   final area = [
     placemark?.subLocality?.trim() ?? '',
@@ -2192,6 +2340,10 @@ List<String> _buildOverlayLines({
     'Date ${_formatCaptureDateTime(capture.capturedAt)}',
     if (street.isNotEmpty) 'Street $street',
     if (area.isNotEmpty) 'Place $area',
+    if (position != null)
+      'Coordinates ${CoordinateFormatter.format(position.latitude, position.longitude, coordinateFormat)}',
+    if (position != null)
+      'Accuracy ${_formatOverlayDistance(position.accuracy, unit)}',
   ];
 
   if (includeLocationNote && capture.locationError != null) {
@@ -2202,6 +2354,13 @@ List<String> _buildOverlayLines({
     return const ['Waiting for GPS details'];
   }
   return lines;
+}
+
+String _formatOverlayDistance(double meters, DistanceUnit unit) {
+  if (unit == DistanceUnit.feet) {
+    return '${(meters * 3.28084).toStringAsFixed(1)} ft';
+  }
+  return '${meters.toStringAsFixed(1)} m';
 }
 
 String _formatCaptureDateTime(DateTime value) {

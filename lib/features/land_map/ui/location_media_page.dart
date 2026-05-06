@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 import '../../auth/providers/auth_provider.dart';
+import '../models/coordinate_format.dart';
 import '../models/location_media_models.dart';
+import '../models/reference_ellipsoid.dart';
 import '../services/location_media_service.dart';
-import 'package:hugeicons/hugeicons.dart';
+import '../services/utm_converter.dart';
+import '../state/settings_provider.dart';
 
 class LocationMediaPage extends ConsumerStatefulWidget {
   final String? initialType;
@@ -328,17 +332,18 @@ class _TypeBadge extends StatelessWidget {
   }
 }
 
-class LocationMediaViewerPage extends StatefulWidget {
+class LocationMediaViewerPage extends ConsumerStatefulWidget {
   final LocationMediaItem item;
 
   const LocationMediaViewerPage({super.key, required this.item});
 
   @override
-  State<LocationMediaViewerPage> createState() =>
+  ConsumerState<LocationMediaViewerPage> createState() =>
       _LocationMediaViewerPageState();
 }
 
-class _LocationMediaViewerPageState extends State<LocationMediaViewerPage> {
+class _LocationMediaViewerPageState
+    extends ConsumerState<LocationMediaViewerPage> {
   VideoPlayerController? _videoController;
   bool _loadingVideo = false;
 
@@ -377,6 +382,12 @@ class _LocationMediaViewerPageState extends State<LocationMediaViewerPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final item = widget.item;
+    final coordinateFormat = ref.watch(coordinateFormatProvider);
+    final referenceEllipsoid = ref.watch(referenceEllipsoidProvider);
+    final placeText = _cloudPlaceText(item);
+    final addressText = _cloudAddressText(item);
+    final coordinateText = _cloudCoordinateText(item, coordinateFormat);
+    final utmText = _cloudUtmText(item, referenceEllipsoid);
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -391,7 +402,10 @@ class _LocationMediaViewerPageState extends State<LocationMediaViewerPage> {
 
         leading: IconButton(
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01, color: Colors.black87,),
+          icon: HugeIcon(
+            icon: HugeIcons.strokeRoundedArrowLeft01,
+            color: Colors.black87,
+          ),
         ),
 
         backgroundColor: Colors.white,
@@ -400,53 +414,102 @@ class _LocationMediaViewerPageState extends State<LocationMediaViewerPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            AspectRatio(
-              aspectRatio: 1,
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.5,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(18),
-                child: item.isVideo
-                    ? _loadingVideo || _videoController == null
-                          ? const ColoredBox(
-                              color: Colors.black,
-                              child: Center(child: CircularProgressIndicator()),
-                            )
-                          : VideoPlayer(_videoController!)
-                    : Image.network(
-                        item.resolvedUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.black12,
-                          child: const Center(
-                            child: Icon(Icons.broken_image_outlined, size: 42),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: Colors.black),
+                    item.isVideo
+                        ? _loadingVideo || _videoController == null
+                              ? const ColoredBox(
+                                  color: Colors.black,
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                )
+                              : FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: _videoController!.value.size.width,
+                                    height: _videoController!.value.size.height,
+                                    child: VideoPlayer(_videoController!),
+                                  ),
+                                )
+                        : Image.network(
+                            item.resolvedUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                                  color: Colors.black12,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      size: 42,
+                                    ),
+                                  ),
+                                ),
+                          ),
+                    if (item.isVideo && _videoController != null)
+                      Positioned(
+                        left: 14,
+                        right: 14,
+                        bottom: 16,
+                        child: VideoProgressIndicator(
+                          _videoController!,
+                          allowScrubbing: true,
+                          colors: const VideoProgressColors(
+                            playedColor: Colors.white,
+                            bufferedColor: Colors.white38,
+                            backgroundColor: Colors.white12,
                           ),
                         ),
                       ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              item.location?.name ?? 'Saved location',
+              placeText == '—' ? 'Saved location' : placeText,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              item.location?.latitude == null ||
-                      item.location?.longitude == null
+              coordinateText == '—'
                   ? 'Coordinates unavailable'
-                  : '${item.location!.latitude!.toStringAsFixed(6)}, ${item.location!.longitude!.toStringAsFixed(6)}',
+                  : coordinateText,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: Colors.black54,
               ),
             ),
             const SizedBox(height: 12),
-            _detailRow('Type', item.type),
-            _detailRow('MIME', item.mimeType),
+            _detailRow('Place', placeText),
+            _detailRow('Address', addressText),
+            _detailRow('Coordinates', coordinateText),
+            _detailRow('UTM', utmText),
+            _detailRow('Reference ellipsoid', referenceEllipsoid.displayName),
+            _detailRow('Coordinate format', coordinateFormat.displayName),
+            _detailRow('Media type', item.type.isEmpty ? 'media' : item.type),
+            _detailRow('MIME', item.mimeType.isEmpty ? '—' : item.mimeType),
             _detailRow('Size', _fileSizeLabel(item.fileSize)),
-            _detailRow('Path', item.filePath),
-            if (item.createdAt != null) _detailRow('Created', item.createdAt!),
-            if (item.updatedAt != null) _detailRow('Updated', item.updatedAt!),
+            _detailRow(
+              'File name',
+              item.fileName.isEmpty ? '—' : item.fileName,
+            ),
+            _detailRow('Path', item.filePath.isEmpty ? '—' : item.filePath),
+            _detailRow(
+              'Location ID',
+              item.locationId.isEmpty ? '—' : item.locationId,
+            ),
+            if (item.createdAt != null)
+              _detailRow('Created', _formatCloudDate(item.createdAt!)),
+            if (item.updatedAt != null)
+              _detailRow('Updated', _formatCloudDate(item.updatedAt!)),
             const SizedBox(height: 12),
             if (item.isVideo && _videoController != null)
               ElevatedButton.icon(
@@ -494,6 +557,57 @@ class _LocationMediaViewerPageState extends State<LocationMediaViewerPage> {
       ),
     );
   }
+}
+
+String _cloudPlaceText(LocationMediaItem item) {
+  final location = item.location;
+  final value = [location?.place, location?.name]
+      .whereType<String>()
+      .map((value) => value.trim())
+      .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+  return value.isEmpty ? '—' : value;
+}
+
+String _cloudAddressText(LocationMediaItem item) {
+  final location = item.location;
+  final value = [location?.address, location?.description]
+      .whereType<String>()
+      .map((value) => value.trim())
+      .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+  return value.isEmpty ? '—' : value;
+}
+
+String _cloudCoordinateText(
+  LocationMediaItem item,
+  CoordinateFormat coordinateFormat,
+) {
+  final latitude = item.location?.latitude;
+  final longitude = item.location?.longitude;
+  if (latitude == null || longitude == null) return '—';
+  return CoordinateFormatter.format(latitude, longitude, coordinateFormat);
+}
+
+String _cloudUtmText(
+  LocationMediaItem item,
+  ReferenceEllipsoid referenceEllipsoid,
+) {
+  final latitude = item.location?.latitude;
+  final longitude = item.location?.longitude;
+  if (latitude == null || longitude == null) return '—';
+  final utm = UtmConverter.fromLatLng(latitude, longitude, referenceEllipsoid);
+  return utm?.toDisplayString() ?? 'UTM unavailable for this latitude';
+}
+
+String _formatCloudDate(String raw) {
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return raw;
+  final local = parsed.toLocal();
+  final day = local.day.toString().padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  final year = local.year.toString();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$day/$month/$year $hour:$minute';
 }
 
 String _fileSizeLabel(int bytes) {

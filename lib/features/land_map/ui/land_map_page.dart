@@ -61,10 +61,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   String? _locationError;
   List<_PlacedMarker> _savedMarkers = const [];
   StreamSubscription<Position>? _fieldTrackingSubscription;
+  StreamSubscription<Position>? _navigationTrackingSubscription;
   bool _showFieldLayer = true;
   bool _showDistanceLayer = true;
   bool _showMarkerLayer = true;
   ProviderSubscription<LandMapState>? _landMapSubscription;
+  DateTime? _lastNavigationCameraMove;
 
   @override
   void initState() {
@@ -77,10 +79,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       final nextLen = next.points.length;
 
       if (next.navigationTarget != null) {
+        if (targetChanged) {
+          _lastNavigationCameraMove = null;
+          unawaited(_startNavigationTracking());
+        }
         if (targetChanged || currentChanged) {
           _focusOnNavigationTarget(next);
         }
         return;
+      }
+
+      if (previous?.navigationTarget != null) {
+        unawaited(_stopNavigationTracking());
       }
 
       if (nextLen == 0) return;
@@ -103,6 +113,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   void dispose() {
     _landMapSubscription?.close();
     _fieldTrackingSubscription?.cancel();
+    _navigationTrackingSubscription?.cancel();
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
@@ -491,13 +502,97 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final target = st.navigationTarget;
     if (target == null) return;
 
+    final now = DateTime.now();
+    final shouldMoveCamera =
+        _lastNavigationCameraMove == null ||
+        now.difference(_lastNavigationCameraMove!) > const Duration(seconds: 8);
+    if (!shouldMoveCamera) return;
+
     final current = st.current;
     if (current == null) {
-      _mapController.move(target.point, _clampZoom(17));
+      _focusOnPoints(_targetPoints(target));
+      _lastNavigationCameraMove = now;
       return;
     }
 
-    _focusOnPoints([current, target.point]);
+    _focusOnPoints([current, ..._targetPoints(target)]);
+    _lastNavigationCameraMove = now;
+  }
+
+  List<LatLng> _targetPoints(LandNavigationTarget target) {
+    return target.points.isEmpty ? [target.point] : target.points;
+  }
+
+  LatLng _navigationPointForCurrent(
+    LatLng current,
+    LandNavigationTarget target,
+  ) {
+    final points = _targetPoints(target);
+    if (points.length == 1) return points.first;
+
+    final kind = target.kind.toLowerCase();
+    if (kind != 'polygon' && kind != 'polyline') return target.point;
+
+    return _nearestPointOnTargetSegments(
+      current,
+      points,
+      closeLoop: kind == 'polygon' && points.length >= 3,
+    );
+  }
+
+  LatLng _nearestPointOnTargetSegments(
+    LatLng current,
+    List<LatLng> points, {
+    required bool closeLoop,
+  }) {
+    if (points.length == 1) return points.first;
+
+    LatLng bestPoint = points.first;
+    double bestDistance = double.infinity;
+    final segmentCount = closeLoop ? points.length : points.length - 1;
+
+    for (int i = 0; i < segmentCount; i++) {
+      final start = points[i];
+      final end = points[(i + 1) % points.length];
+      final candidate = _nearestPointOnSegment(current, start, end);
+      final distance = _distanceCalculator.as(
+        LengthUnit.Meter,
+        current,
+        candidate,
+      );
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestPoint = candidate;
+      }
+    }
+
+    return bestPoint;
+  }
+
+  LatLng _nearestPointOnSegment(LatLng point, LatLng start, LatLng end) {
+    final latScale = 111320.0;
+    final lngScale = latScale * cos(point.latitude * pi / 180.0);
+
+    final px = point.longitude * lngScale;
+    final py = point.latitude * latScale;
+    final ax = start.longitude * lngScale;
+    final ay = start.latitude * latScale;
+    final bx = end.longitude * lngScale;
+    final by = end.latitude * latScale;
+
+    final dx = bx - ax;
+    final dy = by - ay;
+    final lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared == 0) return start;
+
+    final t = (((px - ax) * dx + (py - ay) * dy) / lengthSquared).clamp(
+      0.0,
+      1.0,
+    );
+
+    final nearestX = ax + dx * t;
+    final nearestY = ay + dy * t;
+    return LatLng(nearestY / latScale, nearestX / lngScale);
   }
 
   double _bearingDegrees(LatLng from, LatLng to) {
@@ -614,6 +709,43 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (mounted) {
       setState(() => _isAutoFieldCapture = false);
     }
+  }
+
+  Future<void> _startNavigationTracking() async {
+    if (_navigationTrackingSubscription != null) return;
+
+    final err = await ref.read(landMapProvider.notifier).initLocation();
+    if (!mounted) return;
+    if (err != null) {
+      setState(() => _locationError = err);
+      return;
+    }
+
+    _navigationTrackingSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 1,
+          ),
+        ).listen(
+          (position) {
+            ref
+                .read(landMapProvider.notifier)
+                .updateCurrentFromPosition(position);
+            if (!mounted || _locationError == null) return;
+            setState(() => _locationError = null);
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _locationError = 'Live navigation updates failed.');
+          },
+        );
+  }
+
+  Future<void> _stopNavigationTracking() async {
+    await _navigationTrackingSubscription?.cancel();
+    _navigationTrackingSubscription = null;
+    _lastNavigationCameraMove = null;
   }
 
   Future<_LandSubmitResult> _createLandRecordOnServer({
@@ -895,6 +1027,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
     final navigationTarget = st.navigationTarget;
+    final navigationTargetPoints = navigationTarget == null
+        ? const <LatLng>[]
+        : _targetPoints(navigationTarget);
+    final navigationTargetKind =
+        navigationTarget?.kind.toLowerCase().trim() ?? '';
+    final navigationGuidancePoint = navigationTarget == null
+        ? null
+        : st.current == null
+        ? navigationTarget.point
+        : _navigationPointForCurrent(st.current!, navigationTarget);
 
     final markers = <Marker>[
       if (_showFieldLayer)
@@ -924,11 +1066,28 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               child: const _SavedMarkerPin(),
             ),
           ),
-      if (navigationTarget != null)
+      if (navigationTarget != null && navigationTargetKind == 'point')
         Marker(
           width: 46,
           height: 46,
-          point: navigationTarget.point,
+          point: navigationGuidancePoint ?? navigationTarget.point,
+          child: const _NavigationTargetMarker(),
+        ),
+      if (navigationTarget != null && navigationTargetKind != 'point')
+        for (int i = 0; i < navigationTargetPoints.length; i++)
+          Marker(
+            width: 28,
+            height: 28,
+            point: navigationTargetPoints[i],
+            child: _NavigationTargetVertexMarker(index: i + 1),
+          ),
+      if (navigationTarget != null &&
+          navigationTargetKind != 'point' &&
+          navigationGuidancePoint != null)
+        Marker(
+          width: 42,
+          height: 42,
+          point: navigationGuidancePoint,
           child: const _NavigationTargetMarker(),
         ),
       if (_showDistanceLayer)
@@ -949,6 +1108,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           color: const Color(0xFF001F3F).withValues(alpha: 0.3),
           borderColor: const Color(0xFF001F3F),
         ),
+      if (navigationTargetKind == 'polygon' &&
+          navigationTargetPoints.length >= 3)
+        Polygon(
+          points: navigationTargetPoints,
+          borderStrokeWidth: 3,
+          color: Colors.teal.shade700.withValues(alpha: 0.20),
+          borderColor: Colors.teal.shade700,
+        ),
     ];
 
     final polylines = <Polyline>[
@@ -964,9 +1131,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           strokeWidth: 4,
           color: Colors.orange.shade700,
         ),
-      if (navigationTarget != null && st.current != null)
+      if (navigationTargetKind == 'polyline' &&
+          navigationTargetPoints.length >= 2)
         Polyline(
-          points: [st.current!, navigationTarget.point],
+          points: navigationTargetPoints,
+          strokeWidth: 5,
+          color: Colors.teal.shade700,
+        ),
+      if (navigationTarget != null &&
+          st.current != null &&
+          navigationGuidancePoint != null)
+        Polyline(
+          points: [st.current!, navigationGuidancePoint],
           strokeWidth: 4,
           color: Colors.teal.shade700,
         ),
@@ -2163,14 +2339,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (target == null) return const SizedBox.shrink();
 
     final current = st.current;
+    final guidancePoint = current == null
+        ? target.point
+        : _navigationPointForCurrent(current, target);
     final distanceText = current == null
         ? 'Waiting for location'
         : _formatDistance(
-            _distanceCalculator.as(LengthUnit.Meter, current, target.point),
+            _distanceCalculator.as(LengthUnit.Meter, current, guidancePoint),
           );
     final bearingText = current == null
         ? ''
-        : ' · ${_bearingLabel(_bearingDegrees(current, target.point))}';
+        : ' · ${_bearingLabel(_bearingDegrees(current, guidancePoint))}';
 
     return Material(
       color: Colors.transparent,
@@ -2615,6 +2794,40 @@ class _NavigationTargetMarker extends StatelessWidget {
           child: const Icon(Icons.near_me, color: Colors.white, size: 14),
         ),
       ],
+    );
+  }
+}
+
+class _NavigationTargetVertexMarker extends StatelessWidget {
+  final int index;
+
+  const _NavigationTargetVertexMarker({required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.teal.shade700,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          '$index',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 9,
+          ),
+        ),
+      ),
     );
   }
 }

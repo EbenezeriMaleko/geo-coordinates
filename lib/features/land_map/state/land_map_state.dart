@@ -2,11 +2,13 @@ import 'package:latlong2/latlong.dart';
 
 class LandNavigationTarget {
   final LatLng point;
+  final List<LatLng> points;
   final String label;
   final String kind;
 
   const LandNavigationTarget({
     required this.point,
+    required this.points,
     required this.label,
     required this.kind,
   });
