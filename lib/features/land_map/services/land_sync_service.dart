@@ -2,7 +2,13 @@ import 'package:hive/hive.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/land_api_models.dart';
+import '../models/reference_ellipsoid.dart';
+import 'utm_converter.dart';
 import 'land_cloud_service.dart';
+
+const _referenceEllipsoidPrefKey = 'prefs_reference_ellipsoid';
+const _syncSchemaVersionKey = 'land_sync_schema_version';
+const _currentSyncSchemaVersion = 1;
 
 class LandSyncResult {
   final int attempted;
@@ -24,6 +30,8 @@ class LandSyncService {
     : cloudService = cloudService ?? LandCloudService();
 
   Future<LandSyncResult> syncPendingLands({int limit = 10}) async {
+    await _runLegacySyncMigrationIfNeeded();
+
     final token = (box.get('auth_token')?.toString() ?? '').trim();
     final isVerified = box.get('auth_is_verified') as bool? ?? false;
     if (token.isEmpty || !isVerified) {
@@ -69,18 +77,22 @@ class LandSyncService {
             Map<String, dynamic>.from(entry.value as Map),
           ),
         )
-        .where(
-          (entry) {
-            final entityType = entry.value['entityType']?.toString() ?? '';
-            final isSupported =
-                entityType == 'land' ||
-                entityType == 'polygon' ||
-                entityType == 'polyline' ||
-                entityType == 'point';
-            return isSupported &&
-                (entry.value['syncStatus']?.toString() ?? 'pending') == 'pending';
-          },
-        )
+        .where((entry) {
+          final entityType = entry.value['entityType']?.toString() ?? '';
+          final isSupported =
+              entityType == 'land' ||
+              entityType == 'polygon' ||
+              entityType == 'polyline' ||
+              entityType == 'point';
+          final cloudId = (entry.value['cloudId']?.toString() ?? '').trim();
+          final syncStatus = (entry.value['syncStatus']?.toString() ?? '')
+              .trim()
+              .toLowerCase();
+          final isPending =
+              syncStatus == 'pending' ||
+              (syncStatus.isEmpty && cloudId.isEmpty);
+          return isSupported && isPending;
+        })
         .toList();
 
     // Prioritize latest changes so newly saved edits sync quickly.
@@ -106,50 +118,172 @@ class LandSyncService {
     required Map<String, dynamic> land,
     required String bearerToken,
   }) async {
-    final points = _extractPoints(land);
-    final type = _normalizeLandType(land);
+    final attemptStampedLand = await _markSyncAttempt(key, land);
+
+    final pointEntries = _extractPointEntries(attemptStampedLand);
+    final points = pointEntries
+        .map((e) => LatLng(e['lat'] as double, e['lng'] as double))
+        .toList();
+    final type = _normalizeLandType(attemptStampedLand);
     final minimumPoints = type == 'point' ? 1 : (type == 'polyline' ? 2 : 3);
 
     if (points.length < minimumPoints) {
       final err = 'Not enough points to sync.';
-      await _markSyncFailed(key, land, err);
+      await _markSyncFailed(key, attemptStampedLand, err);
       return err;
     }
 
-    final payload = _buildPayload(land, points);
+    final payload = _buildPayload(attemptStampedLand, pointEntries);
+    final cloudId = (attemptStampedLand['cloudId']?.toString() ?? '').trim();
+    if (cloudId.isNotEmpty) {
+      final updateRequest = _buildMetadataUpdateRequest(attemptStampedLand);
+      try {
+        await cloudService.updateLand(bearerToken, cloudId, updateRequest);
+        await _markSynced(key, attemptStampedLand, cloudId);
+        return null;
+      } catch (error) {
+        final message = error.toString();
+        if (!_isRemoteRecordMissing(message)) {
+          final err = message.trim().isEmpty
+              ? 'Failed to sync land to server.'
+              : message;
+          await _markSyncFailed(key, attemptStampedLand, err);
+          return err;
+        }
+      }
+    }
 
     try {
-      final created = await cloudService.createLand(
-        bearerToken,
-        payload,
-      );
-      await _markSynced(key, land, created.id);
+      final created = await cloudService.createLand(bearerToken, payload);
+      await _markSynced(key, attemptStampedLand, created.id);
       return null;
     } catch (error) {
       final err = error.toString().trim().isEmpty
           ? 'Failed to sync land to server.'
           : error.toString();
-      await _markSyncFailed(key, land, err);
+      await _markSyncFailed(key, attemptStampedLand, err);
       return err;
     }
   }
 
-  List<LatLng> _extractPoints(Map<String, dynamic> land) {
+  Future<void> _runLegacySyncMigrationIfNeeded() async {
+    final currentVersion =
+        (box.get(_syncSchemaVersionKey) as num?)?.toInt() ?? 0;
+    if (currentVersion >= _currentSyncSchemaVersion) return;
+
+    final entries = box.toMap().entries.where((entry) => entry.value is Map);
+    for (final entry in entries) {
+      final raw = Map<String, dynamic>.from(entry.value as Map);
+      final normalized = _migrateLegacyRecord(raw);
+      if (!_mapsEqual(raw, normalized)) {
+        await box.put(entry.key, normalized);
+      }
+    }
+
+    await box.put(_syncSchemaVersionKey, _currentSyncSchemaVersion);
+  }
+
+  Map<String, dynamic> _migrateLegacyRecord(Map<String, dynamic> land) {
+    final entityType = (land['entityType']?.toString() ?? '')
+        .trim()
+        .toLowerCase();
+    final isSupported =
+        entityType == 'land' ||
+        entityType == 'polygon' ||
+        entityType == 'polyline' ||
+        entityType == 'point';
+    if (!isSupported) return land;
+
+    final updated = <String, dynamic>{...land};
+    final cloudId = (updated['cloudId']?.toString() ?? '').trim();
+    final syncStatus = (updated['syncStatus']?.toString() ?? '')
+        .trim()
+        .toLowerCase();
+
+    if (syncStatus.isEmpty) {
+      updated['syncStatus'] = cloudId.isNotEmpty ? 'synced' : 'pending';
+    }
+
+    if (!updated.containsKey('syncError')) {
+      updated['syncError'] = null;
+    }
+
+    if (!updated.containsKey('syncAttempts')) {
+      updated['syncAttempts'] = 0;
+    }
+
+    return updated;
+  }
+
+  bool _mapsEqual(Map<String, dynamic> left, Map<String, dynamic> right) {
+    if (left.length != right.length) return false;
+    for (final key in left.keys) {
+      if (left[key] != right[key]) return false;
+    }
+    return true;
+  }
+
+  Future<Map<String, dynamic>> _markSyncAttempt(
+    dynamic key,
+    Map<String, dynamic> land,
+  ) async {
+    final attempts = _syncAttemptsFrom(land) + 1;
+    final updated = {
+      ...land,
+      'syncAttempts': attempts,
+      'lastSyncAttemptAt': DateTime.now().toIso8601String(),
+    };
+    await box.put(key, updated);
+    return updated;
+  }
+
+  int _syncAttemptsFrom(Map<String, dynamic> land) {
+    final raw = land['syncAttempts'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    if (raw is String) return int.tryParse(raw) ?? 0;
+    return 0;
+  }
+
+  List<Map<String, dynamic>> _extractPointEntries(Map<String, dynamic> land) {
     final rawPoints = (land['points'] as List?) ?? const [];
-    final points = <LatLng>[];
-    for (final item in rawPoints) {
+    final labels = ((land['labels'] as List?) ?? const [])
+        .map((e) => e.toString())
+        .toList();
+    final points = <Map<String, dynamic>>[];
+    for (int index = 0; index < rawPoints.length; index++) {
+      final item = rawPoints[index];
       if (item is! Map) continue;
       final lat = (item['lat'] as num?)?.toDouble();
       final lng = (item['lng'] as num?)?.toDouble();
       if (lat == null || lng == null) continue;
-      points.add(LatLng(lat, lng));
+      final point = Map<String, dynamic>.from(item);
+      points.add({
+        ...point,
+        'lat': lat,
+        'lng': lng,
+        'label': _extractPointLabel(point, labels, index),
+      });
     }
     return points;
   }
 
+  String? _extractPointLabel(
+    Map<String, dynamic> point,
+    List<String> labels,
+    int index,
+  ) {
+    final directLabel = _trimOrNull(point['label']?.toString());
+    if (directLabel != null) return directLabel;
+    if (index < labels.length) {
+      return _trimOrNull(labels[index]);
+    }
+    return null;
+  }
+
   CreateLandRequest _buildPayload(
     Map<String, dynamic> land,
-    List<LatLng> points,
+    List<Map<String, dynamic>> pointEntries,
   ) {
     final firstName = (box.get('auth_first_name')?.toString() ?? '').trim();
     final lastName = (box.get('auth_last_name')?.toString() ?? '').trim();
@@ -158,30 +292,54 @@ class LandSyncService {
       firstName,
       lastName,
     ].where((name) => name.isNotEmpty).join(' ').trim();
+    final ellipsoid = _resolveReferenceEllipsoid(land);
+    final fallbackPhone = _trimOrNull(box.get('submit_phone')?.toString());
+    final normalizedPhone =
+        _trimOrNull(land['phone']?.toString()) ?? fallbackPhone;
+    final normalizedDescription =
+        _trimOrNull(land['description']?.toString()) ??
+        (owner.isEmpty && email.isEmpty
+            ? null
+            : 'Captured by ${owner.isNotEmpty ? owner : email}');
 
     return CreateLandRequest(
       type: _normalizeLandType(land),
       name: (land['name']?.toString() ?? '').trim().isEmpty
           ? 'Land ${DateTime.now().toIso8601String()}'
           : land['name'].toString().trim(),
-      place: land['place']?.toString(),
-      phone: (land['phone']?.toString() ?? box.get('submit_phone')?.toString())
-          ?.trim(),
-      description: (land['description']?.toString() ?? '').trim().isNotEmpty
-          ? land['description']?.toString()
-          : (owner.isEmpty && email.isEmpty
-                ? null
-                : 'Captured by ${owner.isNotEmpty ? owner : email}'),
-      coordinates: points.map(_latLngToServerCoordinate).toList(),
+      place: _trimOrNull(land['place']?.toString()),
+      phone: normalizedPhone,
+      description: normalizedDescription,
+      referenceEllipsoid: ellipsoid.displayName,
+      coordinates: pointEntries.map((entry) {
+        return _latLngToServerCoordinate(
+          LatLng(entry['lat'] as double, entry['lng'] as double),
+          label: entry['label'] as String?,
+          ellipsoid: ellipsoid,
+        );
+      }).toList(),
+    );
+  }
+
+  UpdateLandRequest _buildMetadataUpdateRequest(Map<String, dynamic> land) {
+    final fallbackPhone = _trimOrNull(box.get('submit_phone')?.toString());
+    return UpdateLandRequest(
+      name: _trimOrNull(land['name']?.toString()),
+      place: _trimOrNull(land['place']?.toString()),
+      phone: _trimOrNull(land['phone']?.toString()) ?? fallbackPhone,
+      description: _trimOrNull(land['description']?.toString()),
     );
   }
 
   String _normalizeLandType(Map<String, dynamic> land) {
-    final rawType = (land['type']?.toString() ?? land['entityType']?.toString() ?? 'polygon')
-        .trim()
-        .toLowerCase();
+    final rawType =
+        (land['type']?.toString() ??
+                land['entityType']?.toString() ??
+                'polygon')
+            .trim()
+            .toLowerCase();
     if (rawType == 'point' || rawType == 'polyline' || rawType == 'polygon') {
-        return rawType;
+      return rawType;
     }
     if (rawType == 'land') {
       return 'polygon';
@@ -189,8 +347,24 @@ class LandSyncService {
     return 'polygon';
   }
 
-  LandCoordinateRequest _latLngToServerCoordinate(LatLng point) {
+  LandCoordinateRequest _latLngToServerCoordinate(
+    LatLng point, {
+    String? label,
+    required ReferenceEllipsoid ellipsoid,
+  }) {
     final zone = _utmZone(point.latitude, point.longitude);
+    double? easting;
+    double? northing;
+    final utm = UtmConverter.fromLatLng(
+      point.latitude,
+      point.longitude,
+      ellipsoid,
+    );
+    if (utm != null) {
+      easting = double.parse(utm.easting.toStringAsFixed(2));
+      northing = double.parse(utm.northing.toStringAsFixed(2));
+    }
+
     return LandCoordinateRequest(
       x: point.longitude,
       y: point.latitude,
@@ -198,7 +372,32 @@ class LandSyncService {
       zone: zone.toString(),
       band: _utmBand(point.latitude),
       hemisphere: point.latitude >= 0 ? 'N' : 'S',
+      easting: easting,
+      northing: northing,
+      label: _trimOrNull(label),
     );
+  }
+
+  ReferenceEllipsoid _resolveReferenceEllipsoid(Map<String, dynamic> land) {
+    final rawFromLand = _trimOrNull(land['referenceEllipsoid']?.toString());
+    if (rawFromLand != null) {
+      return ReferenceEllipsoid.fromRaw(rawFromLand);
+    }
+
+    final rawFromPrefs = _trimOrNull(
+      box.get(_referenceEllipsoidPrefKey)?.toString(),
+    );
+    return ReferenceEllipsoid.fromRaw(rawFromPrefs);
+  }
+
+  String? _trimOrNull(String? value) {
+    final text = value?.trim() ?? '';
+    return text.isEmpty ? null : text;
+  }
+
+  bool _isRemoteRecordMissing(String errorText) {
+    final normalized = errorText.toLowerCase();
+    return normalized.contains('404') || normalized.contains('not found');
   }
 
   int _utmZone(double latitude, double longitude) {
@@ -233,6 +432,7 @@ class LandSyncService {
       ...land,
       'syncStatus': 'synced',
       'syncError': null,
+      'lastSyncAttemptAt': DateTime.now().toIso8601String(),
       'lastSyncedAt': DateTime.now().toIso8601String(),
     };
     if (remoteId != null) {
@@ -254,5 +454,4 @@ class LandSyncService {
     };
     await box.put(key, updated);
   }
-
 }

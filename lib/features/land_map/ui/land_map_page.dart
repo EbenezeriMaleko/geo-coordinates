@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -14,7 +13,6 @@ import 'package:uuid/uuid.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/network/api_client.dart';
 import '../models/coordinate_format.dart';
 import '../models/reference_ellipsoid.dart';
 import '../services/utm_converter.dart';
@@ -53,7 +51,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   MapType _currentMapType = MapType.normal;
   _MapTool _activeTool = _MapTool.none;
   final Distance _distanceCalculator = const Distance();
+
   List<LatLng> _distancePoints = const [];
+  List<String> _distanceLabels = const [];
+
   bool _isLocating = false;
   bool _isMarkerSaving = false;
   bool _isAutoFieldCapture = false;
@@ -265,33 +266,28 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (_isMarkerSaving) return;
     setState(() => _isMarkerSaving = true);
     try {
-      final result = await _createLandRecordOnServer(
-        type: 'point',
-        name: 'Location ${DateTime.now().toIso8601String()}',
-        points: [point],
-      );
       final box = Hive.box('landbox');
+      final ellipsoid = ref.read(referenceEllipsoidProvider);
       final id = const Uuid().v4();
+      final now = DateTime.now().toIso8601String();
       final payload = {
         'id': id,
         'entityType': 'point',
         'type': 'point',
         'name': 'Location ${DateTime.now().toIso8601String()}',
+        'referenceEllipsoid': ellipsoid.name,
         'points': [
           {'order': 0, 'lat': point.latitude, 'lng': point.longitude},
         ],
-        if (result.cloudId != null) 'cloudId': result.cloudId,
-        if (result.error != null) 'syncError': result.error,
-        'createdAt': DateTime.now().toIso8601String(),
+        'syncStatus': 'pending',
+        'syncError': null,
+        'createdAt': now,
+        'updatedAt': now,
       };
       await box.put(id, payload);
       if (!mounted) return;
       await _loadSavedMarkers();
-      _snack(
-        result.error == null
-            ? 'Location saved'
-            : 'Location saved locally. Cloud sync pending: ${result.error}',
-      );
+      _snack('Location saved locally. Sync queued.');
     } finally {
       if (mounted) {
         setState(() => _isMarkerSaving = false);
@@ -310,6 +306,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   void _addDistancePoint(LatLng point) {
     setState(() {
       _distancePoints = [..._distancePoints, point];
+      _distanceLabels = [..._distanceLabels, '${_distancePoints.length}'];
     });
   }
 
@@ -317,12 +314,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (_distancePoints.isEmpty) return;
     setState(() {
       _distancePoints = [..._distancePoints]..removeLast();
+      _distanceLabels = [..._distanceLabels]..removeLast();
     });
   }
 
   void _clearDistancePoints() {
     setState(() {
       _distancePoints = const [];
+      _distanceLabels = const [];
     });
   }
 
@@ -333,21 +332,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     String? description,
   }) async {
     final points = List<LatLng>.from(_distancePoints);
+    final labels = List<String>.from(_distanceLabels);
     if (points.length < 2) {
       _snack('Add at least 2 points to save a distance.');
       return;
     }
 
-    final result = await _createLandRecordOnServer(
-      type: 'polyline',
-      name: name,
-      place: place,
-      phone: phone,
-      description: description,
-      points: points,
-    );
-
     final box = Hive.box('landbox');
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
     final id = const Uuid().v4();
     final now = DateTime.now().toIso8601String();
     await box.put(id, {
@@ -355,10 +347,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       'entityType': 'polyline',
       'type': 'polyline',
       'name': name,
+      'referenceEllipsoid': ellipsoid.name,
       if ((place ?? '').trim().isNotEmpty) 'place': place!.trim(),
       if ((phone ?? '').trim().isNotEmpty) 'phone': phone!.trim(),
       if ((description ?? '').trim().isNotEmpty)
         'description': description!.trim(),
+      if (labels.isNotEmpty) 'labels': labels,
       'points': points
           .asMap()
           .entries
@@ -370,8 +364,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             },
           )
           .toList(),
-      if (result.cloudId != null) 'cloudId': result.cloudId,
-      if (result.error != null) 'syncError': result.error,
+      'syncStatus': 'pending',
+      'syncError': null,
       'createdAt': now,
       'updatedAt': now,
     });
@@ -381,11 +375,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _distancePoints = const [];
       _activeTool = _MapTool.none;
     });
-    _snack(
-      result.error == null
-          ? 'Distance saved'
-          : 'Distance saved locally. Cloud sync pending: ${result.error}',
-    );
+    _snack('Distance saved locally. Sync queued.');
   }
 
   double _totalDistanceMeters() {
@@ -754,118 +744,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _lastNavigationCameraMove = null;
   }
 
-  Future<_LandSubmitResult> _createLandRecordOnServer({
-    required String type,
-    required String name,
-    String? place,
-    String? phone,
-    String? description,
-    required List<LatLng> points,
-  }) async {
-    final minimumPoints = type == 'point' ? 1 : (type == 'polyline' ? 2 : 3);
-    if (points.length < minimumPoints) {
-      return const _LandSubmitResult(error: 'Not enough points to submit.');
-    }
-
-    final box = Hive.box('landbox');
-    final authToken = _stringOrFallback(box.get('auth_token'), '');
-    if (authToken.isEmpty) {
-      return const _LandSubmitResult(
-        error: 'Sign in is required before cloud sync.',
-      );
-    }
-
-    final firstName = _stringOrFallback(box.get('auth_first_name'), '');
-    final lastName = _stringOrFallback(box.get('auth_last_name'), '');
-    final userFullName = [
-      firstName,
-      lastName,
-    ].where((s) => s.isNotEmpty).join(' ').trim();
-    final ownerName = userFullName.isNotEmpty
-        ? userFullName
-        : _stringOrFallback(box.get('auth_email'), 'Unknown');
-
-    final normalizedPhone =
-        _optionalTrim(phone) ??
-        _optionalTrim(box.get('submit_phone')?.toString());
-    final normalizedDescription =
-        _optionalTrim(description) ??
-        (ownerName.isEmpty ? null : 'Captured by $ownerName');
-
-    final payload = <String, dynamic>{
-      'type': type,
-      'name': name,
-      'place': _optionalTrim(place),
-      'phone': normalizedPhone,
-      'description': normalizedDescription,
-      'coordinates': points.map(_latLngToServerCoordinate).toList(),
-    };
-    payload.removeWhere(
-      (key, value) =>
-          value == null || (value is String && value.trim().isEmpty),
-    );
-
-    if (normalizedPhone != null) {
-      await box.put('submit_phone', normalizedPhone);
-    }
-
-    try {
-      final response = await ApiClient.postJson(
-        '/lands',
-        body: payload,
-        bearerToken: authToken,
-        tag: 'land_map_manual_submit',
-      );
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return _LandSubmitResult(
-          error: _extractApiError(
-            response.body,
-            'Server rejected payload (${response.statusCode}).',
-          ),
-        );
-      }
-      try {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          final data =
-              (decoded['data'] as Map?)?.cast<String, dynamic>() ?? const {};
-          return _LandSubmitResult(cloudId: data['id']?.toString());
-        }
-      } catch (_) {}
-      return const _LandSubmitResult();
-    } catch (_) {
-      return const _LandSubmitResult(
-        error: 'Failed to send payload to server.',
-      );
-    }
-  }
-
-  String _extractApiError(String rawBody, String fallback) {
-    try {
-      final decoded = jsonDecode(rawBody);
-      if (decoded is Map<String, dynamic>) {
-        final topLevel = decoded['message'] as String?;
-        final errors = decoded['errors'];
-        if (errors is Map && errors.isNotEmpty) {
-          final firstValue = errors.values.first;
-          if (firstValue is List && firstValue.isNotEmpty) {
-            return firstValue.first.toString();
-          }
-        }
-        if (topLevel != null && topLevel.trim().isNotEmpty) {
-          return topLevel;
-        }
-      }
-    } catch (_) {}
-    return fallback;
-  }
-
-  String _stringOrFallback(dynamic value, String fallback) {
-    final text = value?.toString().trim() ?? '';
-    return text.isEmpty ? fallback : text;
-  }
-
   String? _optionalTrim(String? value) {
     final text = value?.trim() ?? '';
     return text.isEmpty ? null : text;
@@ -940,42 +818,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
-  }
-
-  Map<String, dynamic> _latLngToServerCoordinate(LatLng point) {
-    final zone = _utmZone(point.latitude, point.longitude);
-
-    return {
-      'x': point.longitude,
-      'y': point.latitude,
-      'z': 0,
-      'zone': zone.toString(),
-      'band': _utmBand(point.latitude),
-      'hemisphere': point.latitude >= 0 ? 'N' : 'S',
-    };
-  }
-
-  int _utmZone(double latitude, double longitude) {
-    final lon = ((longitude + 180) % 360 + 360) % 360 - 180;
-
-    if (latitude >= 56 && latitude < 64 && lon >= 3 && lon < 12) {
-      return 32;
-    }
-    if (latitude >= 72 && latitude < 84) {
-      if (lon >= 0 && lon < 9) return 31;
-      if (lon >= 9 && lon < 21) return 33;
-      if (lon >= 21 && lon < 33) return 35;
-      if (lon >= 33 && lon < 42) return 37;
-    }
-
-    return ((lon + 180) / 6).floor() + 1;
-  }
-
-  String _utmBand(double latitude) {
-    if (latitude < -80 || latitude > 84) return 'Z';
-    const bands = 'CDEFGHJKLMNPQRSTUVWX';
-    final index = ((latitude + 80) / 8).floor().clamp(0, bands.length - 1);
-    return bands[index];
   }
 
   void _showMarkerActions(_PlacedMarker marker) {
@@ -1102,7 +944,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             width: 34,
             height: 34,
             point: _distancePoints[i],
-            child: _DistancePointMarker(index: i + 1),
+            child: _DistancePointMarker(
+              label: i < _distanceLabels.length
+                  ? _distanceLabels[i]
+                  : '${i + 1}',
+            ),
           ),
     ];
 
@@ -2012,8 +1858,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 onPressed: mapState.isSaving
                                     ? null
                                     : () async {
-                                        final pointsSnapshot =
-                                            List<LatLng>.from(mapState.points);
                                         final enteredPlace = _placeController
                                             .text
                                             .trim();
@@ -2053,16 +1897,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               SnackBar(content: Text(err)),
                                             );
                                           } else {
-                                            final submitResult =
-                                                await _createLandRecordOnServer(
-                                                  type: 'polygon',
-                                                  name: effectiveName,
-                                                  place: enteredPlace,
-                                                  phone: enteredPhone,
-                                                  description:
-                                                      enteredDescription,
-                                                  points: pointsSnapshot,
-                                                );
                                             await _stopAutoFieldCapture();
                                             if (!sheetContext.mounted) return;
                                             _placeController.clear();
@@ -2072,16 +1906,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                 mapState.activeFieldId != null
                                                 ? 'Field updated offline successfully'
                                                 : 'Field saved offline successfully';
-                                            final fullMessage =
-                                                submitResult.error == null
-                                                ? '$baseMessage and sent to server'
-                                                : '$baseMessage. Sync pending: ${submitResult.error}';
 
                                             ScaffoldMessenger.of(
                                               sheetContext,
                                             ).showSnackBar(
                                               SnackBar(
-                                                content: Text(fullMessage),
+                                                content: Text(
+                                                  '$baseMessage. Sync queued.',
+                                                ),
                                               ),
                                             );
                                             Navigator.pop(sheetContext);
@@ -2224,12 +2056,110 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(
-                      '${_distancePoints.length} points captured • Distance: ${_formatDistance(totalDistance)}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_distancePoints.length} points • ${_formatDistance(totalDistance)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (_distancePoints.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Point labels',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF374151),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          StatefulBuilder(
+                            builder: (context, setModalState) {
+                              return Column(
+                                children: List.generate(
+                                  _distancePoints.length,
+                                  (index) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 24,
+                                          child: Text(
+                                            '${index + 1}.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: TextFormField(
+                                            initialValue:
+                                                index < _distanceLabels.length
+                                                ? _distanceLabels[index]
+                                                : '${index + 1}',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                            ),
+                                            decoration: InputDecoration(
+                                              hintText: 'Point ${index + 1}',
+                                              hintStyle: TextStyle(
+                                                color: Colors.grey.shade400,
+                                                fontSize: 13,
+                                              ),
+                                              isDense: true,
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 8,
+                                                  ),
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                borderSide: BorderSide(
+                                                  color: Colors.grey.shade300,
+                                                ),
+                                              ),
+                                              enabledBorder: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                borderSide: BorderSide(
+                                                  color: Colors.grey.shade300,
+                                                ),
+                                              ),
+                                            ),
+                                            onChanged: (value) {
+                                              final updated = List<String>.from(
+                                                _distanceLabels,
+                                              );
+                                              while (updated.length <= index) {
+                                                updated.add(
+                                                  '${updated.length + 1}',
+                                                );
+                                              }
+                                              updated[index] =
+                                                  value.trim().isEmpty
+                                                  ? '${index + 1}'
+                                                  : value;
+                                              setState(() {
+                                                _distanceLabels = updated;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -2864,8 +2794,8 @@ class _NavigationTargetVertexMarker extends StatelessWidget {
 }
 
 class _DistancePointMarker extends StatelessWidget {
-  final int index;
-  const _DistancePointMarker({required this.index});
+  final String label;
+  const _DistancePointMarker({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -2874,15 +2804,24 @@ class _DistancePointMarker extends StatelessWidget {
         shape: BoxShape.circle,
         color: Colors.orange.shade700,
         border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Center(
         child: Text(
-          '$index',
+          label,
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 11,
+            fontSize: 10,
           ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
         ),
       ),
     );
@@ -2899,13 +2838,6 @@ class _PlacedMarker {
     required this.point,
     required this.createdAt,
   });
-}
-
-class _LandSubmitResult {
-  final String? cloudId;
-  final String? error;
-
-  const _LandSubmitResult({this.cloudId, this.error});
 }
 
 class CompassWidget extends StatefulWidget {

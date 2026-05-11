@@ -18,6 +18,48 @@ enum _SavedSort { newest, oldest, nameAsc, nameDesc, pointsDesc }
 
 enum _SavedFilter { all, threePlusPoints, updatedOnly }
 
+enum _SavedContentSection { all, markers, fields, distances }
+
+enum SavedLocationsToolbarAction {
+  filter,
+  sort,
+  menu,
+  setGroup,
+  share,
+  delete,
+  exitSelection,
+}
+
+class SavedLocationsToolbarController extends ChangeNotifier {
+  _SavedLocationsPageState? _state;
+
+  void attach(_SavedLocationsPageState state) {
+    _state = state;
+    notifyListeners();
+  }
+
+  void detach(_SavedLocationsPageState state) {
+    if (_state == state) {
+      _state = null;
+      notifyListeners();
+    }
+  }
+
+  bool get isSelectionMode => _state?._selectionMode ?? false;
+
+  int get selectedCount => _state?._selectedIds.length ?? 0;
+
+  bool get hasSelection => (_state?._selectedIds.isNotEmpty ?? false);
+
+  void dispatch(SavedLocationsToolbarAction action) {
+    _state?.dispatchToolbarAction(action);
+  }
+
+  void refresh() {
+    notifyListeners();
+  }
+}
+
 String _navigationKind(String rawKind, int pointsCount) {
   final kind = rawKind.toLowerCase().trim();
   if (kind == 'marker' || kind == 'point') return 'point';
@@ -34,12 +76,23 @@ String _navigationKind(String rawKind, int pointsCount) {
 
 class SavedLocationsPage extends ConsumerStatefulWidget {
   final VoidCallback? onOpenMapRequested;
+  final VoidCallback? onToolbarStateChanged;
+  final bool showEmbeddedToolbar;
+  final SavedLocationsToolbarController? toolbarController;
 
-  const SavedLocationsPage({super.key, this.onOpenMapRequested});
+  const SavedLocationsPage({
+    super.key,
+    this.onOpenMapRequested,
+    this.onToolbarStateChanged,
+    this.toolbarController,
+    this.showEmbeddedToolbar = true,
+  });
 
   @override
   ConsumerState<SavedLocationsPage> createState() => _SavedLocationsPageState();
 }
+
+typedef SavedLocationsPageState = _SavedLocationsPageState;
 
 class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   static const String _prefViewModeKey = 'prefs_saved_locations_view_mode';
@@ -49,6 +102,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   _ViewMode _viewMode = _ViewMode.combined;
   _SavedSort _sort = _SavedSort.newest;
   _SavedFilter _filter = _SavedFilter.all;
+  _SavedContentSection _contentSection = _SavedContentSection.all;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _selectionMode = false;
@@ -60,6 +114,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   @override
   void initState() {
     super.initState();
+    widget.toolbarController?.attach(this);
     _restoreDisplayPreferences();
     _authSubscription = ref.listenManual(authSessionProvider, (previous, next) {
       if (next.isLoggedIn && next.isVerified) {
@@ -73,6 +128,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   @override
   void dispose() {
+    widget.toolbarController?.detach(this);
     _authSubscription?.close();
     _searchController.dispose();
     super.dispose();
@@ -120,6 +176,42 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     return _ViewMode.combined;
   }
 
+  bool get isSelectionMode => _selectionMode;
+
+  int get selectedCount => _selectedIds.length;
+
+  bool get hasSelection => _selectedIds.isNotEmpty;
+
+  void dispatchToolbarAction(SavedLocationsToolbarAction action) {
+    switch (action) {
+      case SavedLocationsToolbarAction.filter:
+        _showFilterSheet();
+      case SavedLocationsToolbarAction.sort:
+        _showSortSheet();
+      case SavedLocationsToolbarAction.menu:
+        _showPageMenu();
+      case SavedLocationsToolbarAction.setGroup:
+        if (hasSelection) {
+          _setGroupForSelectedItems();
+        }
+      case SavedLocationsToolbarAction.share:
+        if (hasSelection) {
+          _shareSelectedItems();
+        }
+      case SavedLocationsToolbarAction.delete:
+        if (hasSelection) {
+          _deleteSelectedItems();
+        }
+      case SavedLocationsToolbarAction.exitSelection:
+        _exitSelectionMode();
+    }
+  }
+
+  void _notifyToolbarStateChanged() {
+    widget.toolbarController?.refresh();
+    widget.onToolbarStateChanged?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final box = Hive.box('landbox');
@@ -131,65 +223,66 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       color: Colors.white70,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                if (_selectionMode)
-                  Text(
-                    '${_selectedIds.length} selected',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+          if (widget.showEmbeddedToolbar)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  if (_selectionMode)
+                    Text(
+                      '${_selectedIds.length} selected',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                const Spacer(),
-                if (_selectionMode)
-                  IconButton(
-                    onPressed: _selectedIds.isEmpty
-                        ? null
-                        : _setGroupForSelectedItems,
-                    icon: const Icon(Icons.folder_outlined, size: 20),
-                    tooltip: 'Set group',
-                  ),
-                if (_selectionMode)
-                  IconButton(
-                    onPressed: _selectedIds.isEmpty
-                        ? null
-                        : _shareSelectedItems,
-                    icon: const Icon(Icons.share_outlined, size: 20),
-                    tooltip: 'Share selected',
-                  ),
-                if (_selectionMode)
-                  IconButton(
-                    onPressed: _selectedIds.isEmpty
-                        ? null
-                        : _deleteSelectedItems,
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    tooltip: 'Delete selected',
-                  ),
-                if (_selectionMode)
-                  IconButton(
-                    onPressed: _exitSelectionMode,
-                    icon: const Icon(Icons.close, size: 20),
-                    tooltip: 'Exit selection',
-                  ),
-                if (!_selectionMode) ...[
-                  IconButton(
-                    onPressed: _showFilterSheet,
-                    icon: const Icon(Icons.tune, size: 20),
-                  ),
-                  IconButton(
-                    onPressed: _showSortSheet,
-                    icon: const Icon(Icons.sort, size: 20),
-                  ),
-                  IconButton(
-                    onPressed: _showPageMenu,
-                    icon: const Icon(Icons.more_vert, size: 20),
-                  ),
+                  const Spacer(),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : _setGroupForSelectedItems,
+                      icon: const Icon(Icons.folder_outlined, size: 20),
+                      tooltip: 'Set group',
+                    ),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : _shareSelectedItems,
+                      icon: const Icon(Icons.share_outlined, size: 20),
+                      tooltip: 'Share selected',
+                    ),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : _deleteSelectedItems,
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      tooltip: 'Delete selected',
+                    ),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _exitSelectionMode,
+                      icon: const Icon(Icons.close, size: 20),
+                      tooltip: 'Exit selection',
+                    ),
+                  if (!_selectionMode) ...[
+                    IconButton(
+                      onPressed: _showFilterSheet,
+                      icon: const Icon(Icons.tune, size: 20),
+                    ),
+                    IconButton(
+                      onPressed: _showSortSheet,
+                      icon: const Icon(Icons.sort, size: 20),
+                    ),
+                    IconButton(
+                      onPressed: _showPageMenu,
+                      icon: const Icon(Icons.more_vert, size: 20),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
@@ -331,7 +424,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   canUseCloud: canUseCloud,
                 );
 
-                final filteredSorted = _applyFilterAndSort(items);
+                final counts = _contentCounts(items);
+                final sectioned = _applyContentSection(items);
+                final filteredSorted = _applyFilterAndSort(sectioned);
                 final searched = _applySearch(filteredSorted);
                 final groups = _groupOptions(items);
 
@@ -357,13 +452,71 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         ),
                       ),
                     if (groups.length > 1) const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _SectionChip(
+                              label: 'All',
+                              count: items.length,
+                              selected:
+                                  _contentSection == _SavedContentSection.all,
+                              onTap: () => setState(
+                                () =>
+                                    _contentSection = _SavedContentSection.all,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _SectionChip(
+                              label: 'Markers',
+                              count: counts.markers,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.markers,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.markers,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _SectionChip(
+                              label: 'Fields',
+                              count: counts.fields,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.fields,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.fields,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _SectionChip(
+                              label: 'Distance',
+                              count: counts.distances,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.distances,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.distances,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     if (searched.isEmpty)
                       Expanded(
                         child:
                             _searchQuery.isNotEmpty ||
                                 _filter != _SavedFilter.all ||
                                 _sort != _SavedSort.newest ||
-                                _groupFilter != 'All groups'
+                                _groupFilter != 'All groups' ||
+                                _contentSection != _SavedContentSection.all
                             ? const _EmptyState(
                                 title: 'No matching saved locations',
                                 subtitle:
@@ -530,6 +683,72 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           '$points'.contains(q) ||
           group.contains(q);
     }).toList();
+  }
+
+  List<Map<String, dynamic>> _applyContentSection(
+    List<Map<String, dynamic>> src,
+  ) {
+    switch (_contentSection) {
+      case _SavedContentSection.all:
+        return src;
+      case _SavedContentSection.markers:
+        return src
+            .where((item) => _sectionOf(item) == _SavedContentSection.markers)
+            .toList();
+      case _SavedContentSection.fields:
+        return src
+            .where((item) => _sectionOf(item) == _SavedContentSection.fields)
+            .toList();
+      case _SavedContentSection.distances:
+        return src
+            .where((item) => _sectionOf(item) == _SavedContentSection.distances)
+            .toList();
+    }
+  }
+
+  _SavedContentSection _sectionOf(Map<String, dynamic> item) {
+    final rawType =
+        (item['entityType']?.toString() ?? item['type']?.toString() ?? '')
+            .toLowerCase()
+            .trim();
+    if (rawType == 'marker' || rawType == 'point') {
+      return _SavedContentSection.markers;
+    }
+    if (rawType == 'polyline' || rawType == 'line' || rawType == 'distance') {
+      return _SavedContentSection.distances;
+    }
+    if (rawType == 'polygon' || rawType == 'field' || rawType == 'area') {
+      return _SavedContentSection.fields;
+    }
+
+    final points = _pointsCount(item);
+    if (points <= 1) return _SavedContentSection.markers;
+    if (points == 2) return _SavedContentSection.distances;
+    return _SavedContentSection.fields;
+  }
+
+  ({int markers, int fields, int distances}) _contentCounts(
+    List<Map<String, dynamic>> items,
+  ) {
+    var markers = 0;
+    var fields = 0;
+    var distances = 0;
+    for (final item in items) {
+      switch (_sectionOf(item)) {
+        case _SavedContentSection.markers:
+          markers++;
+          break;
+        case _SavedContentSection.fields:
+          fields++;
+          break;
+        case _SavedContentSection.distances:
+          distances++;
+          break;
+        case _SavedContentSection.all:
+          break;
+      }
+    }
+    return (markers: markers, fields: fields, distances: distances);
   }
 
   String _groupOf(Map<String, dynamic> item) {
@@ -885,6 +1104,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       _selectionMode = true;
       if (id.isNotEmpty) _selectedIds.add(id);
     });
+    _notifyToolbarStateChanged();
   }
 
   void _toggleSelection(String id) {
@@ -899,6 +1119,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         _selectionMode = false;
       }
     });
+    _notifyToolbarStateChanged();
   }
 
   void _exitSelectionMode() {
@@ -906,6 +1127,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       _selectionMode = false;
       _selectedIds.clear();
     });
+    _notifyToolbarStateChanged();
   }
 
   Future<void> _shareSelectedItems() async {
@@ -1297,10 +1519,53 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final p = points[index];
+                        // local items store label in points list if available
+                        final rawPoint =
+                            ((item['points'] as List?) ?? const [])[index];
+                        final label = rawPoint is Map
+                            ? (rawPoint['label']
+                                          ?.toString()
+                                          .trim()
+                                          .isNotEmpty ==
+                                      true
+                                  ? rawPoint['label'].toString()
+                                  : '${index + 1}')
+                            : '${index + 1}';
                         return ListTile(
                           dense: true,
-                          leading: Text('#${index + 1}'),
+                          leading: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Theme.of(context).colorScheme.primary,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                label.length > 3 ? '${index + 1}' : label,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
                           title: Text('${p.latitude}, ${p.longitude}'),
+                          subtitle: label != '${index + 1}'
+                              ? Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                )
+                              : null,
                         );
                       },
                     ),
@@ -1687,6 +1952,75 @@ class _ViewModeChip extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: color,
                 fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SectionChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = selected
+        ? theme.colorScheme.primary.withValues(alpha: 0.12)
+        : Colors.white;
+    final borderColor = selected
+        ? theme.colorScheme.primary
+        : Colors.grey.withValues(alpha: 0.18);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: selected ? theme.colorScheme.primary : Colors.black87,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: selected
+                    ? theme.colorScheme.primary.withValues(alpha: 0.18)
+                    : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? theme.colorScheme.primary : Colors.black54,
+                ),
               ),
             ),
           ],
@@ -2431,14 +2765,68 @@ class _RemoteLandDetailSheetState
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: points.length,
+            itemCount: detail.points.length,
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, index) {
-              final p = points[index];
+              final point = detail.points[index];
+              final lat = point.y;
+              final lng = point.x;
+              final label = point.label?.trim().isNotEmpty == true
+                  ? point.label!
+                  : '${index + 1}';
+              final isPolyline = detail.type == 'polyline';
               return ListTile(
                 dense: true,
-                leading: Text('#${index + 1}'),
-                title: Text('${p.latitude}, ${p.longitude}'),
+                leading: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isPolyline
+                        ? Colors.orange.shade700
+                        : Theme.of(context).colorScheme.primary,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      label.length > 3 ? '${index + 1}' : label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                title: isPolyline && point.label?.trim().isNotEmpty == true
+                    ? Text(
+                        point.label!,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      )
+                    : Text(
+                        '${lat?.toStringAsFixed(6) ?? '—'}, ${lng?.toStringAsFixed(6) ?? '—'}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                subtitle: isPolyline && point.label?.trim().isNotEmpty == true
+                    ? Text(
+                        '${lat?.toStringAsFixed(6) ?? '—'}, ${lng?.toStringAsFixed(6) ?? '—'}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      )
+                    : point.easting != null && point.northing != null
+                    ? Text(
+                        'E ${point.easting!.toStringAsFixed(2)} N ${point.northing!.toStringAsFixed(2)} · Zone ${point.zone ?? '—'}${point.band ?? ''}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade500,
+                        ),
+                      )
+                    : null,
               );
             },
           ),
@@ -2492,18 +2880,14 @@ class _RemoteLandDetailSheetState
   List<LatLng> _extractRemoteLatLngPoints(List<LandPoint> remotePoints) {
     final points = <LatLng>[];
     for (final point in remotePoints) {
-      final raw = point.raw;
-
       final lat =
-          _toDouble(raw['lat']) ??
-          _toDouble(raw['latitude']) ??
-          _toDouble(raw['y']);
-
+          point.y ??
+          _toDouble(point.raw['lat']) ??
+          _toDouble(point.raw['latitude']);
       final lng =
-          _toDouble(raw['lng']) ??
-          _toDouble(raw['longitude']) ??
-          _toDouble(raw['x']);
-
+          point.x ??
+          _toDouble(point.raw['lng']) ??
+          _toDouble(point.raw['longitude']);
       if (lat == null || lng == null) continue;
       points.add(LatLng(lat, lng));
     }

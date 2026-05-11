@@ -5,6 +5,9 @@ class LandCoordinateRequest {
   final String? zone;
   final String? band;
   final String? hemisphere;
+  final double? easting;
+  final double? northing;
+  final String? label;
 
   const LandCoordinateRequest({
     required this.x,
@@ -13,6 +16,9 @@ class LandCoordinateRequest {
     this.zone,
     this.band,
     this.hemisphere,
+    this.easting,
+    this.northing,
+    this.label,
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +28,9 @@ class LandCoordinateRequest {
     'zone': zone,
     'band': band,
     'hemisphere': hemisphere,
+    'easting': easting,
+    'northing': northing,
+    'label': label,
   }..removeWhere((key, value) => value == null);
 }
 
@@ -31,6 +40,7 @@ class CreateLandRequest {
   final String? place;
   final String? phone;
   final String? description;
+  final String? referenceEllipsoid;
   final List<LandCoordinateRequest> coordinates;
 
   const CreateLandRequest({
@@ -40,19 +50,21 @@ class CreateLandRequest {
     this.place,
     this.phone,
     this.description,
+    this.referenceEllipsoid,
   });
 
-  Map<String, dynamic> toJson() => {
-    'type': type.trim(),
-    'name': name.trim(),
-    'place': place?.trim(),
-    'phone': phone?.trim(),
-    'description': description?.trim(),
-    'coordinates': coordinates.map((e) => e.toJson()).toList(),
-  }..removeWhere(
-    (key, value) =>
-        value == null || (value is String && value.isEmpty),
-  );
+  Map<String, dynamic> toJson() =>
+      {
+        'type': type.trim(),
+        'name': name.trim(),
+        'place': place?.trim(),
+        'phone': phone?.trim(),
+        'description': description?.trim(),
+        'reference_ellipsoid': referenceEllipsoid?.trim(),
+        'coordinates': coordinates.map((e) => e.toJson()).toList(),
+      }..removeWhere(
+        (key, value) => value == null || (value is String && value.isEmpty),
+      );
 }
 
 class UpdateLandRequest {
@@ -68,15 +80,15 @@ class UpdateLandRequest {
     this.description,
   });
 
-  Map<String, dynamic> toJson() => {
-    'name': name?.trim(),
-    'place': place?.trim(),
-    'phone': phone?.trim(),
-    'description': description?.trim(),
-  }..removeWhere(
-    (key, value) =>
-        value == null || (value is String && value.isEmpty),
-  );
+  Map<String, dynamic> toJson() =>
+      {
+        'name': name?.trim(),
+        'place': place?.trim(),
+        'phone': phone?.trim(),
+        'description': description?.trim(),
+      }..removeWhere(
+        (key, value) => value == null || (value is String && value.isEmpty),
+      );
 }
 
 class LandMarkerRequest {
@@ -98,18 +110,18 @@ class LandMarkerRequest {
     this.properties,
   });
 
-  Map<String, dynamic> toJson() => {
-    'name': name.trim(),
-    'description': description?.trim(),
-    'latitude': latitude,
-    'longitude': longitude,
-    'altitude': altitude,
-    'marker_type': markerType?.trim(),
-    'properties': properties?.trim(),
-  }..removeWhere(
-    (key, value) =>
-        value == null || (value is String && value.isEmpty),
-  );
+  Map<String, dynamic> toJson() =>
+      {
+        'name': name.trim(),
+        'description': description?.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
+        'altitude': altitude,
+        'marker_type': markerType?.trim(),
+        'properties': properties?.trim(),
+      }..removeWhere(
+        (key, value) => value == null || (value is String && value.isEmpty),
+      );
 }
 
 class UpdateLandMarkerRequest {
@@ -131,18 +143,18 @@ class UpdateLandMarkerRequest {
     this.properties,
   });
 
-  Map<String, dynamic> toJson() => {
-    'name': name?.trim(),
-    'description': description?.trim(),
-    'latitude': latitude,
-    'longitude': longitude,
-    'altitude': altitude,
-    'marker_type': markerType?.trim(),
-    'properties': properties?.trim(),
-  }..removeWhere(
-    (key, value) =>
-        value == null || (value is String && value.isEmpty),
-  );
+  Map<String, dynamic> toJson() =>
+      {
+        'name': name?.trim(),
+        'description': description?.trim(),
+        'latitude': latitude,
+        'longitude': longitude,
+        'altitude': altitude,
+        'marker_type': markerType?.trim(),
+        'properties': properties?.trim(),
+      }..removeWhere(
+        (key, value) => value == null || (value is String && value.isEmpty),
+      );
 }
 
 class LandListItem {
@@ -204,6 +216,24 @@ class LandPoint {
   const LandPoint(this.raw);
 
   factory LandPoint.fromJson(Map<String, dynamic> json) => LandPoint(json);
+
+  int get pointOrder => (raw['point_order'] as num?)?.toInt() ?? 0;
+  String? get label => raw['label']?.toString();
+  double? get x => _toDouble(raw['x']);
+  double? get y => _toDouble(raw['y']);
+  double? get easting => _toDouble(raw['easting']);
+  double? get northing => _toDouble(raw['northing']);
+
+  static double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  String? get zone => raw['zone']?.toString();
+  String? get band => raw['band']?.toString();
+  String? get hemisphere => raw['hemisphere']?.toString();
 }
 
 class LandMarker {
@@ -411,14 +441,14 @@ class RemoteSettingsOptions {
       coordinateFormats: ((json['coordinate_formats'] as List?) ?? const [])
           .map((e) => e.toString())
           .toList(),
-      referenceEllipsoids:
-          ((json['reference_ellipsoids'] as List?) ?? const [])
-              .map((e) => e.toString())
-              .toList(),
+      referenceEllipsoids: ((json['reference_ellipsoids'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
       units: ((json['units'] as List?) ?? const [])
           .map((e) => e.toString())
           .toList(),
-      userSettings: (json['user_settings'] as Map?)?.cast<String, dynamic>() ??
+      userSettings:
+          (json['user_settings'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
     );
   }

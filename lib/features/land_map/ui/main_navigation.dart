@@ -11,7 +11,6 @@ import 'my_location_page.dart';
 import 'saved_locations_page.dart';
 import '../services/land_sync_service.dart';
 import 'settings_page.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../state/land_map_notifier.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -26,6 +25,8 @@ class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   Timer? _syncTimer;
   bool _syncInProgress = false;
+  final SavedLocationsToolbarController _savedLocationsToolbarController =
+      SavedLocationsToolbarController();
 
   static const double _bottomNavHeight = 72;
   static const Color _bottomNavBackground = Colors.white;
@@ -36,13 +37,23 @@ class _MainNavigationState extends State<MainNavigation> {
   late final List<Widget> _pages = [
     const LandMapPage(bottomInset: _bottomNavHeight + 12),
     const MyLocationPage(),
-    SavedLocationsPage(onOpenMapRequested: () => _navigateToPage(0)),
+    SavedLocationsPage(
+      toolbarController: _savedLocationsToolbarController,
+      onOpenMapRequested: () => _navigateToPage(0),
+      onToolbarStateChanged: () {
+        if (mounted && _currentIndex == 2) {
+          setState(() {});
+        }
+      },
+      showEmbeddedToolbar: false,
+    ),
     const SettingsPage(),
   ];
 
   @override
   void initState() {
     super.initState();
+    _savedLocationsToolbarController.addListener(_onSavedToolbarChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _runBackgroundSync();
       _syncTimer = Timer.periodic(_syncInterval, (_) => _runBackgroundSync());
@@ -51,8 +62,15 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   void dispose() {
+    _savedLocationsToolbarController.removeListener(_onSavedToolbarChanged);
+    _savedLocationsToolbarController.dispose();
     _syncTimer?.cancel();
     super.dispose();
+  }
+
+  void _onSavedToolbarChanged() {
+    if (!mounted || _currentIndex != 2) return;
+    setState(() {});
   }
 
   Future<void> _runBackgroundSync() async {
@@ -146,65 +164,135 @@ class _MainNavigationState extends State<MainNavigation> {
     }
   }
 
+  String _appBarTitleText() {
+    if (_currentIndex != 2) {
+      const titles = ['Map', 'My location', 'Saved locations', 'Settings'];
+      return titles[_currentIndex];
+    }
+
+    if (_savedLocationsToolbarController.isSelectionMode) {
+      return '${_savedLocationsToolbarController.selectedCount} selected';
+    }
+    return 'Saved locations';
+  }
+
+  List<Widget>? _buildAppBarActions() {
+    if (_currentIndex == 0) {
+      return null;
+    }
+
+    if (_currentIndex == 1) {
+      return [
+        IconButton(
+          icon: const Icon(Icons.refresh, color: Colors.black87),
+          onPressed: _refreshMyLocation,
+        ),
+        PopupMenuButton<_MyLocationAction>(
+          icon: const Icon(Icons.more_vert, color: Colors.black87),
+          onSelected: _handleMyLocationMenu,
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: _MyLocationAction.savePoint,
+              child: Text('Save current point'),
+            ),
+            PopupMenuItem(
+              value: _MyLocationAction.copyBoth,
+              child: Text('Copy coordinates'),
+            ),
+            PopupMenuItem(
+              value: _MyLocationAction.share,
+              child: Text('Share location'),
+            ),
+          ],
+        ),
+      ];
+    }
+
+    if (_currentIndex == 2) {
+      final canActOnSelection = _savedLocationsToolbarController.hasSelection;
+      final isSelectionMode = _savedLocationsToolbarController.isSelectionMode;
+
+      if (isSelectionMode) {
+        return [
+          IconButton(
+            icon: const Icon(Icons.folder_outlined, color: Colors.black87),
+            tooltip: 'Set group',
+            onPressed: canActOnSelection
+                ? () => _savedLocationsToolbarController.dispatch(
+                    SavedLocationsToolbarAction.setGroup,
+                  )
+                : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined, color: Colors.black87),
+            tooltip: 'Share selected',
+            onPressed: canActOnSelection
+                ? () => _savedLocationsToolbarController.dispatch(
+                    SavedLocationsToolbarAction.share,
+                  )
+                : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.black87),
+            tooltip: 'Delete selected',
+            onPressed: canActOnSelection
+                ? () => _savedLocationsToolbarController.dispatch(
+                    SavedLocationsToolbarAction.delete,
+                  )
+                : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.black87),
+            tooltip: 'Exit selection',
+            onPressed: () => _savedLocationsToolbarController.dispatch(
+              SavedLocationsToolbarAction.exitSelection,
+            ),
+          ),
+        ];
+      }
+
+      return [
+        IconButton(
+          icon: const Icon(Icons.tune, color: Colors.black87),
+          tooltip: 'Filter',
+          onPressed: () => _savedLocationsToolbarController.dispatch(
+            SavedLocationsToolbarAction.filter,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.sort, color: Colors.black87),
+          tooltip: 'Sort',
+          onPressed: () => _savedLocationsToolbarController.dispatch(
+            SavedLocationsToolbarAction.sort,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.more_vert, color: Colors.black87),
+          tooltip: 'More',
+          onPressed: () => _savedLocationsToolbarController.dispatch(
+            SavedLocationsToolbarAction.menu,
+          ),
+        ),
+      ];
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final titles = ['Map', 'My location', 'Saved locations', 'Settings'];
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          titles[_currentIndex],
+          _appBarTitleText(),
           style: const TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.w700,
             fontSize: 18,
           ),
         ),
-        actions: _currentIndex == 0
-            ? [
-                IconButton(
-                  icon: SvgPicture.asset(
-                    'lib/assets/icons/search.svg',
-                    width: 18,
-                    height: 18,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.black87,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Search - Coming soon')),
-                    );
-                  },
-                ),
-              ]
-            : _currentIndex == 1
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.refresh, color: Colors.black87),
-                  onPressed: _refreshMyLocation,
-                ),
-                PopupMenuButton<_MyLocationAction>(
-                  icon: const Icon(Icons.more_vert, color: Colors.black87),
-                  onSelected: _handleMyLocationMenu,
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: _MyLocationAction.savePoint,
-                      child: Text('Save current point'),
-                    ),
-                    PopupMenuItem(
-                      value: _MyLocationAction.copyBoth,
-                      child: Text('Copy coordinates'),
-                    ),
-                    PopupMenuItem(
-                      value: _MyLocationAction.share,
-                      child: Text('Share location'),
-                    ),
-                  ],
-                ),
-              ]
-            : null,
+        actions: _buildAppBarActions(),
         backgroundColor: Colors.white,
         elevation: 0,
       ),
