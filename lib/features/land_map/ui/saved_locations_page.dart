@@ -283,6 +283,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ],
               ),
             ),
+            const SizedBox(height: 10,),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
@@ -349,62 +350,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ],
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _ViewModeChip(
-                          label: 'Combined',
-                          icon: Icons.view_list,
-                          isSelected: _viewMode == _ViewMode.combined,
-                          onTap: () => _setViewMode(_ViewMode.combined),
-                        ),
-                        const SizedBox(width: 8),
-                        _ViewModeChip(
-                          label: 'Basic',
-                          icon: Icons.view_agenda,
-                          isSelected: _viewMode == _ViewMode.basic,
-                          onTap: () => _setViewMode(_ViewMode.basic),
-                        ),
-                        const SizedBox(width: 8),
-                        _ViewModeChip(
-                          label: 'Text',
-                          icon: Icons.notes,
-                          isSelected: _viewMode == _ViewMode.text,
-                          onTap: () => _setViewMode(_ViewMode.text),
-                        ),
-                        const SizedBox(width: 8),
-                        _ViewModeChip(
-                          label: 'Photo',
-                          icon: Icons.photo_camera,
-                          isSelected: _viewMode == _ViewMode.photo,
-                          onTap: () => _setViewMode(_ViewMode.photo),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: _toggleCompactMode,
-                  tooltip: _compactMode
-                      ? 'Disable compact mode'
-                      : 'Enable compact mode',
-                  icon: Icon(
-                    _compactMode ? Icons.compress : Icons.expand,
-                    color: _compactMode
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 16),
           Expanded(
             child: ValueListenableBuilder(
@@ -1341,6 +1286,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   void _showDetails(BuildContext context, Map<String, dynamic> item) {
     final points = _extractLatLngPoints(item);
+    final pointLabels = _extractPointLabels(item, points.length);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1470,27 +1416,20 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                                 ],
                               ),
                             MarkerLayer(
-                              markers: points
-                                  .map(
-                                    (p) => Marker(
-                                      width: 20,
-                                      height: 20,
-                                      point: p,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 2,
-                                          ),
-                                        ),
-                                      ),
+                              markers: [
+                                for (int i = 0; i < points.length; i++)
+                                  Marker(
+                                    width: 86,
+                                    height: 42,
+                                    point: points[i],
+                                    child: _MapPointLabelMarker(
+                                      label: pointLabels[i],
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
-                                  )
-                                  .toList(),
+                                  ),
+                              ],
                             ),
                           ],
                         ),
@@ -1594,6 +1533,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   LandNavigationTarget? _buildNavigationTarget(Map<String, dynamic> item) {
     final points = _extractLatLngPoints(item);
     if (points.isEmpty) return null;
+    final pointLabels = _extractPointLabels(item, points.length);
 
     final representative = _representativePoint(points);
     final label = item['name']?.toString().trim().isNotEmpty == true
@@ -1608,6 +1548,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     return LandNavigationTarget(
       point: representative,
       points: points,
+      pointLabels: pointLabels,
       label: label,
       kind: _navigationKind(kind, points.length),
     );
@@ -1686,6 +1627,37 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       }
     }
     return points;
+  }
+
+  List<String> _extractPointLabels(Map<String, dynamic> item, int pointsCount) {
+    if (pointsCount <= 0) return const [];
+
+    final labels = List<String>.filled(pointsCount, '');
+    final pointsRaw = (item['points'] as List?) ?? const [];
+    for (int i = 0; i < pointsRaw.length && i < pointsCount; i++) {
+      final point = pointsRaw[i];
+      if (point is! Map) continue;
+      final raw = point['label']?.toString().trim() ?? '';
+      if (raw.isNotEmpty) {
+        labels[i] = raw;
+      }
+    }
+
+    final topLevel = (item['labels'] as List?) ?? const [];
+    for (int i = 0; i < topLevel.length && i < pointsCount; i++) {
+      if (labels[i].isNotEmpty) continue;
+      final raw = topLevel[i]?.toString().trim() ?? '';
+      if (raw.isNotEmpty) {
+        labels[i] = raw;
+      }
+    }
+
+    for (int i = 0; i < pointsCount; i++) {
+      if (labels[i].isEmpty) {
+        labels[i] = '${i + 1}';
+      }
+    }
+    return labels;
   }
 
   void _renameItem(BuildContext context, String id, String currentName) {
@@ -2499,6 +2471,7 @@ class _RemoteLandDetailSheetState
 
   Widget _buildLoaded(BuildContext context, LandDetail detail) {
     final points = _extractRemoteLatLngPoints(detail.points);
+    final pointLabels = _extractRemotePointLabels(detail.points, points.length);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2659,25 +2632,18 @@ class _RemoteLandDetailSheetState
                       ],
                     ),
                   MarkerLayer(
-                    markers: points
-                        .map(
-                          (p) => Marker(
-                            width: 20,
-                            height: 20,
-                            point: p,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                              ),
-                            ),
+                    markers: [
+                      for (int i = 0; i < points.length; i++)
+                        Marker(
+                          width: 86,
+                          height: 42,
+                          point: points[i],
+                          child: _MapPointLabelMarker(
+                            label: pointLabels[i],
+                            color: Theme.of(context).colorScheme.primary,
                           ),
-                        )
-                        .toList(),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -2692,6 +2658,7 @@ class _RemoteLandDetailSheetState
                 final target = LandNavigationTarget(
                   point: _representativePoint(points),
                   points: points,
+                  pointLabels: pointLabels,
                   label: detail.name,
                   kind: _navigationKind(detail.type, points.length),
                 );
@@ -2894,6 +2861,21 @@ class _RemoteLandDetailSheetState
     return points;
   }
 
+  List<String> _extractRemotePointLabels(
+    List<LandPoint> remotePoints,
+    int pointsCount,
+  ) {
+    if (pointsCount <= 0) return const [];
+    final labels = <String>[];
+    for (int i = 0; i < pointsCount; i++) {
+      final raw = i < remotePoints.length
+          ? (remotePoints[i].label?.trim() ?? '')
+          : '';
+      labels.add(raw.isEmpty ? '${i + 1}' : raw);
+    }
+    return labels;
+  }
+
   LatLng _representativePoint(List<LatLng> points) {
     if (points.length == 1) return points.first;
 
@@ -3023,6 +3005,53 @@ class _RemoteLandDetailSheetState
         context,
       ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
+  }
+}
+
+class _MapPointLabelMarker extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _MapPointLabelMarker({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withValues(alpha: 0.30)),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

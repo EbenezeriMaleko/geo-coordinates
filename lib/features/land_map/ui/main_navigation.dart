@@ -35,8 +35,11 @@ class _MainNavigationState extends State<MainNavigation> {
   static const Duration _syncInterval = Duration(seconds: 60);
 
   late final List<Widget> _pages = [
-    const LandMapPage(bottomInset: _bottomNavHeight + 12),
-    const MyLocationPage(),
+    LandMapPage(bottomInset: _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom),
+    MyLocationPage(
+      onRefresh: _refreshMyLocation,
+      onMenuAction: _handleMyLocationMenu,
+    ),
     SavedLocationsPage(
       toolbarController: _savedLocationsToolbarController,
       onOpenMapRequested: () => _navigateToPage(0),
@@ -114,11 +117,11 @@ class _MainNavigationState extends State<MainNavigation> {
     ).showSnackBar(SnackBar(content: Text('$label copied')));
   }
 
-  Future<void> _handleMyLocationMenu(_MyLocationAction action) async {
+  Future<void> _handleMyLocationMenu(MyLocationAction action) async {
     final container = ProviderScope.containerOf(context, listen: false);
     final current = container.read(landMapProvider).current;
     switch (action) {
-      case _MyLocationAction.savePoint:
+      case MyLocationAction.savePoint:
         if (current == null) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -142,14 +145,14 @@ class _MainNavigationState extends State<MainNavigation> {
         ).showSnackBar(const SnackBar(content: Text('Current point saved')));
         return;
 
-      case _MyLocationAction.copyBoth:
+      case MyLocationAction.copyBoth:
         if (current == null) return;
         await _copyText(
           '${current.latitude.toStringAsFixed(6)},${current.longitude.toStringAsFixed(6)}',
           'Coordinates',
         );
         return;
-      case _MyLocationAction.share:
+      case MyLocationAction.share:
         if (current == null) return;
         final accuracy = container.read(landMapProvider).accuracyMeters;
         final payload = StringBuffer()
@@ -179,33 +182,6 @@ class _MainNavigationState extends State<MainNavigation> {
   List<Widget>? _buildAppBarActions() {
     if (_currentIndex == 0) {
       return null;
-    }
-
-    if (_currentIndex == 1) {
-      return [
-        IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.black87),
-          onPressed: _refreshMyLocation,
-        ),
-        PopupMenuButton<_MyLocationAction>(
-          icon: const Icon(Icons.more_vert, color: Colors.black87),
-          onSelected: _handleMyLocationMenu,
-          itemBuilder: (_) => const [
-            PopupMenuItem(
-              value: _MyLocationAction.savePoint,
-              child: Text('Save current point'),
-            ),
-            PopupMenuItem(
-              value: _MyLocationAction.copyBoth,
-              child: Text('Copy coordinates'),
-            ),
-            PopupMenuItem(
-              value: _MyLocationAction.share,
-              child: Text('Share location'),
-            ),
-          ],
-        ),
-      ];
     }
 
     if (_currentIndex == 2) {
@@ -252,13 +228,13 @@ class _MainNavigationState extends State<MainNavigation> {
       }
 
       return [
-        IconButton(
-          icon: const Icon(Icons.tune, color: Colors.black87),
-          tooltip: 'Filter',
-          onPressed: () => _savedLocationsToolbarController.dispatch(
-            SavedLocationsToolbarAction.filter,
-          ),
-        ),
+        // IconButton(
+        //   icon: const Icon(Icons.tune, color: Colors.black87),
+        //   tooltip: 'Filter',
+        //   onPressed: () => _savedLocationsToolbarController.dispatch(
+        //     SavedLocationsToolbarAction.filter,
+        //   ),
+        // ),
         IconButton(
           icon: const Icon(Icons.sort, color: Colors.black87),
           tooltip: 'Sort',
@@ -283,7 +259,7 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
+      appBar: _currentIndex == 0 || _currentIndex == 1 ? null : AppBar(
         title: Text(
           _appBarTitleText(),
           style: const TextStyle(
@@ -348,7 +324,6 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 }
 
-enum _MyLocationAction { savePoint, copyBoth, share }
 
 class _BottomNavItem extends StatelessWidget {
   final String label;

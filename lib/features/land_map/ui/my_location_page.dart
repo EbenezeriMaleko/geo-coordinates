@@ -25,8 +25,12 @@ import '../state/settings_provider.dart';
 import 'location_media_page.dart';
 import 'package:video_player/video_player.dart';
 
+enum MyLocationAction { savePoint, copyBoth, share }
+
 class MyLocationPage extends ConsumerStatefulWidget {
-  const MyLocationPage({super.key});
+  final Future<void> Function()? onRefresh;
+  final Future<void> Function(MyLocationAction action)? onMenuAction;
+  const MyLocationPage({super.key, this.onRefresh, this.onMenuAction});
 
   @override
   ConsumerState<MyLocationPage> createState() => _MyLocationPageState();
@@ -674,35 +678,61 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
               children: [
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    // borderRadius: const BorderRadius.vertical(
-                    //   bottom: Radius.circular(28),
-                    // ),
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    24 + MediaQuery.of(context).padding.top,
+                    24,
+                    36,
                   ),
+                  decoration: BoxDecoration(color: theme.colorScheme.primary),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.explore,
-                                color: Colors.white,
-                                size: 22,
+                      Row(
+                        children: [
+                          if (widget.onRefresh != null)
+                            GestureDetector(
+                              onTap: widget.onRefresh,
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.refresh,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
                             ),
+                            const Spacer(),
+                          if (widget.onMenuAction != null) ...[
+                            PopupMenuButton<MyLocationAction>(
+                              icon: const Icon(
+                                Icons.more_vert,
+                                color: Colors.white,
+                              ),
+                              color: Colors.white,
+                              onSelected: (action) => widget.onMenuAction!(action),
+                              itemBuilder: (_) => const [
+                                // PopupMenuItem(
+                                //   value: MyLocationAction.savePoint,
+                                //   child: Text('Save current point'),
+                                // ),
+                                PopupMenuItem(
+                                  value: MyLocationAction.copyBoth,
+                                  child: Text('Copy coordinates'),
+                                ),
+                                PopupMenuItem(
+                                  value: MyLocationAction.share,
+                                  child: Text('Share location'),
+                                ),
+                              ],
+                            ),
                           ],
-                        ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       _StatusChip(
@@ -858,23 +888,23 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                 ),
               ),
             ),
-            if (_recentMedia.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _RecentMediaStrip(
-                  media: _recentMedia,
-                  onViewMore: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const LocationMediaPage(),
-                      ),
-                    );
-                  },
-                  onOpenItem: (capture) => _showCaptureDetails(capture),
-                ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _RecentMediaStrip(
+                media: _recentMedia,
+                isLoggedIn: ref.watch(authSessionProvider).isLoggedIn,
+                onViewMore: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const LocationMediaPage(),
+                    ),
+                  );
+                },
+                onOpenItem: (capture) => _showCaptureDetails(capture),
+                onCapture: _openGeoCamera,
               ),
-            ],
+            ),
             // if (_latestPhoto != null) ...[
             //   const SizedBox(height: 12),
             //   Padding(
@@ -2170,18 +2200,23 @@ class _CapturedMediaPreviewState extends State<_CapturedMediaPreview> {
 
 class _RecentMediaStrip extends StatelessWidget {
   final List<_GeoTaggedPhoto> media;
+  final bool isLoggedIn;
   final VoidCallback onViewMore;
   final ValueChanged<_GeoTaggedPhoto> onOpenItem;
+  final VoidCallback onCapture;
 
   const _RecentMediaStrip({
     required this.media,
     required this.onViewMore,
     required this.onOpenItem,
+    required this.isLoggedIn,
+    required this.onCapture,
   });
 
   @override
   Widget build(BuildContext context) {
     final visibleItems = media.take(3).toList();
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2189,83 +2224,144 @@ class _RecentMediaStrip extends StatelessWidget {
           children: [
             Text(
               'Recent media',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const Spacer(),
             TextButton(onPressed: onViewMore, child: const Text('View more')),
           ],
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          height: 118,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: visibleItems.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              final capture = visibleItems[index];
-              return InkWell(
-                onTap: () => onOpenItem(capture),
+        if (visibleItems.isEmpty)
+          InkWell(
+            onTap: isLoggedIn ? onViewMore : onCapture,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
                 borderRadius: BorderRadius.circular(14),
-                child: Ink(
-                  width: 150,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isLoggedIn
+                        ? Icons.photo_library_outlined
+                        : Icons.camera_alt_outlined,
+                    color: Colors.grey.shade400,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isLoggedIn
+                            ? 'No local media yet'
+                            : 'No photos captured yet',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isLoggedIn
+                            ? 'Tap to view cloud media'
+                            : 'Tap to capture your first photo',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _GeoPhotoCanvas(
-                          imagePath: capture.imagePath,
-                          name: capture.name,
-                          mediaType: capture.mediaType,
-                          lines: const [],
-                          dense: true,
-                        ),
-                        Positioned(
-                          left: 8,
-                          right: 8,
-                          bottom: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.42),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              capture.mediaType == 'video' ? 'Video' : 'Photo',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
+                  const Spacer(),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: theme.colorScheme.primary,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 118,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: visibleItems.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final capture = visibleItems[index];
+                return InkWell(
+                  onTap: () => onOpenItem(capture),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Ink(
+                    width: 150,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _GeoPhotoCanvas(
+                            imagePath: capture.imagePath,
+                            name: capture.name,
+                            mediaType: capture.mediaType,
+                            lines: const [],
+                            dense: true,
+                          ),
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            bottom: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.42),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                capture.mediaType == 'video'
+                                    ? 'Video'
+                                    : 'Photo',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
   }

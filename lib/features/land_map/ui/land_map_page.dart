@@ -927,7 +927,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             width: 28,
             height: 28,
             point: navigationTargetPoints[i],
-            child: _NavigationTargetVertexMarker(index: i + 1),
+            child: _NavigationTargetVertexMarker(
+              label: i < navigationTarget.pointLabels.length
+                  ? navigationTarget.pointLabels[i]
+                  : '${i + 1}',
+            ),
           ),
       if (navigationTarget != null &&
           navigationTargetKind != 'point' &&
@@ -1085,7 +1089,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         // GPS Info Card
         if (!_isFullscreen)
           Positioned(
-            top: 16,
+            top: 16 + MediaQuery.of(context).padding.top,
             left: 16,
             right: 16,
             child: Container(
@@ -1184,7 +1188,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
         if (_locationError != null && !_isFullscreen)
           Positioned(
-            top: 92,
+            top: 92 + MediaQuery.of(context).padding.top,
             left: 16,
             right: 16,
             child: Container(
@@ -1246,7 +1250,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 st.activeFieldId != null ||
                 navigationTarget != null))
           Positioned(
-            top: _locationError == null ? 92 : 202,
+            top: _locationError == null ? 92 : 202 + MediaQuery.of(context).padding.top,
             left: 16,
             right: 16,
             child: Column(
@@ -1266,7 +1270,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         // Map Controls (Right side)
         Positioned(
           right: 16,
-          top: _isFullscreen ? 90 : 160,
+          top: _isFullscreen ? 90 : 160 + MediaQuery.of(context).padding.top,
           child: Column(
             children: [
               _MapControlButton(
@@ -1347,7 +1351,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
               const SizedBox(height: 10),
               _ToolButton(
-                label: 'Marker',
+                label: 'Point',
                 icon: SvgPicture.asset(
                   'lib/assets/icons/marker.svg',
                   width: 20,
@@ -2760,9 +2764,9 @@ class _NavigationTargetMarker extends StatelessWidget {
 }
 
 class _NavigationTargetVertexMarker extends StatelessWidget {
-  final int index;
+  final String label;
 
-  const _NavigationTargetVertexMarker({required this.index});
+  const _NavigationTargetVertexMarker({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -2781,12 +2785,14 @@ class _NavigationTargetVertexMarker extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          '$index',
+          label,
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 9,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );
