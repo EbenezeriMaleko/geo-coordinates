@@ -155,19 +155,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     }
   }
 
-  Future<void> _setViewMode(_ViewMode mode) async {
-    if (_viewMode == mode) return;
-    setState(() => _viewMode = mode);
-    final box = Hive.box('landbox');
-    await box.put(_prefViewModeKey, mode.name);
-  }
-
-  Future<void> _toggleCompactMode() async {
-    final next = !_compactMode;
-    setState(() => _compactMode = next);
-    final box = Hive.box('landbox');
-    await box.put(_prefCompactModeKey, next);
-  }
 
   _ViewMode _viewModeFromStorage(String raw) {
     for (final mode in _ViewMode.values) {
@@ -1144,11 +1131,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Set group for selected'),
+        backgroundColor: Colors.white,
+        title: Text('Set group for selected', style: TextStyle(fontSize: 18, color: Color(0xFF111827)),),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Group name',
+            labelStyle: TextStyle(color: Colors.grey.shade600),
             border: OutlineInputBorder(),
           ),
         ),
@@ -1285,237 +1274,17 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   void _showDetails(BuildContext context, Map<String, dynamic> item) {
-    final points = _extractLatLngPoints(item);
-    final pointLabels = _extractPointLabels(item, points.length);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.82,
-            minChildSize: 0.5,
-            maxChildSize: 0.94,
-            builder: (context, scrollController) => SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      item['name']?.toString() ?? 'Saved location',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '${points.length} points',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Group: ${_groupOf(item)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Created: ${_formatDate(item['createdAt']?.toString())}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-                    ),
-                  ),
-                  if ((item['updatedAt']?.toString().isNotEmpty ?? false))
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Updated: ${_formatDate(item['updatedAt']?.toString())}',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  if (points.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox(
-                        height: 180,
-                        child: FlutterMap(
-                          options: MapOptions(
-                            initialCenter: points.first,
-                            initialZoom: 17,
-                            interactionOptions: const InteractionOptions(
-                              flags: InteractiveFlag.none,
-                            ),
-                            cameraConstraint: CameraConstraint.contain(
-                              bounds: LatLngBounds.fromPoints(points),
-                            ),
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate:
-                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName:
-                                  'com.example.geo_coordinates',
-                            ),
-                            if (points.length >= 2)
-                              PolylineLayer(
-                                polylines: [
-                                  Polyline(
-                                    points: points,
-                                    strokeWidth: 3,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ],
-                              ),
-                            if (points.length >= 3)
-                              PolygonLayer(
-                                polygons: [
-                                  Polygon(
-                                    points: points,
-                                    color: Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.16),
-                                    borderStrokeWidth: 2,
-                                    borderColor: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ],
-                              ),
-                            MarkerLayer(
-                              markers: [
-                                for (int i = 0; i < points.length; i++)
-                                  Marker(
-                                    width: 86,
-                                    height: 42,
-                                    point: points[i],
-                                    child: _MapPointLabelMarker(
-                                      label: pointLabels[i],
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (points.isNotEmpty) const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(sheetContext);
-                        _goToSavedItem(context, item);
-                      },
-                      icon: const Icon(Icons.map_outlined),
-                      label: const Text('Go to'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (points.isEmpty)
-                    const Text('No points saved.')
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: points.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final p = points[index];
-                        // local items store label in points list if available
-                        final rawPoint =
-                            ((item['points'] as List?) ?? const [])[index];
-                        final label = rawPoint is Map
-                            ? (rawPoint['label']
-                                          ?.toString()
-                                          .trim()
-                                          .isNotEmpty ==
-                                      true
-                                  ? rawPoint['label'].toString()
-                                  : '${index + 1}')
-                            : '${index + 1}';
-                        return ListTile(
-                          dense: true,
-                          leading: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Theme.of(context).colorScheme.primary,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                label.length > 3 ? '${index + 1}' : label,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                          title: Text('${p.latitude}, ${p.longitude}'),
-                          subtitle: label != '${index + 1}'
-                              ? Text(
-                                  label,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade600,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                )
-                              : null,
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+    showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        useSafeArea: true,
+        builder: (_) => _LandDetailSheet(
+            localItem: item,
+            onOpenMapRequested: widget.onOpenMapRequested,
+        ),
     );
-  }
+}
 
   void _goToSavedItem(BuildContext context, Map<String, dynamic> item) {
     final target = _buildNavigationTarget(item);
@@ -1699,19 +1468,17 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   void _showRemoteLandDetails(LandListItem land) {
     showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _RemoteLandDetailSheet(
-        land: land,
-        onRemoteChanged: _fetchRemoteData,
-        onOpenMapRequested: widget.onOpenMapRequested,
-      ),
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        useSafeArea: true,
+        builder: (_) => _LandDetailSheet(
+            cloudItem: land,
+            onRemoteChanged: _fetchRemoteData,
+            onOpenMapRequested: widget.onOpenMapRequested,
+        ),
     );
-  }
+}
 
   void _openCloudDetailsById(String landId, {required String fallbackName}) {
     final lands =
@@ -2186,6 +1953,7 @@ class _SavedLocationCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
+                  fontSize: 15,
                 ),
               ),
               Text(
@@ -3657,6 +3425,871 @@ class _ActiveTag extends StatelessWidget {
           GestureDetector(
             onTap: onClear,
             child: const Icon(Icons.close, size: 14, color: Color(0xFF0B8A8D)),
+          ),
+        ],
+      ),
+    );
+  }
+  
+}
+
+class _LandDetailSheet extends ConsumerStatefulWidget {
+  // Local item data
+  final Map<String, dynamic>? localItem;
+  // Cloud item data
+  final LandListItem? cloudItem;
+  final Future<void> Function()? onRemoteChanged;
+  final VoidCallback? onOpenMapRequested;
+
+  const _LandDetailSheet({
+    this.localItem,
+    this.cloudItem,
+    this.onRemoteChanged,
+    this.onOpenMapRequested,
+  }) : assert(
+          localItem != null || cloudItem != null,
+          'Either localItem or cloudItem must be provided',
+        );
+
+  bool get isCloud => cloudItem != null;
+
+  @override
+  ConsumerState<_LandDetailSheet> createState() => _LandDetailSheetState();
+}
+
+class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
+  bool _showAllPoints = false;
+  bool _isDeleting = false;
+  bool _isSaving = false;
+
+  // Local helpers
+  List<LatLng> get _localPoints {
+    if (widget.localItem == null) return const [];
+    final pointsRaw = (widget.localItem!['points'] as List?) ?? const [];
+    final points = <LatLng>[];
+    for (final e in pointsRaw) {
+      if (e is! Map) continue;
+      final lat = (e['lat'] as num?)?.toDouble();
+      final lng = (e['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) continue;
+      points.add(LatLng(lat, lng));
+    }
+    if (points.isEmpty) {
+      final lat = (widget.localItem!['lat'] as num?)?.toDouble();
+      final lng = (widget.localItem!['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null) points.add(LatLng(lat, lng));
+    }
+    return points;
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  List<LatLng> get _cloudPoints {
+    final detail = _cloudDetail;
+    if (detail == null) return const [];
+    final points = <LatLng>[];
+    for (final point in detail.points) {
+      final lat = point.y ?? _toDouble(point.raw['lat']) ?? _toDouble(point.raw['latitude']);
+      final lng = point.x ?? _toDouble(point.raw['lng']) ?? _toDouble(point.raw['longitude']);
+      if (lat == null || lng == null) continue;
+      points.add(LatLng(lat, lng));
+    }
+    return points;
+  }
+
+  LandDetail? get _cloudDetail {
+    if (!widget.isCloud) return null;
+    return ref.watch(remoteLandDetailProvider(widget.cloudItem!.id)).asData?.value;
+  }
+
+  bool get _cloudLoading {
+    if (!widget.isCloud) return false;
+    return ref.watch(remoteLandDetailProvider(widget.cloudItem!.id)).isLoading;
+  }
+
+  String? get _cloudError {
+    if (!widget.isCloud) return null;
+    final state = ref.watch(remoteLandDetailProvider(widget.cloudItem!.id));
+    return state.hasError ? state.error.toString() : null;
+  }
+
+  String _typeBadgeLabel(String type) {
+    switch (type.toLowerCase()) {
+      case 'polygon': return 'Field';
+      case 'polyline': return 'Distance';
+      case 'point': return 'Location';
+      default: return type;
+    }
+  }
+
+  Color _typeBadgeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'polygon': return const Color(0xFF0074D9);
+      case 'polyline': return const Color(0xFFF59E0B);
+      case 'point': return const Color(0xFF16A34A);
+      default: return Colors.grey;
+    }
+  }
+
+  String _formatDate(String? iso) {
+    if (iso == null || iso.isEmpty) return '—';
+    final parsed = DateTime.tryParse(iso);
+    if (parsed == null) return '—';
+    return '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // Determine values from either local or cloud
+    final name = widget.isCloud
+        ? widget.cloudItem!.name
+        : widget.localItem!['name']?.toString() ?? 'Saved location';
+    final type = widget.isCloud
+        ? (_cloudDetail?.type ?? widget.cloudItem!.type)
+        : (widget.localItem!['entityType']?.toString() ?? widget.localItem!['type']?.toString() ?? 'polygon');
+    final place = widget.isCloud
+        ? widget.cloudItem!.place
+        : widget.localItem!['place']?.toString();
+    final phone = widget.isCloud
+        ? widget.cloudItem!.phone
+        : widget.localItem!['phone']?.toString();
+    final description = widget.isCloud
+        ? widget.cloudItem!.description
+        : widget.localItem!['description']?.toString();
+    final createdAt = widget.isCloud
+        ? widget.cloudItem!.createdAt
+        : widget.localItem!['createdAt']?.toString();
+    final updatedAt = widget.isCloud
+        ? widget.cloudItem!.updatedAt
+        : widget.localItem!['updatedAt']?.toString();
+    final isCloudSynced = widget.isCloud ||
+        (widget.localItem!['cloudId']?.toString().trim().isNotEmpty ?? false);
+
+    final badgeColor = _typeBadgeColor(type);
+    final points = widget.isCloud ? _cloudPoints : _localPoints;
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: badgeColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                      color: badgeColor.withValues(alpha: 0.3)),
+                                ),
+                                child: Text(
+                                  _typeBadgeLabel(type),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: badgeColor,
+                                  ),
+                                ),
+                              ),
+                              if (isCloudSynced) ...[
+                                const SizedBox(width: 8),
+                                Icon(Icons.cloud_done,
+                                    size: 16,
+                                    color: theme.colorScheme.primary),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            name,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black87,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Body
+              Expanded(
+                child: widget.isCloud && _cloudLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : widget.isCloud && _cloudError != null
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    color: Colors.red, size: 36),
+                                const SizedBox(height: 12),
+                                Text(_cloudError!,
+                                    textAlign: TextAlign.center),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () => ref.invalidate(
+                                      remoteLandDetailProvider(
+                                          widget.cloudItem!.id)),
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView(
+                            controller: scrollController,
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                            children: [
+                              // Map card
+                              if (points.isNotEmpty)
+                                _buildMapCard(context, points, type),
+                              const SizedBox(height: 12),
+                              // Info card
+                              _buildInfoCard(context,
+                                  place: place,
+                                  phone: phone,
+                                  description: description,
+                                  createdAt: createdAt,
+                                  updatedAt: updatedAt,
+                                  type: type),
+                              const SizedBox(height: 12),
+                              // Points card
+                              if (points.isNotEmpty)
+                                _buildPointsCard(context, points),
+                              const SizedBox(height: 12),
+                              // Actions card
+                              _buildActionsCard(context),
+                            ],
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapCard(BuildContext context, List<LatLng> points, String type) {
+    final theme = Theme.of(context);
+    final color = _typeBadgeColor(type);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          height: 200,
+          child: FlutterMap(
+            options: MapOptions(
+              initialCenter: points.first,
+              initialZoom: 15,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.none,
+              ),
+              cameraConstraint: CameraConstraint.contain(
+                bounds: LatLngBounds.fromPoints(points),
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate:
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.geo_coordinates',
+              ),
+              if (type == 'polyline' && points.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                        points: points,
+                        strokeWidth: 3,
+                        color: color),
+                  ],
+                ),
+              if (type == 'polygon' && points.length >= 3)
+                PolygonLayer(
+                  polygons: [
+                    Polygon(
+                      points: points,
+                      color: color.withValues(alpha: 0.16),
+                      borderStrokeWidth: 2.5,
+                      borderColor: color,
+                    ),
+                  ],
+                ),
+              MarkerLayer(
+                markers: points
+                    .map((p) => Marker(
+                          width: 20,
+                          height: 20,
+                          point: p,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: Colors.white, width: 2),
+                            ),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+    BuildContext context, {
+    required String? place,
+    required String? phone,
+    required String? description,
+    required String? createdAt,
+    required String? updatedAt,
+    required String type,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline,
+                  size: 16, color: Colors.grey.shade500),
+              const SizedBox(width: 6),
+              Text(
+                'Details',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _InfoRow(label: 'Type', value: _typeBadgeLabel(type)),
+          if (place?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Place', value: place!),
+          if (phone?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Phone', value: phone!),
+          if (description?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Description', value: description!),
+          _InfoRow(label: 'Created', value: _formatDate(createdAt)),
+          if (updatedAt?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Updated', value: _formatDate(updatedAt)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPointsCard(BuildContext context, List<LatLng> points) {
+    final theme = Theme.of(context);
+    final cloudDetail = _cloudDetail;
+    final visiblePoints = _showAllPoints ? points : points.take(3).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.place_outlined,
+                  size: 16, color: Colors.grey.shade500),
+              const SizedBox(width: 6),
+              Text(
+                'Points (${points.length})',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...visiblePoints.asMap().entries.map((entry) {
+            final index = entry.key;
+            final p = entry.value;
+
+            // Get label
+            String label = '${index + 1}';
+            if (widget.isCloud && cloudDetail != null &&
+                index < cloudDetail.points.length) {
+              final raw = cloudDetail.points[index].label?.trim() ?? '';
+              if (raw.isNotEmpty) label = raw;
+            } else if (!widget.isCloud) {
+              final rawPoints =
+                  (widget.localItem!['points'] as List?) ?? const [];
+              if (index < rawPoints.length && rawPoints[index] is Map) {
+                final rawLabel =
+                    rawPoints[index]['label']?.toString().trim() ?? '';
+                if (rawLabel.isNotEmpty) label = rawLabel;
+              }
+            }
+
+            final type = widget.isCloud
+                ? widget.cloudItem!.type
+                : (widget.localItem!['entityType']?.toString() ??
+                    widget.localItem!['type']?.toString() ??
+                    'polygon');
+            final dotColor = _typeBadgeColor(type);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: dotColor.withValues(alpha: 0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        label.length > 3 ? '${index + 1}' : label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (label != '${index + 1}')
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        Text(
+                          '${p.latitude.toStringAsFixed(6)}, ${p.longitude.toStringAsFixed(6)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        // Show easting/northing for cloud points
+                        if (widget.isCloud &&
+                            cloudDetail != null &&
+                            index < cloudDetail.points.length)
+                          Builder(builder: (context) {
+                            final cp = cloudDetail.points[index];
+                            if (cp.easting == null || cp.northing == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Text(
+                              'E ${cp.easting!.toStringAsFixed(2)}  N ${cp.northing!.toStringAsFixed(2)}  Zone ${cp.zone ?? '—'}${cp.band ?? ''}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade400,
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          if (points.length > 3)
+            TextButton(
+              onPressed: () =>
+                  setState(() => _showAllPoints = !_showAllPoints),
+              child: Text(
+                _showAllPoints
+                    ? 'Show less'
+                    : 'Show all ${points.length} points',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionsCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Go to map — always shown
+          _ActionRow(
+            icon: Icons.navigation_outlined,
+            label: 'Go to map',
+            color: theme.colorScheme.primary,
+            onTap: () {
+              Navigator.of(context).pop();
+              if (widget.isCloud) {
+                final detail = _cloudDetail;
+                if (detail != null) {
+                  final points = _cloudPoints;
+                  if (points.isNotEmpty) {
+                    final target = LandNavigationTarget(
+                      point: _representativePoint(points),
+                      points: points,
+                      pointLabels: detail.points
+                          .map((p) => p.label?.trim().isNotEmpty == true
+                              ? p.label!
+                              : '${detail.points.indexOf(p) + 1}')
+                          .toList(),
+                      label: detail.name,
+                      kind: _navigationKind(detail.type, points.length),
+                    );
+                    ref
+                        .read(landMapProvider.notifier)
+                        .setNavigationTarget(target);
+                  }
+                }
+              }
+              widget.onOpenMapRequested?.call();
+            },
+          ),
+          const Divider(height: 1, indent: 56),
+          if (widget.isCloud) ...[
+            _ActionRow(
+              icon: Icons.edit_outlined,
+              label: 'Edit metadata',
+              onTap: () async {
+                final detail = _cloudDetail;
+                if (detail == null) return;
+                await showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => _EditRemoteLandSheet(
+                    land: detail,
+                    onSaved: () async {
+                      ref.invalidate(remoteLandDetailProvider(detail.id));
+                      await widget.onRemoteChanged?.call();
+                    },
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 1, indent: 56),
+            _ActionRow(
+              icon: Icons.refresh,
+              label: 'Refresh',
+              onTap: () => ref.invalidate(
+                  remoteLandDetailProvider(widget.cloudItem!.id)),
+            ),
+            const Divider(height: 1, indent: 56),
+            _ActionRow(
+              icon: Icons.delete_outline,
+              label: _isDeleting ? 'Deleting...' : 'Delete land',
+              color: Colors.red,
+              onTap: _isDeleting ? null : () => _deleteCloudLand(context),
+            ),
+          ] else ...[
+            _ActionRow(
+              icon: Icons.edit_outlined,
+              label: 'Rename',
+              onTap: () {
+                Navigator.of(context).pop();
+                // Caller handles rename
+              },
+            ),
+            const Divider(height: 1, indent: 56),
+            _ActionRow(
+              icon: Icons.copy_outlined,
+              label: 'Copy coordinates',
+              onTap: () async {
+                final pts = (widget.localItem!['points'] as List?) ?? [];
+                final coords = pts
+                    .map((p) => '${p['lat']},${p['lng']}')
+                    .join('\n');
+                await Clipboard.setData(ClipboardData(text: coords));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Coordinates copied')),
+                );
+              },
+            ),
+            const Divider(height: 1, indent: 56),
+            _ActionRow(
+              icon: Icons.delete_outline,
+              label: 'Delete',
+              color: Colors.red,
+              onTap: () => _deleteLocalItem(context),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  LatLng _representativePoint(List<LatLng> points) {
+    if (points.length == 1) return points.first;
+    final lat = points.fold<double>(0, (s, p) => s + p.latitude) / points.length;
+    final lng = points.fold<double>(0, (s, p) => s + p.longitude) / points.length;
+    return LatLng(lat, lng);
+  }
+
+  Future<void> _deleteCloudLand(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete cloud land?'),
+        content: Text(
+            'This will delete "${widget.cloudItem!.name}" from the server.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final token = ref.read(authSessionProvider).token.trim();
+    if (token.isEmpty) return;
+    setState(() => _isDeleting = true);
+    try {
+      await ref
+          .read(landCloudServiceProvider)
+          .deleteLand(token, widget.cloudItem!.id);
+      await widget.onRemoteChanged?.call();
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Land deleted from cloud')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  void _deleteLocalItem(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete location?'),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final box = Hive.box('landbox');
+              final id = widget.localItem!['id']?.toString() ?? '';
+              await box.delete(id);
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+  final VoidCallback? onTap;
+
+  const _ActionRow({
+    required this.icon,
+    required this.label,
+    this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? Colors.black87;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: c),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: c,
+              ),
+            ),
+            const Spacer(),
+            Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
           ),
         ],
       ),

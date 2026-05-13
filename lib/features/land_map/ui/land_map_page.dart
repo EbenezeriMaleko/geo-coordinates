@@ -264,6 +264,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   Future<void> _addMarkerAt(LatLng point) async {
     if (_isMarkerSaving) return;
+    final name = await _promptMarkerName();
+    if (name == null) return;
     setState(() => _isMarkerSaving = true);
     try {
       final box = Hive.box('landbox');
@@ -274,7 +276,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         'id': id,
         'entityType': 'point',
         'type': 'point',
-        'name': 'Location ${DateTime.now().toIso8601String()}',
+        'name': name,
         'referenceEllipsoid': ellipsoid.name,
         'points': [
           {'order': 0, 'lat': point.latitude, 'lng': point.longitude},
@@ -293,6 +295,118 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         setState(() => _isMarkerSaving = false);
       }
     }
+  }
+
+  Future<String?> _promptMarkerName() async {
+    final controller = TextEditingController();
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, 14, 20, bottomInset + 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Save location',
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Give this location a name before saving.',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (value) {
+                  final trimmed = value.trim();
+                  if (trimmed.isNotEmpty) {
+                    Navigator.of(sheetContext).pop(trimmed);
+                  }
+                },
+                decoration: _sheetInputDecoration(
+                  hint: 'e.g. Home, Office, Farm Entrace',
+                  icon: Icons.place_outlined,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(null),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final trimmed = controller.text.trim();
+                        if (trimmed.isNotEmpty) {
+                          Navigator.of(sheetContext).pop(trimmed);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF001F3F),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Save',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.dispose();
+    });
+    return result;
   }
 
   Future<void> _deleteMarker(String id) async {
@@ -1050,6 +1164,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             if (polygons.isNotEmpty) PolygonLayer(polygons: polygons),
             if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
             MarkerLayer(markers: markers),
+
+            RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution('OpenStreetMap contributors')
+              ],
+            ),
           ],
         ),
 
