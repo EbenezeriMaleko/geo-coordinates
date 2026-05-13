@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:in_app_update/in_app_update.dart';
 
 import 'main_navigation.dart';
 
@@ -12,14 +13,32 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
-  static const Duration _splashDuration = Duration(seconds: 2);
 
   @override
   void initState() {
     super.initState();
-    Timer(_splashDuration, () {
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
+    _checkForUpdate();
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final AppUpdateInfo updateInfo = await InAppUpdate.checkForUpdate();
+
+      if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable &&
+          updateInfo.immediateUpdateAllowed) {
+        await InAppUpdate.performImmediateUpdate();
+        return;
+      }
+    } catch (e) {
+      debugPrint('In-App Update Error: $e');
+    }
+    if (mounted) {
+      _navigateToHome();
+    }
+  }
+
+  void _navigateToHome(){
+    Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
           pageBuilder: (context, animation, secondaryAnimation) =>
               const MainNavigation(),
@@ -28,7 +47,6 @@ class _SplashPageState extends State<SplashPage> {
           transitionDuration: const Duration(milliseconds: 450),
         ),
       );
-    });
   }
 
   @override
