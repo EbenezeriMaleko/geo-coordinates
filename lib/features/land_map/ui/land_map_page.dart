@@ -1250,7 +1250,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 st.activeFieldId != null ||
                 navigationTarget != null))
           Positioned(
-            top: _locationError == null ? 92 : 202 + MediaQuery.of(context).padding.top,
+            top: _locationError == null
+                ? 92 + MediaQuery.of(context).padding.top
+                : 202 + MediaQuery.of(context).padding.top,
             left: 16,
             right: 16,
             child: Column(
