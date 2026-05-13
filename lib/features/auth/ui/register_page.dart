@@ -155,33 +155,25 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     final errorMsg = authState.hasError ? authState.error.toString() : null;
 
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF001F3F), Color(0xFF003366), Color(0xFF0055A5)],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 32,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 36),
-                    _buildCard(isLoading, errorMsg),
-                    const SizedBox(height: 24),
-                    _buildFooter(),
-                  ],
-                ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 32,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 36),
+                  _buildCard(isLoading, errorMsg),
+                  const SizedBox(height: 24),
+                  _buildFooter(),
+                ],
               ),
             ),
           ),
@@ -197,10 +189,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
           width: 80,
           height: 80,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               width: 2,
             ),
           ),
@@ -212,7 +204,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
           style: GoogleFonts.inter(
             fontSize: 30,
             fontWeight: FontWeight.w800,
-            color: Colors.white,
+            color: Colors.black,
             letterSpacing: -0.5,
           ),
         ),
@@ -221,7 +213,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
           'Join Taref Gps today',
           style: GoogleFonts.inter(
             fontSize: 15,
-            color: Colors.white.withValues(alpha: 0.75),
+            color: Colors.black.withValues(alpha: 0.75),
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -436,7 +428,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
         Text(
           'Already have an account? ',
           style: GoogleFonts.inter(
-            color: Colors.white.withValues(alpha: 0.8),
+            color: Colors.black.withValues(alpha: 0.8),
             fontSize: 14,
           ),
         ),
@@ -448,11 +440,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
           child: Text(
             'Sign In',
             style: GoogleFonts.inter(
-              color: Colors.white,
+              color: Colors.black,
               fontSize: 14,
               fontWeight: FontWeight.w700,
               decoration: TextDecoration.underline,
-              decorationColor: Colors.white,
+              decorationColor: Colors.black,
             ),
           ),
         ),

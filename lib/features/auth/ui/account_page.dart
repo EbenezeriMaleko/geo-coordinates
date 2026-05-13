@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/auth_provider.dart';
 import 'forgot_password_page.dart';
 import 'login_page.dart';
 import 'register_page.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 class AccountPage extends ConsumerWidget {
   const AccountPage({super.key});
@@ -18,10 +20,10 @@ class AccountPage extends ConsumerWidget {
       backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: const HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01, color: Colors.black87),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        title: const Text('Account', style: TextStyle(color: Colors.black87)),
+        title: Text('Account', style: GoogleFonts.inter(color: Colors.black87, fontSize: 18)),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -37,7 +39,7 @@ class AccountPage extends ConsumerWidget {
                   );
                 }
               },
-              icon: const Icon(Icons.refresh, color: Colors.black87),
+              icon: const HugeIcon(icon: HugeIcons.strokeRoundedRefresh, color: Colors.black87, size: 20,),
             ),
         ],
       ),
@@ -45,11 +47,6 @@ class AccountPage extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
           if (!session.isLoggedIn) ...[
-            const _HeroCard(
-              title: 'Cloud Sync Access',
-              subtitle:
-                  'Sign in only when you want to sync local data to the server and manage your account.',
-            ),
             const SizedBox(height: 16),
             _PanelCard(
               child: Column(
@@ -141,8 +138,8 @@ class AccountPage extends ConsumerWidget {
                         ).showSnackBar(SnackBar(content: Text(result.message)));
                       },
                 trailing: session.isVerified
-                    ? const Icon(Icons.check_circle, color: Colors.green)
-                    : const Icon(Icons.chevron_right, color: Colors.black45),
+                    ? const HugeIcon(icon: HugeIcons.strokeRoundedCheckmarkCircle01, color: Colors.green)
+                    : const HugeIcon(icon: HugeIcons.strokeRoundedArrowRight01, color: Colors.black45),
               ),
             ),
             const SizedBox(height: 16),
@@ -159,7 +156,7 @@ class AccountPage extends ConsumerWidget {
                   );
                 },
                 titleColor: Colors.red,
-                trailing: const Icon(Icons.logout, color: Colors.red),
+                trailing: const HugeIcon(icon: HugeIcons.strokeRoundedLogout01, color: Colors.red),
               ),
             ),
           ],

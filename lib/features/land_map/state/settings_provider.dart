@@ -63,7 +63,7 @@ class CoordinateFormatNotifier extends Notifier<CoordinateFormat> {
 class DistanceUnitNotifier extends Notifier<DistanceUnit> {
   @override
   DistanceUnit build() {
-    return DistanceUnit.feet;
+    return DistanceUnit.meters;
   }
 
   void setUnit(DistanceUnit unit) {
