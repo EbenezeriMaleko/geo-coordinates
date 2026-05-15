@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geo_coordinates/features/land_map/services/map_tile_cache.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:taref_gps/features/land_map/services/map_tile_cache.dart';
 
 import 'features/land_map/ui/splash_page.dart';
 

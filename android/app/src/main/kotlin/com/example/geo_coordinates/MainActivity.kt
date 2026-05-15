@@ -1,4 +1,4 @@
-package com.example.geo_coordinates
+package com.databenki.taref_gps
 
 import io.flutter.embedding.android.FlutterActivity
 

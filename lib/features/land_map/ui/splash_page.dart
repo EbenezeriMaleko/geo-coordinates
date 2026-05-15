@@ -1,9 +1,8 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:in_app_update/in_app_update.dart';
-
 import 'main_navigation.dart';
+import 'package:flutter/services.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -13,7 +12,6 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
-
   @override
   void initState() {
     super.initState();
@@ -22,31 +20,40 @@ class _SplashPageState extends State<SplashPage> {
 
   Future<void> _checkForUpdate() async {
     try {
-      final AppUpdateInfo updateInfo = await InAppUpdate.checkForUpdate();
+      final AppUpdateInfo updateInfo = await InAppUpdate.checkForUpdate()
+          .timeout(const Duration(seconds: 6));
+
+      if (!mounted) return;
 
       if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable &&
           updateInfo.immediateUpdateAllowed) {
         await InAppUpdate.performImmediateUpdate();
         return;
       }
+    } on PlatformException catch (e) {
+      // Catches: Binder died, app not owned, service failed
+      debugPrint('In-App Update PlatformException: ${e.code} - ${e.message}');
+    } on TimeoutException catch (_) {
+      debugPrint('In-App Update timed out');
     } catch (e) {
-      debugPrint('In-App Update Error: $e');
+      debugPrint('In-App Update unknown error: $e');
     }
+
     if (mounted) {
       _navigateToHome();
     }
   }
 
-  void _navigateToHome(){
+  void _navigateToHome() {
     Navigator.of(context).pushReplacement(
-        PageRouteBuilder<void>(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const MainNavigation(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              FadeTransition(opacity: animation, child: child),
-          transitionDuration: const Duration(milliseconds: 450),
-        ),
-      );
+      PageRouteBuilder<void>(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const MainNavigation(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+        transitionDuration: const Duration(milliseconds: 450),
+      ),
+    );
   }
 
   @override
