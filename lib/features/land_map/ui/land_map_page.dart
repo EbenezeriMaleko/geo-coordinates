@@ -10,6 +10,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:flutter_compass/flutter_compass.dart';
+import 'package:taref_gps/features/land_map/services/routing_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -69,6 +70,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   bool _showFieldLayer = true;
   bool _showDistanceLayer = true;
   bool _showMarkerLayer = true;
+  List<LatLng> _routePoints = const [];
+  RouteResult? _currentRoute;
+  bool _isFetchingRoute = false;
   ProviderSubscription<LandMapState>? _landMapSubscription;
   DateTime? _lastNavigationCameraMove;
   bool _userIsInteracting = false;
@@ -85,18 +89,22 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       final nextLen = next.points.length;
 
       if (next.navigationTarget != null) {
-        if (targetChanged) {
-          _lastNavigationCameraMove = null;
-          unawaited(_startNavigationTracking());
-        }
-        if (targetChanged || currentChanged) {
-          _focusOnNavigationTarget(next);
-        }
-        return;
+          if (targetChanged) {
+              _lastNavigationCameraMove = null;
+              unawaited(_startNavigationTracking());
+              // Fetch road route to the target
+              final targetPoint = next.navigationTarget!.point;
+              unawaited(_fetchRoute(targetPoint));
+          }
+          if (targetChanged || currentChanged) {
+              _focusOnNavigationTarget(next);
+          }
+          return;
       }
 
       if (previous?.navigationTarget != null) {
-        unawaited(_stopNavigationTracking());
+          unawaited(_stopNavigationTracking());
+          _clearRoute();
       }
 
       if (nextLen == 0) return;
@@ -727,7 +735,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   void _clearNavigationTarget() {
     ref.read(landMapProvider.notifier).clearNavigationTarget();
-  }
+    _clearRoute();
+}
 
   double _calculatePerimeterMeters(List<LatLng> points) {
     if (points.length < 2) return 0;
@@ -882,6 +891,43 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _navigationTrackingSubscription = null;
     _lastNavigationCameraMove = null;
   }
+
+  Future<void> _fetchRoute(LatLng destination) async {
+    final current = ref.read(landMapProvider).current;
+    if (current == null) return;
+
+    setState(() {
+        _isFetchingRoute = true;
+        _routePoints = const [];
+        _currentRoute = null;
+    });
+
+    final result = await RoutingService.getRoute(
+        from: current,
+        to: destination,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+        _isFetchingRoute = false;
+        if (result != null) {
+            _routePoints = result.points;
+            _currentRoute = result;
+        } else {
+            // Fallback to straight line if routing fails
+            _routePoints = [current, destination];
+            _snack('Road routing unavailable. Showing straight line.');
+        }
+    });
+}
+
+void _clearRoute() {
+    setState(() {
+        _routePoints = const [];
+        _currentRoute = null;
+    });
+}
 
   String? _optionalTrim(String? value) {
     final text = value?.trim() ?? '';
@@ -1133,15 +1179,21 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           strokeWidth: 5,
           color: Colors.teal.shade700,
         ),
-      if (navigationTarget != null &&
-          st.current != null &&
-          navigationGuidancePoint != null)
-        Polyline(
-          points: [st.current!, navigationGuidancePoint],
-          strokeWidth: 4,
-          color: Colors.teal.shade700,
-        ),
-    ];
+      // Show road route if available, otherwise straight line
+      if (navigationTarget != null && st.current != null)
+          if (_routePoints.length >= 2)
+              Polyline(
+                  points: _routePoints,
+                  strokeWidth: 4,
+                  color: Colors.teal.shade700,
+              )
+          else if (navigationGuidancePoint != null)
+              Polyline(
+                  points: [st.current!, navigationGuidancePoint],
+                  strokeWidth: 3,
+                  color: Colors.teal.shade700,
+              ),
+      ];
 
     return Stack(
       children: [
@@ -1204,6 +1256,50 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             ),
           ],
         ),
+        if (_isFetchingRoute)
+          Positioned(
+              top: 110 + MediaQuery.of(context).padding.top,
+              left: 16,
+              right: 16,
+              child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                      color: Colors.teal.shade700,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.15),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                          ),
+                      ],
+                  ),
+                  child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                          SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                              ),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                              'Finding best route...',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                              ),
+                          ),
+                      ],
+                  ),
+              ),
+          ),
 
         if (_isMapTypeSwitching)
           Positioned.fill(
@@ -2462,12 +2558,24 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final guidancePoint = current == null
         ? target.point
         : _navigationPointForCurrent(current, target);
-    final distanceText = current == null
-        ? 'Waiting for location'
-        : _formatDistance(
-            _distanceCalculator.as(LengthUnit.Meter, current, guidancePoint),
-          );
-    final bearingText = current == null
+
+    // Use road distance if available, otherwise straight line
+    final distanceText = _isFetchingRoute
+        ? 'Calculating route...'
+        : _currentRoute != null
+            ? _currentRoute!.formattedDistance
+            : current == null
+                ? 'Waiting for location'
+                : _formatDistance(
+                    _distanceCalculator.as(
+                        LengthUnit.Meter, current, guidancePoint),
+                  );
+
+    final durationText = _currentRoute != null
+        ? ' · ${_currentRoute!.formattedDuration}'
+        : '';
+
+    final bearingText = current == null || _currentRoute != null
         ? ''
         : ' · ${_bearingLabel(_bearingDegrees(current, guidancePoint))}';
 
@@ -2493,7 +2601,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                '${target.label} · $distanceText$bearingText',
+                '${target.label} · $distanceText$durationText$bearingText',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
