@@ -4,14 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
 import 'land_map_page.dart';
 import 'my_location_page.dart';
 import 'saved_locations_page.dart';
 import '../services/land_sync_service.dart';
+import '../services/utm_converter.dart';
+import '../models/reference_ellipsoid.dart';
 import 'settings_page.dart';
 import '../state/land_map_notifier.dart';
+import '../state/settings_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -147,24 +151,58 @@ class _MainNavigationState extends State<MainNavigation> {
 
       case MyLocationAction.copyBoth:
         if (current == null) return;
+        final ellipsoid = container.read(referenceEllipsoidProvider);
         await _copyText(
-          '${current.latitude.toStringAsFixed(6)},${current.longitude.toStringAsFixed(6)}',
+          _buildMyLocationPayload(
+            current: current,
+            accuracy: container.read(landMapProvider).accuracyMeters,
+            referenceEllipsoid: ellipsoid,
+          ),
           'Coordinates',
         );
         return;
       case MyLocationAction.share:
         if (current == null) return;
+        final ellipsoid = container.read(referenceEllipsoidProvider);
         final accuracy = container.read(landMapProvider).accuracyMeters;
-        final payload = StringBuffer()
-          ..writeln('My current location')
-          ..writeln('Latitude: ${current.latitude.toStringAsFixed(6)}')
-          ..writeln('Longitude: ${current.longitude.toStringAsFixed(6)}')
-          ..writeln(
-            'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
-          );
-        await SharePlus.instance.share(ShareParams(text: payload.toString()));
+        await SharePlus.instance.share(
+          ShareParams(
+            text: _buildMyLocationPayload(
+              current: current,
+              accuracy: accuracy,
+              referenceEllipsoid: ellipsoid,
+            ),
+          ),
+        );
         return;
     }
+  }
+
+  String _buildMyLocationPayload({
+    required LatLng current,
+    required double? accuracy,
+    required ReferenceEllipsoid referenceEllipsoid,
+  }) {
+    final utm = UtmConverter.fromLatLng(
+      current.latitude,
+      current.longitude,
+      referenceEllipsoid,
+    );
+    final buffer = StringBuffer()
+      ..writeln('My current location')
+      ..writeln('Latitude: ${current.latitude.toStringAsFixed(6)}')
+      ..writeln('Longitude: ${current.longitude.toStringAsFixed(6)}')
+      ..writeln(
+        'Easting: ${utm?.easting.toStringAsFixed(2) ?? '—'}',
+      )
+      ..writeln(
+        'Northing: ${utm?.northing.toStringAsFixed(2) ?? '—'}',
+      )
+      ..writeln('UTM Zone: ${utm?.zone ?? '—'}')
+      ..writeln(
+        'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
+      );
+    return buffer.toString();
   }
 
   String _appBarTitleText() {

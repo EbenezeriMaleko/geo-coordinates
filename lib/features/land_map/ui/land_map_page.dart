@@ -89,22 +89,22 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       final nextLen = next.points.length;
 
       if (next.navigationTarget != null) {
-          if (targetChanged) {
-              _lastNavigationCameraMove = null;
-              unawaited(_startNavigationTracking());
-              // Fetch road route to the target
-              final targetPoint = next.navigationTarget!.point;
-              unawaited(_fetchRoute(targetPoint));
-          }
-          if (targetChanged || currentChanged) {
-              _focusOnNavigationTarget(next);
-          }
-          return;
+        if (targetChanged) {
+          _lastNavigationCameraMove = null;
+          unawaited(_startNavigationTracking());
+          // Fetch road route to the target
+          final targetPoint = next.navigationTarget!.point;
+          unawaited(_fetchRoute(targetPoint));
+        }
+        if (targetChanged || currentChanged) {
+          _focusOnNavigationTarget(next);
+        }
+        return;
       }
 
       if (previous?.navigationTarget != null) {
-          unawaited(_stopNavigationTracking());
-          _clearRoute();
+        unawaited(_stopNavigationTracking());
+        _clearRoute();
       }
 
       if (nextLen == 0) return;
@@ -736,7 +736,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   void _clearNavigationTarget() {
     ref.read(landMapProvider.notifier).clearNavigationTarget();
     _clearRoute();
-}
+  }
 
   double _calculatePerimeterMeters(List<LatLng> points) {
     if (points.length < 2) return 0;
@@ -897,37 +897,37 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (current == null) return;
 
     setState(() {
-        _isFetchingRoute = true;
-        _routePoints = const [];
-        _currentRoute = null;
+      _isFetchingRoute = true;
+      _routePoints = const [];
+      _currentRoute = null;
     });
 
     final result = await RoutingService.getRoute(
-        from: current,
-        to: destination,
+      from: current,
+      to: destination,
     );
 
     if (!mounted) return;
 
     setState(() {
-        _isFetchingRoute = false;
-        if (result != null) {
-            _routePoints = result.points;
-            _currentRoute = result;
-        } else {
-            // Fallback to straight line if routing fails
-            _routePoints = [current, destination];
-            _snack('Road routing unavailable. Showing straight line.');
-        }
+      _isFetchingRoute = false;
+      if (result != null) {
+        _routePoints = result.points;
+        _currentRoute = result;
+      } else {
+        // Fallback to straight line if routing fails
+        _routePoints = [current, destination];
+        _snack('Road routing unavailable. Showing straight line.');
+      }
     });
-}
+  }
 
-void _clearRoute() {
+  void _clearRoute() {
     setState(() {
-        _routePoints = const [];
-        _currentRoute = null;
+      _routePoints = const [];
+      _currentRoute = null;
     });
-}
+  }
 
   String? _optionalTrim(String? value) {
     final text = value?.trim() ?? '';
@@ -1181,19 +1181,19 @@ void _clearRoute() {
         ),
       // Show road route if available, otherwise straight line
       if (navigationTarget != null && st.current != null)
-          if (_routePoints.length >= 2)
-              Polyline(
-                  points: _routePoints,
-                  strokeWidth: 4,
-                  color: Colors.teal.shade700,
-              )
-          else if (navigationGuidancePoint != null)
-              Polyline(
-                  points: [st.current!, navigationGuidancePoint],
-                  strokeWidth: 3,
-                  color: Colors.teal.shade700,
-              ),
-      ];
+        if (_routePoints.length >= 2)
+          Polyline(
+            points: _routePoints,
+            strokeWidth: 4,
+            color: Colors.teal.shade700,
+          )
+        else if (navigationGuidancePoint != null)
+          Polyline(
+            points: [st.current!, navigationGuidancePoint],
+            strokeWidth: 3,
+            color: Colors.teal.shade700,
+          ),
+    ];
 
     return Stack(
       children: [
@@ -1258,47 +1258,46 @@ void _clearRoute() {
         ),
         if (_isFetchingRoute)
           Positioned(
-              top: 110 + MediaQuery.of(context).padding.top,
-              left: 16,
-              right: 16,
-              child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                      color: Colors.teal.shade700,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                          ),
-                      ],
+            top: 110 + MediaQuery.of(context).padding.top,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.teal.shade700,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
-                  child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                          SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                              ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                              'Finding best route...',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                              ),
-                          ),
-                      ],
-                  ),
+                ],
               ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Finding best route...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
 
         if (_isMapTypeSwitching)
@@ -1856,365 +1855,413 @@ void _clearRoute() {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) => Consumer(
-        builder: (context, ref, child) {
-          final mapState = ref.watch(landMapProvider);
-          final pointsCount = mapState.points.length;
-          final perimeter = _calculatePerimeterMeters(mapState.points);
-          final area = _calculateAreaSqm(mapState.points);
-          final notifier = ref.read(landMapProvider.notifier);
-          final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+      builder: (sheetContext) {
+        String? fieldSheetMessage;
+        bool fieldSheetIsError = false;
 
-          return PopScope(
-            canPop: true,
-            onPopInvokedWithResult: (_, result) async {
-              await _stopAutoFieldCapture();
-            },
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 14, 20, bottomInset + 20),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 46,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
+        return StatefulBuilder(
+          builder: (sheetStateContext, setSheetState) {
+            return Consumer(
+              builder: (context, ref, child) {
+                final mapState = ref.watch(landMapProvider);
+                final pointsCount = mapState.points.length;
+                final perimeter = _calculatePerimeterMeters(mapState.points);
+                final area = _calculateAreaSqm(mapState.points);
+                final notifier = ref.read(landMapProvider.notifier);
+                final bottomInset = MediaQuery.of(
+                  sheetStateContext,
+                ).viewInsets.bottom;
+
+                Widget? feedbackBanner;
+                if (fieldSheetMessage != null) {
+                  feedbackBanner = Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: fieldSheetIsError
+                          ? Colors.red.shade50
+                          : Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: fieldSheetIsError
+                            ? Colors.red.shade200
+                            : Colors.green.shade200,
                       ),
-                      const SizedBox(height: 14),
-                      Text(
-                        mapState.activeFieldId != null
-                            ? 'Update Field'
-                            : 'Create Field',
-                        style: GoogleFonts.inter(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF111827),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          fieldSheetIsError
+                              ? Icons.error_outline
+                              : Icons.check_circle_outline,
+                          color: fieldSheetIsError
+                              ? Colors.red.shade700
+                              : Colors.green.shade700,
+                          size: 18,
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Capture boundary points and save your land details.',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text('Place *', style: _sheetLabelStyle()),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _placeController,
-                        textInputAction: TextInputAction.next,
-                        decoration: _sheetInputDecoration(
-                          hint: 'Enter place name',
-                          icon: Icons.place_outlined,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text('Phone (optional)', style: _sheetLabelStyle()),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        textInputAction: TextInputAction.next,
-                        decoration: _sheetInputDecoration(
-                          hint: 'e.g. 0712345678',
-                          icon: Icons.phone_outlined,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text('Description (optional)', style: _sheetLabelStyle()),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _descriptionController,
-                        minLines: 2,
-                        maxLines: 3,
-                        textInputAction: TextInputAction.done,
-                        decoration: _sheetInputDecoration(
-                          hint: 'Add notes about this land',
-                          icon: Icons.notes_outlined,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        'Boundary capture',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Mark current GPS or use auto-capture while walking around the field boundary.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text(
-                          'Auto-capture while moving',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: const Text(
-                          'Walk field boundary. Adds point every ~2m when GPS is accurate.',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        value: _isAutoFieldCapture,
-                        onChanged: mapState.isSaving
-                            ? null
-                            : (value) async {
-                                if (value) {
-                                  await _startAutoFieldCapture();
-                                } else {
-                                  await _stopAutoFieldCapture();
-                                }
-                              },
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: mapState.isSaving
-                                  ? null
-                                  : () async {
-                                      final err = await notifier
-                                          .addPointFromCurrent();
-                                      if (err != null && sheetContext.mounted) {
-                                        ScaffoldMessenger.of(
-                                          sheetContext,
-                                        ).showSnackBar(
-                                          SnackBar(content: Text(err)),
-                                        );
-                                      } else if (sheetContext.mounted) {
-                                        ScaffoldMessenger.of(
-                                          sheetContext,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Point added'),
-                                          ),
-                                        );
-                                      }
-                                    },
-                              icon: const Icon(Icons.my_location),
-                              label: const Text('Mark Current GPS'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF001F3F),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            fieldSheetMessage!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: fieldSheetIsError
+                                  ? Colors.red.shade800
+                                  : Colors.green.shade800,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: pointsCount == 0 || mapState.isSaving
-                                  ? null
-                                  : notifier.undoLastPoint,
-                              icon: const Icon(Icons.undo),
-                              label: const Text('Undo Last'),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: pointsCount == 0 || mapState.isSaving
-                                  ? null
-                                  : notifier.clearPoints,
-                              icon: const Icon(Icons.delete_sweep_outlined),
-                              label: const Text('Clear All'),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(10),
                         ),
+                        TextButton(
+                          onPressed: () {
+                            setSheetState(() {
+                              fieldSheetMessage = null;
+                            });
+                          },
+                          child: const Text('Dismiss'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return PopScope(
+                  canPop: true,
+                  onPopInvokedWithResult: (_, result) async {
+                    await _stopAutoFieldCapture();
+                  },
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        14,
+                        20,
+                        bottomInset + 20,
+                      ),
+                      child: SingleChildScrollView(
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Center(
+                              child: Container(
+                                width: 46,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
                             Text(
-                              '$pointsCount points captured',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                              mapState.activeFieldId != null
+                                  ? 'Update Field'
+                                  : 'Create Field',
+                              style: GoogleFonts.inter(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF111827),
                               ),
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Perimeter: ${_formatDistance(perimeter)}',
-                              style: const TextStyle(fontSize: 12),
+                              'Capture boundary points and save your land details.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
+                              ),
                             ),
+                            const SizedBox(height: 20),
+                            Text('Place *', style: _sheetLabelStyle()),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _placeController,
+                              textInputAction: TextInputAction.next,
+                              decoration: _sheetInputDecoration(
+                                hint: 'Enter place name',
+                                icon: Icons.place_outlined,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text('Phone (optional)', style: _sheetLabelStyle()),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              textInputAction: TextInputAction.next,
+                              decoration: _sheetInputDecoration(
+                                hint: 'e.g. 0712345678',
+                                icon: Icons.phone_outlined,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
                             Text(
-                              'Area: ${_formatArea(area)}',
-                              style: const TextStyle(fontSize: 12),
+                              'Description (optional)',
+                              style: _sheetLabelStyle(),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _descriptionController,
+                              minLines: 2,
+                              maxLines: 3,
+                              textInputAction: TextInputAction.done,
+                              decoration: _sheetInputDecoration(
+                                hint: 'Add notes about this land',
+                                icon: Icons.notes_outlined,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              'Boundary capture',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Mark current Location while walking around the field boundary.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: mapState.isSaving
+                                        ? null
+                                        : () async {
+                                            final err = await notifier
+                                                .addPointFromCurrent();
+                                            if (!sheetStateContext.mounted)
+                                              return;
+                                            setSheetState(() {
+                                              fieldSheetMessage =
+                                                  err ?? 'Point added';
+                                              fieldSheetIsError = err != null;
+                                            });
+                                          },
+                                    icon: const Icon(Icons.my_location),
+                                    label: const Text('Mark Current Location'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF001F3F),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed:
+                                        pointsCount == 0 || mapState.isSaving
+                                        ? null
+                                        : notifier.undoLastPoint,
+                                    icon: const Icon(Icons.undo),
+                                    label: const Text('Undo Last'),
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed:
+                                        pointsCount == 0 || mapState.isSaving
+                                        ? null
+                                        : notifier.clearPoints,
+                                    icon: const Icon(
+                                      Icons.delete_sweep_outlined,
+                                    ),
+                                    label: const Text('Clear All'),
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$pointsCount points captured',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Perimeter: ${_formatDistance(perimeter)}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    'Area: ${_formatArea(area)}',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (feedbackBanner != null) ...[
+                              const SizedBox(height: 12),
+                              feedbackBanner,
+                            ],
+                            const SizedBox(height: 18),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextButton(
+                                    onPressed: mapState.isSaving
+                                        ? null
+                                        : () async {
+                                            await _stopAutoFieldCapture();
+                                            if (mapState.activeFieldId ==
+                                                null) {
+                                              notifier.clearPoints();
+                                            }
+                                            if (sheetContext.mounted) {
+                                              Navigator.pop(sheetContext);
+                                            }
+                                          },
+                                    child: const Text('Cancel'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 52,
+                                    child: ElevatedButton(
+                                      onPressed: mapState.isSaving
+                                          ? null
+                                          : () async {
+                                              final enteredPlace =
+                                                  _placeController.text.trim();
+                                              final enteredPhone =
+                                                  _phoneController.text.trim();
+                                              final enteredDescription =
+                                                  _descriptionController.text
+                                                      .trim();
+
+                                              if (enteredPlace.isEmpty) {
+                                                if (!sheetStateContext.mounted)
+                                                  return;
+                                                setSheetState(() {
+                                                  fieldSheetMessage =
+                                                      'Place is required.';
+                                                  fieldSheetIsError = true;
+                                                });
+                                                return;
+                                              }
+
+                                              final effectiveName =
+                                                  enteredPlace;
+
+                                              final err = await notifier
+                                                  .saveOffline(
+                                                    name: effectiveName,
+                                                    place: enteredPlace,
+                                                    phone: enteredPhone,
+                                                    description:
+                                                        enteredDescription,
+                                                  );
+                                              if (!sheetStateContext.mounted)
+                                                return;
+
+                                              if (err != null) {
+                                                setSheetState(() {
+                                                  fieldSheetMessage = err;
+                                                  fieldSheetIsError = true;
+                                                });
+                                              } else {
+                                                await _stopAutoFieldCapture();
+                                                if (!sheetStateContext.mounted)
+                                                  return;
+                                                _placeController.clear();
+                                                _phoneController.clear();
+                                                _descriptionController.clear();
+                                                setSheetState(() {
+                                                  fieldSheetMessage =
+                                                      mapState.activeFieldId !=
+                                                          null
+                                                      ? 'Field updated offline successfully. Sync queued.'
+                                                      : 'Field saved offline successfully. Sync queued.';
+                                                  fieldSheetIsError = false;
+                                                });
+                                              }
+                                            },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFF001F3F,
+                                        ),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+                                        elevation: mapState.isSaving ? 0 : 2,
+                                      ),
+                                      child: mapState.isSaving
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : Text(
+                                              mapState.activeFieldId != null
+                                                  ? 'Update Field'
+                                                  : 'Save Field',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 0.3,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextButton(
-                              onPressed: mapState.isSaving
-                                  ? null
-                                  : () async {
-                                      await _stopAutoFieldCapture();
-                                      if (mapState.activeFieldId == null) {
-                                        notifier.clearPoints();
-                                      }
-                                      if (sheetContext.mounted) {
-                                        Navigator.pop(sheetContext);
-                                      }
-                                    },
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: SizedBox(
-                              height: 52,
-                              child: ElevatedButton(
-                                onPressed: mapState.isSaving
-                                    ? null
-                                    : () async {
-                                        final enteredPlace = _placeController
-                                            .text
-                                            .trim();
-                                        final enteredPhone = _phoneController
-                                            .text
-                                            .trim();
-                                        final enteredDescription =
-                                            _descriptionController.text.trim();
-
-                                        if (enteredPlace.isEmpty) {
-                                          if (!sheetContext.mounted) return;
-                                          ScaffoldMessenger.of(
-                                            sheetContext,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Place is required.',
-                                              ),
-                                            ),
-                                          );
-                                          return;
-                                        }
-
-                                        final effectiveName = enteredPlace;
-
-                                        final err = await notifier.saveOffline(
-                                          name: effectiveName,
-                                          place: enteredPlace,
-                                          phone: enteredPhone,
-                                          description: enteredDescription,
-                                        );
-                                        if (sheetContext.mounted) {
-                                          if (err != null) {
-                                            ScaffoldMessenger.of(
-                                              sheetContext,
-                                            ).showSnackBar(
-                                              SnackBar(content: Text(err)),
-                                            );
-                                          } else {
-                                            await _stopAutoFieldCapture();
-                                            if (!sheetContext.mounted) return;
-                                            _placeController.clear();
-                                            _phoneController.clear();
-                                            _descriptionController.clear();
-                                            final baseMessage =
-                                                mapState.activeFieldId != null
-                                                ? 'Field updated offline successfully'
-                                                : 'Field saved offline successfully';
-
-                                            ScaffoldMessenger.of(
-                                              sheetContext,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  '$baseMessage. Sync queued.',
-                                                ),
-                                              ),
-                                            );
-                                            Navigator.pop(sheetContext);
-                                          }
-                                        }
-                                      },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF001F3F),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  elevation: mapState.isSaving ? 0 : 2,
-                                ),
-                                child: mapState.isSaving
-                                    ? const SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.5,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : Text(
-                                        mapState.activeFieldId != null
-                                            ? 'Update Field'
-                                            : 'Save Field',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.3,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
@@ -2563,13 +2610,12 @@ void _clearRoute() {
     final distanceText = _isFetchingRoute
         ? 'Calculating route...'
         : _currentRoute != null
-            ? _currentRoute!.formattedDistance
-            : current == null
-                ? 'Waiting for location'
-                : _formatDistance(
-                    _distanceCalculator.as(
-                        LengthUnit.Meter, current, guidancePoint),
-                  );
+        ? _currentRoute!.formattedDistance
+        : current == null
+        ? 'Waiting for location'
+        : _formatDistance(
+            _distanceCalculator.as(LengthUnit.Meter, current, guidancePoint),
+          );
 
     final durationText = _currentRoute != null
         ? ' · ${_currentRoute!.formattedDuration}'

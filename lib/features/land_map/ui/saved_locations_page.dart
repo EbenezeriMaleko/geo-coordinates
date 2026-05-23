@@ -4,13 +4,17 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/land_api_models.dart';
+import '../models/reference_ellipsoid.dart';
 import '../providers/land_cloud_provider.dart';
 import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
+import '../state/settings_provider.dart';
+import '../services/utm_converter.dart';
 
 enum _ViewMode { combined, basic, text, photo }
 
@@ -155,7 +159,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     }
   }
 
-
   _ViewMode _viewModeFromStorage(String raw) {
     for (final mode in _ViewMode.values) {
       if (mode.name == raw) return mode;
@@ -270,7 +273,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 10,),
+          const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
@@ -1065,36 +1068,35 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   Future<void> _shareSelectedItems() async {
     if (_selectedIds.isEmpty) return;
     final box = Hive.box('landbox');
-    final out = StringBuffer();
-    for (final id in _selectedIds) {
-      final raw = box.get(id);
-      if (raw is! Map) continue;
-      final item = Map<String, dynamic>.from(raw);
-      final name = item['name']?.toString() ?? 'Saved location';
-      final group = _groupOf(item);
-      final points = (item['points'] as List?) ?? const [];
-      final createdAt = _formatDate(item['createdAt']?.toString());
-      out
-        ..writeln(name)
-        ..writeln('Group: $group')
-        ..writeln('Points: ${points.length}')
-        ..writeln('Created: $createdAt');
-      for (final p in points) {
-        if (p is Map) {
-          out.writeln('${p['lat']},${p['lng']}');
-        }
+    final blocks = <String>[];
+    for (final selectionId in _selectedIds) {
+      final block = await _shareBlockForSelection(selectionId, box);
+      if (block != null && block.trim().isNotEmpty) {
+        blocks.add(block.trimRight());
       }
-      out.writeln('');
     }
-    await Clipboard.setData(ClipboardData(text: out.toString()));
+
+    if (blocks.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Nothing to share')));
+      }
+      return;
+    }
+
+    await SharePlus.instance.share(
+      ShareParams(text: blocks.join('\n\n---\n\n')),
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Selected items copied')));
+    ).showSnackBar(const SnackBar(content: Text('Selected items shared')));
   }
 
-  void _deleteSelectedItems() {
+  Future<void> _deleteSelectedItems() async {
     if (_selectedIds.isEmpty) return;
+    final selectedCount = _selectedIds.length;
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1110,12 +1112,75 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           ElevatedButton(
             onPressed: () async {
               final box = Hive.box('landbox');
-              await box.deleteAll(_selectedIds.toList());
+              final session = ref.read(authSessionProvider);
+              final token = session.token.trim();
+              final cloudIdsToDelete = <String>{};
+              final localKeysToDelete = <dynamic>{};
+
+              for (final selectionId in _selectedIds) {
+                if (selectionId.startsWith('remote:')) {
+                  final landId = selectionId.substring('remote:'.length).trim();
+                  if (landId.isNotEmpty) {
+                    cloudIdsToDelete.add(landId);
+                  }
+                  continue;
+                }
+
+                final raw = box.get(selectionId);
+                if (raw is! Map) continue;
+                final item = Map<String, dynamic>.from(raw);
+                localKeysToDelete.add(selectionId);
+                final linkedCloudId = _linkedCloudId(item);
+                if (linkedCloudId != null) {
+                  cloudIdsToDelete.add(linkedCloudId);
+                }
+              }
+
+              if (cloudIdsToDelete.isNotEmpty && token.isEmpty) {
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Sign in again to delete cloud records.'),
+                    ),
+                  );
+                }
+                return;
+              }
+
+              for (final landId in cloudIdsToDelete) {
+                await ref
+                    .read(landCloudServiceProvider)
+                    .deleteLand(token, landId);
+                final matchingKeys = box
+                    .toMap()
+                    .entries
+                    .where((entry) {
+                      final value = entry.value;
+                      if (value is! Map) return false;
+                      final raw = Map<String, dynamic>.from(value);
+                      final localId = raw['id']?.toString().trim() ?? '';
+                      final cloudId = raw['cloudId']?.toString().trim() ?? '';
+                      return localId == landId || cloudId == landId;
+                    })
+                    .map((entry) => entry.key);
+                localKeysToDelete.addAll(matchingKeys);
+              }
+
+              if (localKeysToDelete.isNotEmpty) {
+                await box.deleteAll(localKeysToDelete.toList());
+              }
+
+              await _fetchRemoteData();
               if (!mounted) return;
               if (dialogContext.mounted) Navigator.pop(dialogContext);
               _exitSelectionMode();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Selected items deleted')),
+                SnackBar(
+                  content: Text(
+                    'Deleted $selectedCount selected item${selectedCount == 1 ? '' : 's'}',
+                  ),
+                ),
               );
             },
             child: const Text('Delete'),
@@ -1132,7 +1197,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
-        title: Text('Set group for selected', style: TextStyle(fontSize: 18, color: Color(0xFF111827)),),
+        title: Text(
+          'Set group for selected',
+          style: TextStyle(fontSize: 18, color: Color(0xFF111827)),
+        ),
         content: TextField(
           controller: controller,
           decoration: InputDecoration(
@@ -1275,16 +1343,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   void _showDetails(BuildContext context, Map<String, dynamic> item) {
     showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        useSafeArea: true,
-        builder: (_) => _LandDetailSheet(
-            localItem: item,
-            onOpenMapRequested: widget.onOpenMapRequested,
-        ),
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => _LandDetailSheet(
+        localItem: item,
+        onOpenMapRequested: widget.onOpenMapRequested,
+      ),
     );
-}
+  }
 
   void _goToSavedItem(BuildContext context, Map<String, dynamic> item) {
     final target = _buildNavigationTarget(item);
@@ -1468,17 +1536,17 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   void _showRemoteLandDetails(LandListItem land) {
     showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        useSafeArea: true,
-        builder: (_) => _LandDetailSheet(
-            cloudItem: land,
-            onRemoteChanged: _fetchRemoteData,
-            onOpenMapRequested: widget.onOpenMapRequested,
-        ),
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => _LandDetailSheet(
+        cloudItem: land,
+        onRemoteChanged: _fetchRemoteData,
+        onOpenMapRequested: widget.onOpenMapRequested,
+      ),
     );
-}
+  }
 
   void _openCloudDetailsById(String landId, {required String fallbackName}) {
     final lands =
@@ -1596,13 +1664,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     BuildContext context,
     Map<String, dynamic> item,
   ) async {
-    final points = (item['points'] as List?) ?? [];
-    if (points.isEmpty) return;
-    final coords = points
-        .map((p) => '${p['lat']},${p['lng']}')
-        .toList()
-        .join('\n');
-    await Clipboard.setData(ClipboardData(text: coords));
+    final text = _buildLocalShareText(item, includeHeader: false);
+    if (text.trim().isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
@@ -1614,26 +1678,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     BuildContext context,
     Map<String, dynamic> item,
   ) async {
-    final points = (item['points'] as List?) ?? [];
-    final name = item['name']?.toString() ?? 'Saved location';
-    final group = _groupOf(item);
-    final createdAt = _formatDate(item['createdAt']?.toString());
-    final updatedAt = _formatDate(item['updatedAt']?.toString());
-    final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
-    final coords = points
-        .map((p) => '${p['lat']},${p['lng']}')
-        .toList()
-        .join('\n');
-    final text =
-        (StringBuffer()
-              ..writeln(name)
-              ..writeln('Group: $group')
-              ..writeln('Points: ${points.length}')
-              ..writeln('Created: $createdAt')
-              ..writeln(hasUpdated ? 'Updated: $updatedAt' : 'Updated: -')
-              ..writeln('')
-              ..writeln(coords))
-            .toString();
+    final text = _buildLocalShareText(item);
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
       ScaffoldMessenger.of(
@@ -1650,6 +1695,180 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final mm = parsed.month.toString().padLeft(2, '0');
     final dd = parsed.day.toString().padLeft(2, '0');
     return '$dd/$mm/$yyyy';
+  }
+
+  List<String> _extractRemotePointLabels(
+    List<LandPoint> remotePoints,
+    int pointsCount,
+  ) {
+    if (pointsCount <= 0) return const [];
+    final labels = <String>[];
+    for (int i = 0; i < pointsCount; i++) {
+      final raw = i < remotePoints.length
+          ? (remotePoints[i].label?.trim() ?? '')
+          : '';
+      labels.add(raw.isEmpty ? '${i + 1}' : raw);
+    }
+    return labels;
+  }
+
+  Future<String?> _shareBlockForSelection(
+    String selectionId,
+    Box<dynamic> box,
+  ) async {
+    if (selectionId.startsWith('remote:')) {
+      final landId = selectionId.substring('remote:'.length).trim();
+      if (landId.isEmpty) return null;
+      try {
+        final detail = await ref.read(remoteLandDetailProvider(landId).future);
+        return _buildRemoteShareText(detail);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final raw = box.get(selectionId);
+    if (raw is! Map) return null;
+    return _buildLocalShareText(Map<String, dynamic>.from(raw));
+  }
+
+  String _buildLocalShareText(
+    Map<String, dynamic> item, {
+    bool includeHeader = true,
+  }) {
+    final pointsRaw = (item['points'] as List?) ?? const [];
+    final name = item['name']?.toString() ?? 'Saved location';
+    final group = _groupOf(item);
+    final createdAt = _formatDate(item['createdAt']?.toString());
+    final updatedAt = _formatDate(item['updatedAt']?.toString());
+    final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
+    final ellipsoid = _referenceEllipsoidForItem(item);
+    final buffer = StringBuffer();
+
+    if (includeHeader) {
+      buffer
+        ..writeln(name)
+        ..writeln('Group: $group')
+        ..writeln('Points: ${pointsRaw.length}')
+        ..writeln('Created: $createdAt')
+        ..writeln(hasUpdated ? 'Updated: $updatedAt' : 'Updated: -')
+        ..writeln('');
+    }
+
+    for (var i = 0; i < pointsRaw.length; i++) {
+      final point = pointsRaw[i];
+      if (point is! Map) continue;
+      final lat = _toDouble(point['lat']) ?? _toDouble(point['latitude']);
+      final lng = _toDouble(point['lng']) ?? _toDouble(point['longitude']);
+      if (lat == null || lng == null) continue;
+      final computed = UtmConverter.fromLatLng(lat, lng, ellipsoid);
+      final easting = _toDouble(point['easting']) ?? computed?.easting;
+      final northing = _toDouble(point['northing']) ?? computed?.northing;
+      final zone = point['zone']?.toString().trim();
+      buffer.writeln(
+        _formatPointShareBlock(
+          title: 'Point ${i + 1}',
+          latitude: lat,
+          longitude: lng,
+          easting: easting,
+          northing: northing,
+          zone: zone,
+        ),
+      );
+      if (i < pointsRaw.length - 1) {
+        buffer.writeln();
+      }
+    }
+
+    return buffer.toString().trimRight();
+  }
+
+  String _buildRemoteShareText(LandDetail detail) {
+    final points = detail.points;
+    final pointLabels = _extractRemotePointLabels(points, points.length);
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
+    final buffer = StringBuffer()
+      ..writeln(detail.name.isNotEmpty ? detail.name : 'Saved location')
+      ..writeln('Group: Cloud')
+      ..writeln('Points: ${points.length}')
+      ..writeln('Created: ${_formatDate(detail.createdAt)}')
+      ..writeln(
+        detail.updatedAt?.toString().isNotEmpty ?? false
+            ? 'Updated: ${_formatDate(detail.updatedAt)}'
+            : 'Updated: -',
+      )
+      ..writeln('');
+
+    for (var i = 0; i < points.length; i++) {
+      final point = points[i];
+      final lat =
+          point.y ??
+          _toDouble(point.raw['lat']) ??
+          _toDouble(point.raw['latitude']);
+      final lng =
+          point.x ??
+          _toDouble(point.raw['lng']) ??
+          _toDouble(point.raw['longitude']);
+      if (lat == null || lng == null) continue;
+      final computed = UtmConverter.fromLatLng(lat, lng, ellipsoid);
+      final easting = point.easting ?? computed?.easting;
+      final northing = point.northing ?? computed?.northing;
+      buffer.writeln(
+        _formatPointShareBlock(
+          title: 'Point ${pointLabels[i]}',
+          latitude: lat,
+          longitude: lng,
+          easting: easting,
+          northing: northing,
+          zone: point.zone,
+        ),
+      );
+      if (i < points.length - 1) {
+        buffer.writeln();
+      }
+    }
+
+    return buffer.toString().trimRight();
+  }
+
+  String _formatPointShareBlock({
+    required String title,
+    required double latitude,
+    required double longitude,
+    double? easting,
+    double? northing,
+    String? zone,
+  }) {
+    final buffer = StringBuffer()
+      ..writeln(title)
+      ..writeln('Latitude: ${latitude.toStringAsFixed(6)}')
+      ..writeln('Longitude: ${longitude.toStringAsFixed(6)}');
+
+    if (easting != null && northing != null) {
+      buffer
+        ..writeln('Easting: ${easting.toStringAsFixed(2)}')
+        ..writeln('Northing: ${northing.toStringAsFixed(2)}');
+      if (zone != null && zone.isNotEmpty) {
+        buffer.writeln('Zone: $zone');
+      }
+    }
+
+    return buffer.toString().trimRight();
+  }
+
+  ReferenceEllipsoid _referenceEllipsoidForItem(Map<String, dynamic> item) {
+    final raw = item['referenceEllipsoid']?.toString().trim() ?? '';
+    for (final ellipsoid in ReferenceEllipsoid.values) {
+      if (ellipsoid.name == raw) return ellipsoid;
+    }
+    return ref.read(referenceEllipsoidProvider);
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }
 
@@ -3430,7 +3649,6 @@ class _ActiveTag extends StatelessWidget {
       ),
     );
   }
-  
 }
 
 class _LandDetailSheet extends ConsumerStatefulWidget {
@@ -3447,9 +3665,9 @@ class _LandDetailSheet extends ConsumerStatefulWidget {
     this.onRemoteChanged,
     this.onOpenMapRequested,
   }) : assert(
-          localItem != null || cloudItem != null,
-          'Either localItem or cloudItem must be provided',
-        );
+         localItem != null || cloudItem != null,
+         'Either localItem or cloudItem must be provided',
+       );
 
   bool get isCloud => cloudItem != null;
 
@@ -3494,8 +3712,14 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
     if (detail == null) return const [];
     final points = <LatLng>[];
     for (final point in detail.points) {
-      final lat = point.y ?? _toDouble(point.raw['lat']) ?? _toDouble(point.raw['latitude']);
-      final lng = point.x ?? _toDouble(point.raw['lng']) ?? _toDouble(point.raw['longitude']);
+      final lat =
+          point.y ??
+          _toDouble(point.raw['lat']) ??
+          _toDouble(point.raw['latitude']);
+      final lng =
+          point.x ??
+          _toDouble(point.raw['lng']) ??
+          _toDouble(point.raw['longitude']);
       if (lat == null || lng == null) continue;
       points.add(LatLng(lat, lng));
     }
@@ -3504,7 +3728,10 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
 
   LandDetail? get _cloudDetail {
     if (!widget.isCloud) return null;
-    return ref.watch(remoteLandDetailProvider(widget.cloudItem!.id)).asData?.value;
+    return ref
+        .watch(remoteLandDetailProvider(widget.cloudItem!.id))
+        .asData
+        ?.value;
   }
 
   bool get _cloudLoading {
@@ -3520,19 +3747,27 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
 
   String _typeBadgeLabel(String type) {
     switch (type.toLowerCase()) {
-      case 'polygon': return 'Field';
-      case 'polyline': return 'Distance';
-      case 'point': return 'Location';
-      default: return type;
+      case 'polygon':
+        return 'Field';
+      case 'polyline':
+        return 'Distance';
+      case 'point':
+        return 'Location';
+      default:
+        return type;
     }
   }
 
   Color _typeBadgeColor(String type) {
     switch (type.toLowerCase()) {
-      case 'polygon': return const Color(0xFF0074D9);
-      case 'polyline': return const Color(0xFFF59E0B);
-      case 'point': return const Color(0xFF16A34A);
-      default: return Colors.grey;
+      case 'polygon':
+        return const Color(0xFF0074D9);
+      case 'polyline':
+        return const Color(0xFFF59E0B);
+      case 'point':
+        return const Color(0xFF16A34A);
+      default:
+        return Colors.grey;
     }
   }
 
@@ -3553,7 +3788,9 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
         : widget.localItem!['name']?.toString() ?? 'Saved location';
     final type = widget.isCloud
         ? (_cloudDetail?.type ?? widget.cloudItem!.type)
-        : (widget.localItem!['entityType']?.toString() ?? widget.localItem!['type']?.toString() ?? 'polygon');
+        : (widget.localItem!['entityType']?.toString() ??
+              widget.localItem!['type']?.toString() ??
+              'polygon');
     final place = widget.isCloud
         ? widget.cloudItem!.place
         : widget.localItem!['place']?.toString();
@@ -3569,7 +3806,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
     final updatedAt = widget.isCloud
         ? widget.cloudItem!.updatedAt
         : widget.localItem!['updatedAt']?.toString();
-    final isCloudSynced = widget.isCloud ||
+    final isCloudSynced =
+        widget.isCloud ||
         (widget.localItem!['cloudId']?.toString().trim().isNotEmpty ?? false);
 
     final badgeColor = _typeBadgeColor(type);
@@ -3612,12 +3850,15 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: badgeColor.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                      color: badgeColor.withValues(alpha: 0.3)),
+                                    color: badgeColor.withValues(alpha: 0.3),
+                                  ),
                                 ),
                                 child: Text(
                                   _typeBadgeLabel(type),
@@ -3630,9 +3871,11 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                               ),
                               if (isCloudSynced) ...[
                                 const SizedBox(width: 8),
-                                Icon(Icons.cloud_done,
-                                    size: 16,
-                                    color: theme.colorScheme.primary),
+                                Icon(
+                                  Icons.cloud_done,
+                                  size: 16,
+                                  color: theme.colorScheme.primary,
+                                ),
                               ],
                             ],
                           ),
@@ -3661,50 +3904,54 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                 child: widget.isCloud && _cloudLoading
                     ? const Center(child: CircularProgressIndicator())
                     : widget.isCloud && _cloudError != null
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.error_outline,
-                                    color: Colors.red, size: 36),
-                                const SizedBox(height: 12),
-                                Text(_cloudError!,
-                                    textAlign: TextAlign.center),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () => ref.invalidate(
-                                      remoteLandDetailProvider(
-                                          widget.cloudItem!.id)),
-                                  child: const Text('Retry'),
-                                ),
-                              ],
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              color: Colors.red,
+                              size: 36,
                             ),
-                          )
-                        : ListView(
-                            controller: scrollController,
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                            children: [
-                              // Map card
-                              if (points.isNotEmpty)
-                                _buildMapCard(context, points, type),
-                              const SizedBox(height: 12),
-                              // Info card
-                              _buildInfoCard(context,
-                                  place: place,
-                                  phone: phone,
-                                  description: description,
-                                  createdAt: createdAt,
-                                  updatedAt: updatedAt,
-                                  type: type),
-                              const SizedBox(height: 12),
-                              // Points card
-                              if (points.isNotEmpty)
-                                _buildPointsCard(context, points),
-                              const SizedBox(height: 12),
-                              // Actions card
-                              _buildActionsCard(context),
-                            ],
+                            const SizedBox(height: 12),
+                            Text(_cloudError!, textAlign: TextAlign.center),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: () => ref.invalidate(
+                                remoteLandDetailProvider(widget.cloudItem!.id),
+                              ),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                        children: [
+                          // Map card
+                          if (points.isNotEmpty)
+                            _buildMapCard(context, points, type),
+                          const SizedBox(height: 12),
+                          // Info card
+                          _buildInfoCard(
+                            context,
+                            place: place,
+                            phone: phone,
+                            description: description,
+                            createdAt: createdAt,
+                            updatedAt: updatedAt,
+                            type: type,
                           ),
+                          const SizedBox(height: 12),
+                          // Points card
+                          if (points.isNotEmpty)
+                            _buildPointsCard(context, points),
+                          const SizedBox(height: 12),
+                          // Actions card
+                          _buildActionsCard(context),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -3744,17 +3991,13 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ),
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.geo_coordinates',
               ),
               if (type == 'polyline' && points.length >= 2)
                 PolylineLayer(
                   polylines: [
-                    Polyline(
-                        points: points,
-                        strokeWidth: 3,
-                        color: color),
+                    Polyline(points: points, strokeWidth: 3, color: color),
                   ],
                 ),
               if (type == 'polygon' && points.length >= 3)
@@ -3770,19 +4013,20 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                 ),
               MarkerLayer(
                 markers: points
-                    .map((p) => Marker(
-                          width: 20,
-                          height: 20,
-                          point: p,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: Colors.white, width: 2),
-                            ),
+                    .map(
+                      (p) => Marker(
+                        width: 20,
+                        height: 20,
+                        point: p,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
-                        ))
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ],
@@ -3820,8 +4064,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline,
-                  size: 16, color: Colors.grey.shade500),
+              Icon(Icons.info_outline, size: 16, color: Colors.grey.shade500),
               const SizedBox(width: 6),
               Text(
                 'Details',
@@ -3873,8 +4116,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
         children: [
           Row(
             children: [
-              Icon(Icons.place_outlined,
-                  size: 16, color: Colors.grey.shade500),
+              Icon(Icons.place_outlined, size: 16, color: Colors.grey.shade500),
               const SizedBox(width: 6),
               Text(
                 'Points (${points.length})',
@@ -3893,7 +4135,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
 
             // Get label
             String label = '${index + 1}';
-            if (widget.isCloud && cloudDetail != null &&
+            if (widget.isCloud &&
+                cloudDetail != null &&
                 index < cloudDetail.points.length) {
               final raw = cloudDetail.points[index].label?.trim() ?? '';
               if (raw.isNotEmpty) label = raw;
@@ -3910,8 +4153,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             final type = widget.isCloud
                 ? widget.cloudItem!.type
                 : (widget.localItem!['entityType']?.toString() ??
-                    widget.localItem!['type']?.toString() ??
-                    'polygon');
+                      widget.localItem!['type']?.toString() ??
+                      'polygon');
             final dotColor = _typeBadgeColor(type);
 
             return Padding(
@@ -3924,8 +4167,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                     decoration: BoxDecoration(
                       color: dotColor,
                       shape: BoxShape.circle,
-                      border:
-                          Border.all(color: Colors.white, width: 2),
+                      border: Border.all(color: Colors.white, width: 2),
                       boxShadow: [
                         BoxShadow(
                           color: dotColor.withValues(alpha: 0.3),
@@ -3970,19 +4212,21 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                         if (widget.isCloud &&
                             cloudDetail != null &&
                             index < cloudDetail.points.length)
-                          Builder(builder: (context) {
-                            final cp = cloudDetail.points[index];
-                            if (cp.easting == null || cp.northing == null) {
-                              return const SizedBox.shrink();
-                            }
-                            return Text(
-                              'E ${cp.easting!.toStringAsFixed(2)}  N ${cp.northing!.toStringAsFixed(2)}  Zone ${cp.zone ?? '—'}${cp.band ?? ''}',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey.shade400,
-                              ),
-                            );
-                          }),
+                          Builder(
+                            builder: (context) {
+                              final cp = cloudDetail.points[index];
+                              if (cp.easting == null || cp.northing == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return Text(
+                                'E ${cp.easting!.toStringAsFixed(2)}  N ${cp.northing!.toStringAsFixed(2)}  Zone ${cp.zone ?? '—'}${cp.band ?? ''}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade400,
+                                ),
+                              );
+                            },
+                          ),
                       ],
                     ),
                   ),
@@ -3992,8 +4236,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           }),
           if (points.length > 3)
             TextButton(
-              onPressed: () =>
-                  setState(() => _showAllPoints = !_showAllPoints),
+              onPressed: () => setState(() => _showAllPoints = !_showAllPoints),
               child: Text(
                 _showAllPoints
                     ? 'Show less'
@@ -4043,9 +4286,11 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                       point: _representativePoint(points),
                       points: points,
                       pointLabels: detail.points
-                          .map((p) => p.label?.trim().isNotEmpty == true
-                              ? p.label!
-                              : '${detail.points.indexOf(p) + 1}')
+                          .map(
+                            (p) => p.label?.trim().isNotEmpty == true
+                                ? p.label!
+                                : '${detail.points.indexOf(p) + 1}',
+                          )
                           .toList(),
                       label: detail.name,
                       kind: _navigationKind(detail.type, points.length),
@@ -4086,7 +4331,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               icon: Icons.refresh,
               label: 'Refresh',
               onTap: () => ref.invalidate(
-                  remoteLandDetailProvider(widget.cloudItem!.id)),
+                remoteLandDetailProvider(widget.cloudItem!.id),
+              ),
             ),
             const Divider(height: 1, indent: 56),
             _ActionRow(
@@ -4135,8 +4381,10 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
 
   LatLng _representativePoint(List<LatLng> points) {
     if (points.length == 1) return points.first;
-    final lat = points.fold<double>(0, (s, p) => s + p.latitude) / points.length;
-    final lng = points.fold<double>(0, (s, p) => s + p.longitude) / points.length;
+    final lat =
+        points.fold<double>(0, (s, p) => s + p.latitude) / points.length;
+    final lng =
+        points.fold<double>(0, (s, p) => s + p.longitude) / points.length;
     return LatLng(lat, lng);
   }
 
@@ -4146,14 +4394,17 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       builder: (ctx) => AlertDialog(
         title: const Text('Delete cloud land?'),
         content: Text(
-            'This will delete "${widget.cloudItem!.name}" from the server.'),
+          'This will delete "${widget.cloudItem!.name}" from the server.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -4168,12 +4419,14 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       await widget.onRemoteChanged?.call();
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Land deleted from cloud')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Land deleted from cloud')));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _isDeleting = false);
     }
@@ -4187,8 +4440,9 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
         content: const Text('This action cannot be undone.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final box = Hive.box('landbox');
