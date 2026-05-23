@@ -132,9 +132,19 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
     _locationSubscription =
         Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
+          locationSettings: AndroidSettings(
             accuracy: LocationAccuracy.best,
             distanceFilter: 1,
+            intervalDuration: const Duration(seconds: 2),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'TaREF GPS - Coordinates',
+              notificationText: 'Location tracking is active',
+              enableWakeLock: true,
+              notificationIcon: AndroidResource(
+                name: 'ic_launcher',
+                defType: 'mipmap',
+              ),
+            ),
           ),
         ).listen(
           (position) {
@@ -707,7 +717,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                                 ),
                               ),
                             ),
-                            const Spacer(),
+                          const Spacer(),
                           if (widget.onMenuAction != null) ...[
                             PopupMenuButton<MyLocationAction>(
                               icon: const Icon(
@@ -715,7 +725,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                                 color: Colors.white,
                               ),
                               color: Colors.white,
-                              onSelected: (action) => widget.onMenuAction!(action),
+                              onSelected: (action) =>
+                                  widget.onMenuAction!(action),
                               itemBuilder: (_) => const [
                                 // PopupMenuItem(
                                 //   value: MyLocationAction.savePoint,
@@ -1304,9 +1315,19 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
 
     _positionSubscription =
         Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
+          locationSettings: AndroidSettings(
             accuracy: LocationAccuracy.best,
             distanceFilter: 1,
+            intervalDuration: const Duration(seconds: 2),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'TaREF GPS - Coordinates',
+              notificationText: 'Location tracking is active',
+              enableWakeLock: true,
+              notificationIcon: AndroidResource(
+                name: 'ic_launcher',
+                defType: 'mipmap',
+              ),
+            ),
           ),
         ).listen(
           (position) async {
@@ -2297,7 +2318,7 @@ class _RecentMediaStrip extends StatelessWidget {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: visibleItems.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 final capture = visibleItems[index];
                 return InkWell(

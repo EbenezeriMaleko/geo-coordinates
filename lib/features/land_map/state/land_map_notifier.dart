@@ -50,8 +50,22 @@ class LandMapNotifier extends Notifier<LandMapState> {
   Future<String?> refreshLocation() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
+        // locationSettings: const LocationSettings(
+        //   accuracy: LocationAccuracy.best,
+        // ),
+        locationSettings: AndroidSettings(
           accuracy: LocationAccuracy.best,
+          distanceFilter: 1,
+          intervalDuration: const Duration(seconds: 2),
+          foregroundNotificationConfig: const ForegroundNotificationConfig(
+            notificationTitle: 'TaREF GPS - Coordinates',
+            notificationText: 'Location tracking is active',
+            enableWakeLock: true,
+            notificationIcon: AndroidResource(
+              name: 'ic_launcher',
+              defType: 'mipmap',
+            ),
+          ),
         ),
       );
       state = state.copyWith(

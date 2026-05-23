@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map_compass/flutter_map_compass.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -791,9 +792,23 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     setState(() => _isAutoFieldCapture = true);
     _fieldTrackingSubscription =
         Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.best,
+          // locationSettings: const LocationSettings(
+          //   accuracy: LocationAccuracy.best,
+          //   distanceFilter: 1,
+          // ),
+          locationSettings: AndroidSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
             distanceFilter: 1,
+            intervalDuration: const Duration(seconds: 2),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'TaREF GPS - Coordinates',
+              notificationText: 'Location tracking is active',
+              enableWakeLock: true,
+              notificationIcon: AndroidResource(
+                name: 'ic_launcher',
+                defType: 'mipmap',
+              ),
+            ),
           ),
         ).listen(
           (position) {
@@ -833,9 +848,19 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     _navigationTrackingSubscription =
         Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.best,
+          locationSettings: AndroidSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
             distanceFilter: 1,
+            intervalDuration: const Duration(seconds: 2),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'TaREF GPS - Coordinates',
+              notificationText: 'Location tracking is active',
+              enableWakeLock: true,
+              notificationIcon: AndroidResource(
+                name: 'ic_launcher',
+                defType: 'mipmap',
+              ),
+            ),
           ),
         ).listen(
           (position) {
@@ -1165,10 +1190,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
             MarkerLayer(markers: markers),
 
+            Positioned(
+              top: 140 + MediaQuery.of(context).padding.top,
+              child: const Padding(
+                padding: EdgeInsets.all(10.0),
+                child: MapCompass.cupertino(hideIfRotatedNorth: true),
+              ),
+            ),
+
             RichAttributionWidget(
-              attributions: [
-                TextSourceAttribution('OpenStreetMap contributors')
-              ],
+              showFlutterMapAttribution: false,
+              attributions: [TextSourceAttribution('OSM contributors')],
             ),
           ],
         ),
@@ -1306,64 +1338,65 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             ),
           ),
 
-        if (_locationError != null && !_isFullscreen)
-          Positioned(
-            top: 92 + MediaQuery.of(context).padding.top,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.orange.shade700,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _locationError!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange.shade900,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            OutlinedButton(
-                              onPressed: _isLocating
-                                  ? null
-                                  : _handleLocationIssueAction,
-                              child: const Text('Open settings'),
-                            ),
-                            ElevatedButton(
-                              onPressed: _isLocating
-                                  ? null
-                                  : _initLocationAndCenter,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      ],
+        if (!_isFullscreen)
+          if (_locationError != null && !_isFullscreen)
+            Positioned(
+              top: 92 + MediaQuery.of(context).padding.top,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.orange.shade700,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _locationError!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange.shade900,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              OutlinedButton(
+                                onPressed: _isLocating
+                                    ? null
+                                    : _handleLocationIssueAction,
+                                child: const Text('Open settings'),
+                              ),
+                              ElevatedButton(
+                                onPressed: _isLocating
+                                    ? null
+                                    : _initLocationAndCenter,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
         if (!_isFullscreen &&
             (_activeTool != _MapTool.none ||
