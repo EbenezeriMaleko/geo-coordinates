@@ -51,12 +51,16 @@ class AuthSessionNotifier extends Notifier<AuthSession> {
     await ref.read(authSessionStoreProvider).clear();
     state = AuthSession.empty;
   }
+
+  Future<void> clearLocalSession() async {
+    await ref.read(authSessionStoreProvider).clear();
+    state = AuthSession.empty;
+  }
 }
 
-final authSessionProvider =
-    NotifierProvider<AuthSessionNotifier, AuthSession>(
-      AuthSessionNotifier.new,
-    );
+final authSessionProvider = NotifierProvider<AuthSessionNotifier, AuthSession>(
+  AuthSessionNotifier.new,
+);
 
 class LoginNotifier extends AsyncNotifier<AuthResponse?> {
   @override
@@ -261,6 +265,66 @@ class UpdateProfileNotifier extends AsyncNotifier<AuthUser?> {
 final updateProfileProvider =
     AsyncNotifierProvider<UpdateProfileNotifier, AuthUser?>(
       UpdateProfileNotifier.new,
+    );
+
+class AccountDeletionNotifier extends AsyncNotifier<MessageResponse?> {
+  @override
+  Future<MessageResponse?> build() async => null;
+
+  Future<MessageResponse?> requestDeletion({required String password}) async {
+    final session = ref.read(authSessionProvider);
+    final token = session.token.trim();
+    final email = session.user?.email.trim() ?? '';
+    if (token.isEmpty || email.isEmpty) {
+      throw const AuthException('Sign in is required.');
+    }
+
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      return ref
+          .read(authServiceProvider)
+          .requestAccountDeletion(
+            token,
+            AccountDeletionRequest(email: email, password: password),
+          );
+    });
+
+    return switch (state) {
+      AsyncData<MessageResponse?>(:final value) => value,
+      _ => null,
+    };
+  }
+
+  Future<MessageResponse?> confirmDeletion({required String code}) async {
+    final session = ref.read(authSessionProvider);
+    final token = session.token.trim();
+    final email = session.user?.email.trim() ?? '';
+    if (token.isEmpty || email.isEmpty) {
+      throw const AuthException('Sign in is required.');
+    }
+
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      return ref
+          .read(authServiceProvider)
+          .confirmAccountDeletion(
+            token,
+            AccountDeletionConfirmRequest(email: email, code: code),
+          );
+    });
+
+    return switch (state) {
+      AsyncData<MessageResponse?>(:final value) => value,
+      _ => null,
+    };
+  }
+
+  void reset() => state = const AsyncData(null);
+}
+
+final accountDeletionProvider =
+    AsyncNotifierProvider<AccountDeletionNotifier, MessageResponse?>(
+      AccountDeletionNotifier.new,
     );
 
 class ChangePasswordNotifier extends AsyncNotifier<MessageResponse?> {

@@ -79,13 +79,11 @@ class UpdateProfileRequest {
     this.phone,
   });
 
-  Map<String, dynamic> toJson() => {
-    'name': name.trim(),
-    'email': email.trim(),
-    'phone': phone?.trim(),
-  }..removeWhere(
-    (key, value) => value == null || (value is String && value.isEmpty),
-  );
+  Map<String, dynamic> toJson() =>
+      {'name': name.trim(), 'email': email.trim(), 'phone': phone?.trim()}
+        ..removeWhere(
+          (key, value) => value == null || (value is String && value.isEmpty),
+        );
 }
 
 class ChangePasswordRequest {
@@ -104,6 +102,30 @@ class ChangePasswordRequest {
     'password': password,
     'password_confirmation': passwordConfirmation,
   };
+}
+
+class AccountDeletionRequest {
+  final String email;
+  final String password;
+
+  const AccountDeletionRequest({required this.email, required this.password});
+
+  Map<String, dynamic> toJson() => {
+    'email': email.trim(),
+    'password': password,
+  };
+}
+
+class AccountDeletionConfirmRequest {
+  final String email;
+  final String code;
+
+  const AccountDeletionConfirmRequest({
+    required this.email,
+    required this.code,
+  });
+
+  Map<String, dynamic> toJson() => {'email': email.trim(), 'code': code.trim()};
 }
 
 class AuthUser {
@@ -246,10 +268,7 @@ class AuthSession {
   bool get isVerified => user?.isVerified ?? false;
 
   AuthSession copyWith({AuthUser? user, String? token}) {
-    return AuthSession(
-      user: user ?? this.user,
-      token: token ?? this.token,
-    );
+    return AuthSession(user: user ?? this.user, token: token ?? this.token);
   }
 
   static const empty = AuthSession(user: null, token: '');

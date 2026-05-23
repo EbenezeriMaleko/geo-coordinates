@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -21,7 +22,13 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  bool _keepScreenOn = false;
+  late final Future<PackageInfo> _packageInfoFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _packageInfoFuture = PackageInfo.fromPlatform();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,40 +57,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           _sectionDivider(),
 
-          _sectionHeader('General', theme),
-          _switchItem(
-            title: 'Keep screen on',
-            value: _keepScreenOn,
-            onChanged: (value) => setState(() => _keepScreenOn = value),
-          ),
-          _item(
-            title: 'App language',
-            subtitle: 'English',
-            onTap: _comingSoon('App language'),
-          ),
-          _sectionDivider(),
-
           _sectionHeader('Location Settings', theme),
           _item(
             title: 'Coordinates format',
             subtitle: selectedFormat.displayName,
             onTap: _showCoordinateFormatSelector,
           ),
-          _item(
-            title: 'Location accuracy',
-            subtitle: 'High accuracy',
-            onTap: _comingSoon('Location accuracy'),
-          ),
+
           _item(
             title: 'Reference ellipsoid',
             subtitle: selectedEllipsoid.displayName,
             onTap: _showReferenceEllipsoidSelector,
           ),
-          _item(
-            title: 'Location provider',
-            subtitle: 'Fused',
-            onTap: _comingSoon('Location provider'),
-          ),
+
           _sectionDivider(),
 
           _sectionHeader('Units', theme),
@@ -126,14 +112,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             subtitle: '[Combined, Basic, Text, Photo]',
             onTap: _comingSoon('View modes'),
           ),
-          _sectionDivider(),
 
-          _sectionHeader('Compass', theme),
-          _item(
-            title: 'Compass mode',
-            subtitle: 'True north',
-            onTap: _comingSoon('Compass mode'),
-          ),
           _sectionDivider(),
 
           _sectionHeader('Other', theme),
@@ -157,8 +136,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           _item(
             title: 'Version',
-            subtitle: '1.0.0+1',
-            onTap: _comingSoon('Version'),
+            subtitleWidget: FutureBuilder<PackageInfo>(
+              future: _packageInfoFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Text(
+                    'Loading version...',
+                    style: TextStyle(fontSize: 14, color: Colors.black54),
+                  );
+                }
+
+                final info = snapshot.data;
+                if (info == null) {
+                  return const Text(
+                    'Version unavailable',
+                    style: TextStyle(fontSize: 14, color: Colors.black54),
+                  );
+                }
+
+                return Text(
+                  '${info.version}+${info.buildNumber}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black54),
+                );
+              },
+            ),
+            onTap: _showVersionDetails,
           ),
         ],
       ),
@@ -181,6 +183,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget _item({
     required String title,
     String? subtitle,
+    Widget? subtitleWidget,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -198,7 +201,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 color: Colors.black87,
               ),
             ),
-            if (subtitle != null) ...[
+            if (subtitleWidget != null) ...[
+              const SizedBox(height: 3),
+              subtitleWidget,
+            ] else if (subtitle != null) ...[
               const SizedBox(height: 3),
               Text(
                 subtitle,
@@ -274,6 +280,63 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         context,
       ).showSnackBar(SnackBar(content: Text('$feature - Coming soon')));
     };
+  }
+
+  void _showVersionDetails() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: FutureBuilder<PackageInfo>(
+              future: _packageInfoFuture,
+              builder: (context, snapshot) {
+                final info = snapshot.data;
+                final versionText = info == null
+                    ? 'Loading version...'
+                    : '${info.version}+${info.buildNumber}';
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Version',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      versionText,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      snapshot.connectionState == ConnectionState.waiting
+                          ? 'Reading build metadata from the app package...'
+                          : 'This comes from the installed app metadata.',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _clearCache() {

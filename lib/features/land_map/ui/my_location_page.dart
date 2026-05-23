@@ -368,6 +368,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
     if (await source.exists()) {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final keepOriginal = ref.read(saveOriginalPhotoProvider);
       final ext = capture.mediaType == 'video'
           ? _fileExtension(capture.imagePath)
           : '.png';
@@ -378,6 +379,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       final destination = File('${photosDir.path}/$fileName');
       final copied = capture.mediaType == 'video'
           ? await source.copy(destination.path)
+          : keepOriginal
+          ? await source.copy(destination.path)
           : await _copyImageWithLocationOverlay(
               source: source,
               destination: destination,
@@ -385,8 +388,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
             );
       storedPath = copied.path;
 
-      final keepOriginal = ref.read(saveOriginalPhotoProvider);
-      if (!keepOriginal && source.path != copied.path) {
+      if (source.path != copied.path) {
         try {
           await source.delete();
         } catch (_) {

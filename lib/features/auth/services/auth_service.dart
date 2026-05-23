@@ -147,6 +147,36 @@ class AuthService {
     );
   }
 
+  Future<MessageResponse> requestAccountDeletion(
+    String bearerToken,
+    AccountDeletionRequest request,
+  ) async {
+    return _performMessageRequest(
+      () => ApiClient.postJson(
+        '/auth/account-deletion/request',
+        body: request.toJson(),
+        bearerToken: bearerToken,
+        tag: 'auth_account_deletion_request',
+      ),
+      fallbackError: 'Failed to request account deletion.',
+    );
+  }
+
+  Future<MessageResponse> confirmAccountDeletion(
+    String bearerToken,
+    AccountDeletionConfirmRequest request,
+  ) async {
+    return _performMessageRequest(
+      () => ApiClient.postJson(
+        '/auth/account-deletion/confirm',
+        body: request.toJson(),
+        bearerToken: bearerToken,
+        tag: 'auth_account_deletion_confirm',
+      ),
+      fallbackError: 'Failed to confirm account deletion.',
+    );
+  }
+
   Future<AuthResponse> _performAuthRequest(
     Future<dynamic> Function() request, {
     required String fallbackError,

@@ -39,7 +39,10 @@ class _MainNavigationState extends State<MainNavigation> {
   static const Duration _syncInterval = Duration(seconds: 60);
 
   late final List<Widget> _pages = [
-    LandMapPage(bottomInset: _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom),
+    LandMapPage(
+      bottomInset:
+          _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom,
+    ),
     MyLocationPage(
       onRefresh: _refreshMyLocation,
       onMenuAction: _handleMyLocationMenu,
@@ -192,12 +195,8 @@ class _MainNavigationState extends State<MainNavigation> {
       ..writeln('My current location')
       ..writeln('Latitude: ${current.latitude.toStringAsFixed(6)}')
       ..writeln('Longitude: ${current.longitude.toStringAsFixed(6)}')
-      ..writeln(
-        'Easting: ${utm?.easting.toStringAsFixed(2) ?? '—'}',
-      )
-      ..writeln(
-        'Northing: ${utm?.northing.toStringAsFixed(2) ?? '—'}',
-      )
+      ..writeln('Easting: ${utm?.easting.toStringAsFixed(2) ?? '—'}')
+      ..writeln('Northing: ${utm?.northing.toStringAsFixed(2) ?? '—'}')
       ..writeln('UTM Zone: ${utm?.zone ?? '—'}')
       ..writeln(
         'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
@@ -297,19 +296,21 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: _currentIndex == 0 || _currentIndex == 1 ? null : AppBar(
-        title: Text(
-          _appBarTitleText(),
-          style: const TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
-        actions: _buildAppBarActions(),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
+      appBar: _currentIndex == 0 || _currentIndex == 1
+          ? null
+          : AppBar(
+              title: Text(
+                _appBarTitleText(),
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                ),
+              ),
+              actions: _buildAppBarActions(),
+              backgroundColor: Colors.white,
+              elevation: 0,
+            ),
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: Container(
         height: _bottomNavHeight + MediaQuery.of(context).padding.bottom,
@@ -361,7 +362,6 @@ class _MainNavigationState extends State<MainNavigation> {
     );
   }
 }
-
 
 class _BottomNavItem extends StatelessWidget {
   final String label;

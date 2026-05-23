@@ -514,7 +514,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return total;
   }
 
-  String _formatDistance(double meters) {
+  String _formatDistance(double meters, DistanceUnit unit) {
+    if (unit == DistanceUnit.feet) {
+      return '${(meters * 3.28084).toStringAsFixed(1)} ft';
+    }
     if (meters >= 1000) {
       return '${(meters / 1000).toStringAsFixed(2)} km';
     }
@@ -1048,6 +1051,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     super.build(context);
     final st = ref.watch(landMapProvider);
     final coordinateFormat = ref.watch(coordinateFormatProvider);
+    final distanceUnit = ref.watch(distanceUnitProvider);
     final referenceEllipsoid = ref.watch(referenceEllipsoidProvider);
     final utmText = st.current == null
         ? null
@@ -1383,7 +1387,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                           ),
                         if (st.current != null)
                           Text(
-                            '${referenceEllipsoid.displayName} • Accuracy: ${(st.accuracyMeters ?? 0).toStringAsFixed(1)}m',
+                            '${referenceEllipsoid.displayName} • Accuracy: ${st.accuracyMeters == null ? '—' : _formatDistance(st.accuracyMeters!, distanceUnit)}',
                             style: TextStyle(
                               fontSize: 10,
                               color: Colors.grey.shade600,
@@ -1864,6 +1868,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             return Consumer(
               builder: (context, ref, child) {
                 final mapState = ref.watch(landMapProvider);
+                final distanceUnit = ref.watch(distanceUnitProvider);
                 final pointsCount = mapState.points.length;
                 final perimeter = _calculatePerimeterMeters(mapState.points);
                 final area = _calculateAreaSqm(mapState.points);
@@ -2118,7 +2123,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'Perimeter: ${_formatDistance(perimeter)}',
+                                    'Perimeter: ${_formatDistance(perimeter, distanceUnit)}',
                                     style: const TextStyle(fontSize: 12),
                                   ),
                                   Text(
@@ -2271,6 +2276,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _optionalTrim(Hive.box('landbox').get('submit_phone')?.toString()) ??
         '';
     _descriptionController.clear();
+    final distanceUnit = ref.read(distanceUnitProvider);
 
     showModalBottomSheet<void>(
       context: context,
@@ -2362,7 +2368,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${_distancePoints.length} points • ${_formatDistance(totalDistance)}',
+                          '${_distancePoints.length} points • ${_formatDistance(totalDistance, distanceUnit)}',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -2531,7 +2537,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       icon = Icons.straighten;
       label = _distancePoints.isEmpty
           ? 'Distance — tap map or Mark GPS'
-          : _formatDistance(_totalDistanceMeters());
+          : _formatDistance(
+              _totalDistanceMeters(),
+              ref.read(distanceUnitProvider),
+            );
       onDismiss = () => setState(() => _activeTool = _MapTool.none);
     }
 
@@ -2610,11 +2619,15 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final distanceText = _isFetchingRoute
         ? 'Calculating route...'
         : _currentRoute != null
-        ? _currentRoute!.formattedDistance
+        ? _formatDistance(
+            _currentRoute!.distanceMeters,
+            ref.read(distanceUnitProvider),
+          )
         : current == null
         ? 'Waiting for location'
         : _formatDistance(
             _distanceCalculator.as(LengthUnit.Meter, current, guidancePoint),
+            ref.read(distanceUnitProvider),
           );
 
     final durationText = _currentRoute != null

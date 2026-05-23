@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 
 import '../providers/auth_provider.dart';
 import 'forgot_password_page.dart';
@@ -20,10 +21,16 @@ class AccountPage extends ConsumerWidget {
       backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
-          icon: const HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01, color: Colors.black87),
+          icon: const HugeIcon(
+            icon: HugeIcons.strokeRoundedArrowLeft01,
+            color: Colors.black87,
+          ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        title: Text('Account', style: GoogleFonts.inter(color: Colors.black87, fontSize: 18)),
+        title: Text(
+          'Account',
+          style: GoogleFonts.inter(color: Colors.black87, fontSize: 18),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -39,7 +46,11 @@ class AccountPage extends ConsumerWidget {
                   );
                 }
               },
-              icon: const HugeIcon(icon: HugeIcons.strokeRoundedRefresh, color: Colors.black87, size: 20,),
+              icon: const HugeIcon(
+                icon: HugeIcons.strokeRoundedRefresh,
+                color: Colors.black87,
+                size: 20,
+              ),
             ),
         ],
       ),
@@ -138,8 +149,14 @@ class AccountPage extends ConsumerWidget {
                         ).showSnackBar(SnackBar(content: Text(result.message)));
                       },
                 trailing: session.isVerified
-                    ? const HugeIcon(icon: HugeIcons.strokeRoundedCheckmarkCircle01, color: Colors.green)
-                    : const HugeIcon(icon: HugeIcons.strokeRoundedArrowRight01, color: Colors.black45),
+                    ? const HugeIcon(
+                        icon: HugeIcons.strokeRoundedCheckmarkCircle01,
+                        color: Colors.green,
+                      )
+                    : const HugeIcon(
+                        icon: HugeIcons.strokeRoundedArrowRight01,
+                        color: Colors.black45,
+                      ),
               ),
             ),
             const SizedBox(height: 16),
@@ -156,7 +173,25 @@ class AccountPage extends ConsumerWidget {
                   );
                 },
                 titleColor: Colors.red,
-                trailing: const HugeIcon(icon: HugeIcons.strokeRoundedLogout01, color: Colors.red),
+                trailing: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedLogout01,
+                  color: Colors.red,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const _SectionLabel('Danger zone'),
+            _PanelCard(
+              child: _ActionTile(
+                title: 'Delete account',
+                subtitle:
+                    'Permanently delete your account. You will need your password and email access to confirm.',
+                onTap: () => _showDeleteAccountSheet(context),
+                titleColor: const Color(0xFFB42318),
+                trailing: const Icon(
+                  Icons.delete_forever_outlined,
+                  color: Color(0xFFB42318),
+                ),
               ),
             ),
           ],
@@ -183,46 +218,16 @@ class AccountPage extends ConsumerWidget {
     );
   }
 
-  static Widget _divider() => Divider(height: 1, color: Colors.grey.shade300);
-}
-
-class _HeroCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-
-  const _HeroCard({required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF001F3F),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 21,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.82),
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
+  Future<void> _showDeleteAccountSheet(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _DeleteAccountSheet(),
     );
   }
+
+  static Widget _divider() => Divider(height: 1, color: Colors.grey.shade300);
 }
 
 class _ProfileCard extends StatelessWidget {
@@ -347,18 +352,12 @@ class _PanelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return Material(
+      color: Colors.white,
+      elevation: 0,
+      shadowColor: Colors.black.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
       child: child,
     );
   }
@@ -659,6 +658,362 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
         onPressed: toggle,
         icon: Icon(
           obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
+      ),
+    );
+  }
+}
+
+enum _AccountDeletionStage { request, confirm }
+
+class _DeleteAccountSheet extends ConsumerStatefulWidget {
+  const _DeleteAccountSheet();
+
+  @override
+  ConsumerState<_DeleteAccountSheet> createState() =>
+      _DeleteAccountSheetState();
+}
+
+class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
+  final _requestFormKey = GlobalKey<FormState>();
+  final _confirmFormKey = GlobalKey<FormState>();
+  late final TextEditingController _passwordController;
+  late final TextEditingController _codeController;
+  bool _obscurePassword = true;
+  _AccountDeletionStage _stage = _AccountDeletionStage.request;
+  String? _bannerMessage;
+  bool _bannerIsError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController = TextEditingController();
+    _codeController = TextEditingController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(accountDeletionProvider.notifier).reset();
+    });
+  }
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _requestCode() async {
+    if (!(_requestFormKey.currentState?.validate() ?? false)) return;
+
+    final response = await ref
+        .read(accountDeletionProvider.notifier)
+        .requestDeletion(password: _passwordController.text);
+
+    if (!mounted || response == null) return;
+
+    setState(() {
+      _bannerMessage = response.message;
+      _bannerIsError = !response.success;
+    });
+
+    if (response.success) {
+      setState(() {
+        _stage = _AccountDeletionStage.confirm;
+      });
+      _passwordController.clear();
+      _codeController.clear();
+      return;
+    }
+  }
+
+  Future<void> _confirmDeletion() async {
+    if (!(_confirmFormKey.currentState?.validate() ?? false)) return;
+
+    final response = await ref
+        .read(accountDeletionProvider.notifier)
+        .confirmDeletion(code: _codeController.text);
+
+    if (!mounted || response == null) return;
+
+    setState(() {
+      _bannerMessage = response.message;
+      _bannerIsError = !response.success;
+    });
+
+    if (!response.success) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(authSessionProvider.notifier).clearLocalSession();
+    ref.read(accountDeletionProvider.notifier).reset();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    messenger.showSnackBar(SnackBar(content: Text(response.message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(accountDeletionProvider);
+    final isLoading = state.isLoading;
+    final providerError = state.hasError ? state.error.toString() : null;
+    final session = ref.watch(authSessionProvider);
+    final email = session.user?.email ?? '';
+    final bannerText = _bannerIsError
+        ? (providerError ?? _bannerMessage)
+        : (_bannerMessage ?? providerError);
+
+    return _SheetFrame(
+      title: 'Delete account',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1F0),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFFECACA)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Color(0xFFB42318),
+                  size: 24,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'This action is irreversible. All tokens will be revoked and your account data will be deleted after code confirmation.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: const Color(0xFF7A271A),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _StepChip(
+                  label: '1 Request code',
+                  active: _stage == _AccountDeletionStage.request,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _StepChip(
+                  label: '2 Confirm deletion',
+                  active: _stage == _AccountDeletionStage.confirm,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (bannerText != null) ...[
+            _SheetError(message: bannerText),
+            const SizedBox(height: 14),
+          ],
+          Text(
+            'Email address',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Text(
+              email.isEmpty ? 'No email found' : email,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: _stage == _AccountDeletionStage.request
+                ? Form(
+                    key: _requestFormKey,
+                    child: Column(
+                      key: const ValueKey('request-stage'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          autofillHints: const [AutofillHints.password],
+                          decoration: InputDecoration(
+                            labelText: 'Current password',
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (value) => value == null || value.isEmpty
+                              ? 'Current password is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'A verification code will be sent to your email address. The request is throttled to 3 times per minute.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            height: 1.45,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: isLoading ? null : _requestCode,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFB42318),
+                              foregroundColor: Colors.white,
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Send verification code'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Form(
+                    key: _confirmFormKey,
+                    child: Column(
+                      key: const ValueKey('confirm-stage'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextFormField(
+                          controller: _codeController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(6),
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Verification code',
+                            prefixIcon: Icon(Icons.pin_outlined),
+                            helperText:
+                                'Enter the 6-digit code sent to your email.',
+                          ),
+                          validator: (value) =>
+                              value == null || value.trim().length != 6
+                              ? 'Enter the 6-digit verification code'
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'The confirm request is throttled to 6 times per minute.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            height: 1.45,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: isLoading ? null : _confirmDeletion,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFB42318),
+                              foregroundColor: Colors.white,
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Delete my account'),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextButton(
+                          onPressed: isLoading
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _stage = _AccountDeletionStage.request;
+                                    _bannerMessage = null;
+                                    _bannerIsError = false;
+                                  });
+                                  _codeController.clear();
+                                },
+                          child: const Text('Back to password step'),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepChip extends StatelessWidget {
+  final String label;
+  final bool active;
+
+  const _StepChip({required this.label, required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFFFF1F0) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active ? const Color(0xFFFECACA) : Colors.grey.shade300,
+        ),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: active ? const Color(0xFFB42318) : Colors.black54,
         ),
       ),
     );
