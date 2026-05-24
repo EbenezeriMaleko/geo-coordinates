@@ -313,7 +313,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       };
       await box.put(id, payload);
       if (!mounted) return;
-      await _loadSavedMarkers();
+      setState(() {
+        _activeTool = _MapTool.none;
+      });
       _snack('Location saved locally. Sync queued.');
     } finally {
       if (mounted) {
