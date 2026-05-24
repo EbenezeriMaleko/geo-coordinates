@@ -178,6 +178,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
     String? place,
     String? phone,
     String? description,
+    List<String>? pointLabels,
   }) async {
     if (state.points.length < 3) {
       return 'Add at least 3 points to form a land boundary.';
@@ -192,6 +193,10 @@ class LandMapNotifier extends Notifier<LandMapState> {
       final placeValue = place?.trim() ?? '';
       final phoneValue = phone?.trim() ?? '';
       final descriptionValue = description?.trim() ?? '';
+      final normalizedLabels = _normalizePointLabels(
+        pointLabels,
+        state.points.length,
+      );
       final pointsPayload = state.points
           .asMap()
           .entries
@@ -200,14 +205,10 @@ class LandMapNotifier extends Notifier<LandMapState> {
               'order': e.key,
               'lat': e.value.latitude,
               'lng': e.value.longitude,
-              'label': '${e.key + 1}',
+              'label': normalizedLabels[e.key],
             },
           )
           .toList();
-      final pointLabels = List<String>.generate(
-        state.points.length,
-        (index) => '${index + 1}',
-      );
 
       if (state.activeFieldId != null) {
         final existing = await repo.getById(state.activeFieldId!);
@@ -226,7 +227,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'updatedAt': now.toIso8601String(),
           'syncStatus': 'pending',
           'points': pointsPayload,
-          'labels': pointLabels,
+          'labels': normalizedLabels,
         };
         if (placeValue.isNotEmpty) {
           updated['place'] = placeValue;
@@ -256,7 +257,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'createdAt': now.toIso8601String(),
           'syncStatus': 'pending',
           'points': pointsPayload,
-          'labels': pointLabels,
+          'labels': normalizedLabels,
         };
         if (placeValue.isNotEmpty) {
           payload['place'] = placeValue;
@@ -277,6 +278,16 @@ class LandMapNotifier extends Notifier<LandMapState> {
     } finally {
       state = state.copyWith(isSaving: false);
     }
+  }
+
+  List<String> _normalizePointLabels(List<String>? labels, int count) {
+    return List<String>.generate(count, (index) {
+      if (labels == null || index >= labels.length) {
+        return '${index + 1}';
+      }
+      final value = labels[index].trim();
+      return value.isEmpty ? '${index + 1}' : value;
+    });
   }
 
   /// Transform all coordinates in the land map state
