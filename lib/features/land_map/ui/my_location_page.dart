@@ -515,20 +515,20 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         return source.copy(destination.path);
       }
 
-     final command =
-         '-y '
-         '-i ${_ffmpegQuotePath(source.path)} '
-        '-i ${_ffmpegQuotePath(overlayCard.path)} '
-        '-filter_complex '
-        '"[1:v]scale=350:-1[overlay];'
-        '[0:v][overlay]overlay=x=W-w-34:y=H-h-34" '
-        '-map 0:v:0 '
-        '-map 0:a? '
-        '-c:v mpeg4 '
-        '-b:v 2500k '
-        '-pix_fmt yuv420p '
-        '-c:a aac '
-        '${_ffmpegQuotePath(tempOutput.path)}';
+      final command =
+          '-y '
+          '-i ${_ffmpegQuotePath(source.path)} '
+          '-i ${_ffmpegQuotePath(overlayCard.path)} '
+          '-filter_complex '
+          '"[1:v]scale=350:-1[overlay];'
+          '[0:v][overlay]overlay=x=W-w-34:y=H-h-34" '
+          '-map 0:v:0 '
+          '-map 0:a? '
+          '-c:v mpeg4 '
+          '-b:v 2500k '
+          '-pix_fmt yuv420p '
+          '-c:a aac '
+          '${_ffmpegQuotePath(tempOutput.path)}';
       final session = await FFmpegKit.execute(command);
       final rc = await session.getReturnCode();
       _debugLog('FFmpeg return code: ${rc?.getValue()}');
@@ -1289,82 +1289,241 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
     final pos = capture.position;
     final placemarkText = _formatPlacemark(capture.placemark);
     final date = capture.capturedAt;
+    final title = capture.name.isEmpty ? 'GPS media details' : capture.name;
     final when =
         '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}';
     final utmText = pos == null
         ? '—'
         : _formatUtmCoordinate(pos.latitude, pos.longitude, referenceEllipsoid);
+    final accuracyText = pos == null
+        ? '—'
+        : '${pos.accuracy.toStringAsFixed(1)} m';
+    final altitudeText = pos == null
+        ? '—'
+        : '${pos.altitude.toStringAsFixed(1)} m';
+    final speedText = pos == null ? '—' : '${pos.speed.toStringAsFixed(2)} m/s';
+    final headingText = pos == null
+        ? '—'
+        : '${pos.heading.toStringAsFixed(1)}°';
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          Center(
-            child: Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            capture.name.isEmpty ? 'GPS media details' : capture.name,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: SizedBox(
-              height: 420,
-              width: double.infinity,
-              child: _GeoPhotoCanvas(
-                imagePath: capture.imagePath,
-                name: capture.name,
-                mediaType: capture.mediaType,
-                lines: _buildOverlayLines(
-                  capture: capture,
-                  coordinateFormat: coordinateFormat,
-                  referenceEllipsoid: referenceEllipsoid,
-                  unit: distanceUnit,
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
               ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          when,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    color: Colors.black54,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MetaChip(
+                    label: capture.mediaType == 'video' ? 'Video' : 'Photo',
+                    icon: capture.mediaType == 'video'
+                        ? Icons.videocam
+                        : Icons.photo_camera,
+                  ),
+                  _MetaChip(
+                    label: 'Accuracy $accuracyText',
+                    icon: Icons.gps_fixed,
+                  ),
+                  _MetaChip(
+                    label: 'Altitude $altitudeText',
+                    icon: Icons.landscape,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: SizedBox(
+                    height: 360,
+                    width: double.infinity,
+                    child: _GeoPhotoCanvas(
+                      imagePath: capture.imagePath,
+                      name: capture.name,
+                      mediaType: capture.mediaType,
+                      lines: _buildOverlayLines(
+                        capture: capture,
+                        coordinateFormat: coordinateFormat,
+                        referenceEllipsoid: referenceEllipsoid,
+                        unit: distanceUnit,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _DetailSection(
+                title: 'Coordinates',
+                children: [
+                  _DetailRow(label: 'Lat/Lon', value: formattedCoordinates),
+                  _DetailRow(label: 'UTM', value: utmText),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _DetailSection(
+                title: 'Motion',
+                children: [
+                  _DetailRow(label: 'Speed', value: speedText),
+                  _DetailRow(label: 'Heading', value: headingText),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _DetailSection(
+                title: 'Reference',
+                children: [
+                  _DetailRow(
+                    label: 'Ellipsoid',
+                    value: referenceEllipsoid.displayName,
+                  ),
+                  _DetailRow(label: 'Captured at', value: when),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _DetailSection(
+                title: 'Address',
+                children: [
+                  _DetailRow(label: 'Location', value: placemarkText),
+                  if (capture.locationError != null)
+                    _DetailRow(
+                      label: 'Location note',
+                      value: capture.locationError!,
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _DetailSection({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.black54,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
             ),
           ),
-          const SizedBox(height: 14),
-          _DetailRow(label: 'Captured at', value: when),
-          _DetailRow(
-            label: 'Reference ellipsoid',
-            value: referenceEllipsoid.displayName,
+          const SizedBox(height: 8),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+
+  const _MetaChip({required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.black54),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          _DetailRow(label: 'Coordinates', value: formattedCoordinates),
-          _DetailRow(label: 'UTM', value: utmText),
-          _DetailRow(label: 'Media type', value: capture.mediaType),
-          _DetailRow(
-            label: 'Accuracy',
-            value: pos == null ? '—' : '${pos.accuracy.toStringAsFixed(1)} m',
-          ),
-          _DetailRow(
-            label: 'Altitude',
-            value: pos == null ? '—' : '${pos.altitude.toStringAsFixed(1)} m',
-          ),
-          _DetailRow(
-            label: 'Speed',
-            value: pos == null ? '—' : '${pos.speed.toStringAsFixed(2)} m/s',
-          ),
-          _DetailRow(
-            label: 'Heading',
-            value: pos == null ? '—' : '${pos.heading.toStringAsFixed(1)}°',
-          ),
-          _DetailRow(label: 'Address', value: placemarkText),
-          if (capture.locationError != null)
-            _DetailRow(label: 'Location note', value: capture.locationError!),
         ],
       ),
     );
@@ -1789,24 +1948,33 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                           icon: Icons.close,
                           onTap: () => Navigator.of(context).pop(),
                         ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            _capturedPhoto == null ? 'GPS Camera' : 'Preview',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
+                        Expanded(
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.42),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Text(
+                                _capturedPhoto == null
+                                    ? 'GPS Camera'
+                                    : 'Preview',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                        const SizedBox(width: 46, height: 46),
                       ],
                     ),
                   ),
@@ -1817,167 +1985,256 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_locationError != null) ...[
-                          Text(
-                            _locationError!,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w600,
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.15),
                             ),
-                            textAlign: TextAlign.center,
                           ),
-                        ],
-                        const SizedBox(height: 18),
-                        if (_capturedPhoto == null)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              ChoiceChip(
-                                label: const Text('Photo'),
-                                selected: !_videoMode,
-                                onSelected: (_) {
-                                  if (_isRecordingVideo) return;
-                                  setState(() => _videoMode = false);
-                                },
-                                selectedColor: Colors.white,
-                                labelStyle: TextStyle(
-                                  color: !_videoMode
-                                      ? Colors.black87
-                                      : Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                backgroundColor: Colors.white.withValues(
-                                  alpha: 0.14,
-                                ),
-                                side: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.45),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              ChoiceChip(
-                                label: const Text('Video'),
-                                selected: _videoMode,
-                                onSelected: (_) {
-                                  if (_isRecordingVideo) return;
-                                  setState(() => _videoMode = true);
-                                },
-                                selectedColor: Colors.white,
-                                labelStyle: TextStyle(
-                                  color: _videoMode
-                                      ? Colors.black87
-                                      : Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                backgroundColor: Colors.white.withValues(
-                                  alpha: 0.14,
-                                ),
-                                side: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.45),
-                                ),
-                              ),
-                            ],
-                          ),
-                        if (_capturedPhoto == null) const SizedBox(height: 18),
-                        if (_capturedPhoto == null)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              GestureDetector(
-                                onTap: _isTakingPhoto
-                                    ? null
-                                    : (_videoMode
-                                          ? (_isRecordingVideo
-                                                ? _stopVideoRecording
-                                                : _captureMedia)
-                                          : _captureMedia),
-                                child: Container(
-                                  width: 86,
-                                  height: 86,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 5,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Container(
-                                      width: 68,
-                                      height: 68,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: _isTakingPhoto
-                                          ? const Padding(
-                                              padding: EdgeInsets.all(20),
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2.5,
-                                              ),
-                                            )
-                                          : _isRecordingVideo
-                                          ? Center(
-                                              child: Container(
-                                                width: 26,
-                                                height: 26,
-                                                decoration: BoxDecoration(
-                                                  color: const Color(
-                                                    0xFFC94835,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                ),
-                                              ),
-                                            )
-                                          : Icon(
-                                              _videoMode
-                                                  ? Icons.videocam
-                                                  : Icons.photo_camera,
-                                              color: _videoMode
-                                                  ? const Color(0xFFC94835)
-                                                  : Colors.black87,
-                                              size: 30,
-                                            ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _retake,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                    side: const BorderSide(
+                              if (_locationError != null)
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.info_outline,
                                       color: Colors.white70,
+                                      size: 16,
                                     ),
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _locationError!,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              if (_locationError != null)
+                                const SizedBox(height: 12),
+                              if (_capturedPhoto == null)
+                                Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.25,
+                                      ),
                                     ),
                                   ),
-                                  child: const Text('Retake'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: _save,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF0C8A8C),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: _isRecordingVideo
+                                              ? null
+                                              : () => setState(
+                                                  () => _videoMode = false,
+                                                ),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: !_videoMode
+                                                  ? Colors.white
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              'Photo',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: !_videoMode
+                                                    ? Colors.black87
+                                                    : Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: _isRecordingVideo
+                                              ? null
+                                              : () => setState(
+                                                  () => _videoMode = true,
+                                                ),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _videoMode
+                                                  ? Colors.white
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              'Video',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: _videoMode
+                                                    ? Colors.black87
+                                                    : Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  child: const Text('Save'),
                                 ),
-                              ),
+                              if (_capturedPhoto == null)
+                                const SizedBox(height: 16),
+                              if (_capturedPhoto == null)
+                                Column(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: _isTakingPhoto
+                                          ? null
+                                          : (_videoMode
+                                                ? (_isRecordingVideo
+                                                      ? _stopVideoRecording
+                                                      : _captureMedia)
+                                                : _captureMedia),
+                                      child: Container(
+                                        width: 92,
+                                        height: 92,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 4,
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Container(
+                                            width: 72,
+                                            height: 72,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.2),
+                                                  blurRadius: 12,
+                                                  offset: const Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: _isTakingPhoto
+                                                ? const Padding(
+                                                    padding: EdgeInsets.all(20),
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2.5,
+                                                        ),
+                                                  )
+                                                : _isRecordingVideo
+                                                ? Center(
+                                                    child: Container(
+                                                      width: 26,
+                                                      height: 26,
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(
+                                                          0xFFC94835,
+                                                        ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              6,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    _videoMode
+                                                        ? Icons.videocam
+                                                        : Icons.photo_camera,
+                                                    color: _videoMode
+                                                        ? const Color(
+                                                            0xFFC94835,
+                                                          )
+                                                        : Colors.black87,
+                                                    size: 30,
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      _isRecordingVideo
+                                          ? 'Recording... Tap to stop'
+                                          : _videoMode
+                                          ? 'Tap to record video'
+                                          : 'Tap to capture photo',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              else
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: _retake,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                          side: const BorderSide(
+                                            color: Colors.white70,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
+                                        ),
+                                        child: const Text('Retake'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: _save,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(
+                                            0xFF0C8A8C,
+                                          ),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
+                                        ),
+                                        child: const Text('Save'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -2581,12 +2838,12 @@ class _DetailRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 108,
+            width: 112,
             child: Text(
               label,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: Colors.black54,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

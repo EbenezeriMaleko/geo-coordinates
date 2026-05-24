@@ -388,6 +388,10 @@ class _LocationMediaViewerPageState
     final addressText = _cloudAddressText(item);
     final coordinateText = _cloudCoordinateText(item, coordinateFormat);
     final utmText = _cloudUtmText(item, referenceEllipsoid);
+    final titleText = placeText == '—' ? 'Saved location' : placeText;
+    final subtitleText = coordinateText == '—'
+        ? 'Coordinates unavailable'
+        : coordinateText;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -414,104 +418,157 @@ class _LocationMediaViewerPageState
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.5,
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    const ColoredBox(color: Colors.black),
-                    item.isVideo
-                        ? _loadingVideo || _videoController == null
-                              ? const ColoredBox(
-                                  color: Colors.black,
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                )
-                              : FittedBox(
-                                  fit: BoxFit.contain,
-                                  child: SizedBox(
-                                    width: _videoController!.value.size.width,
-                                    height: _videoController!.value.size.height,
-                                    child: VideoPlayer(_videoController!),
-                                  ),
-                                )
-                        : Image.network(
-                            item.resolvedUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                                  color: Colors.black12,
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.broken_image_outlined,
-                                      size: 42,
+                borderRadius: BorderRadius.circular(20),
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(context).height * 0.46,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const ColoredBox(color: Colors.black),
+                      item.isVideo
+                          ? _loadingVideo || _videoController == null
+                                ? const ColoredBox(
+                                    color: Colors.black,
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  )
+                                : FittedBox(
+                                    fit: BoxFit.contain,
+                                    child: SizedBox(
+                                      width: _videoController!.value.size.width,
+                                      height:
+                                          _videoController!.value.size.height,
+                                      child: VideoPlayer(_videoController!),
+                                    ),
+                                  )
+                          : Image.network(
+                              item.resolvedUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                    color: Colors.black12,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.broken_image_outlined,
+                                        size: 42,
+                                      ),
                                     ),
                                   ),
-                                ),
-                          ),
-                    if (item.isVideo && _videoController != null)
-                      Positioned(
-                        left: 14,
-                        right: 14,
-                        bottom: 16,
-                        child: VideoProgressIndicator(
-                          _videoController!,
-                          allowScrubbing: true,
-                          colors: const VideoProgressColors(
-                            playedColor: Colors.white,
-                            bufferedColor: Colors.white38,
-                            backgroundColor: Colors.white12,
+                            ),
+                      if (item.isVideo && _videoController != null)
+                        Positioned(
+                          left: 14,
+                          right: 14,
+                          bottom: 16,
+                          child: VideoProgressIndicator(
+                            _videoController!,
+                            allowScrubbing: true,
+                            colors: const VideoProgressColors(
+                              playedColor: Colors.white,
+                              bufferedColor: Colors.white38,
+                              backgroundColor: Colors.white12,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              placeText == '—' ? 'Saved location' : placeText,
+              titleText,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              coordinateText == '—'
-                  ? 'Coordinates unavailable'
-                  : coordinateText,
+              subtitleText,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: Colors.black54,
               ),
             ),
             const SizedBox(height: 12),
-            _detailRow('Place', placeText),
-            _detailRow('Address', addressText),
-            _detailRow('Coordinates', coordinateText),
-            _detailRow('UTM', utmText),
-            _detailRow('Reference ellipsoid', referenceEllipsoid.displayName),
-            _detailRow('Coordinate format', coordinateFormat.displayName),
-            _detailRow('Media type', item.type.isEmpty ? 'media' : item.type),
-            _detailRow('MIME', item.mimeType.isEmpty ? '—' : item.mimeType),
-            _detailRow('Size', _fileSizeLabel(item.fileSize)),
-            _detailRow(
-              'File name',
-              item.fileName.isEmpty ? '—' : item.fileName,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _MediaMetaChip(
+                  label: item.type.isEmpty ? 'Media' : item.type,
+                  icon: item.isVideo ? Icons.videocam : Icons.photo,
+                ),
+                _MediaMetaChip(
+                  label: _fileSizeLabel(item.fileSize),
+                  icon: Icons.sd_storage,
+                ),
+                _MediaMetaChip(
+                  label: item.mimeType.isEmpty ? 'MIME —' : item.mimeType,
+                  icon: Icons.description,
+                ),
+              ],
             ),
-            _detailRow('Path', item.filePath.isEmpty ? '—' : item.filePath),
-            _detailRow(
-              'Location ID',
-              item.locationId.isEmpty ? '—' : item.locationId,
+            const SizedBox(height: 14),
+            _MediaSection(
+              title: 'Location',
+              children: [
+                _detailRow('Place', placeText),
+                _detailRow('Address', addressText),
+              ],
             ),
-            if (item.createdAt != null)
-              _detailRow('Created', _formatCloudDate(item.createdAt!)),
-            if (item.updatedAt != null)
-              _detailRow('Updated', _formatCloudDate(item.updatedAt!)),
             const SizedBox(height: 12),
-            if (item.isVideo && _videoController != null)
+            _MediaSection(
+              title: 'Coordinates',
+              children: [
+                _detailRow('Lat/Lon', coordinateText),
+                _detailRow('UTM', utmText),
+                _detailRow('Ellipsoid', referenceEllipsoid.displayName),
+                _detailRow('Format', coordinateFormat.displayName),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _MediaSection(
+              title: 'File',
+              children: [
+                _detailRow(
+                  'File name',
+                  item.fileName.isEmpty ? '—' : item.fileName,
+                ),
+                _detailRow('Path', item.filePath.isEmpty ? '—' : item.filePath),
+                _detailRow('MIME', item.mimeType.isEmpty ? '—' : item.mimeType),
+                _detailRow('Size', _fileSizeLabel(item.fileSize)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _MediaSection(
+              title: 'System',
+              children: [
+                _detailRow(
+                  'Location ID',
+                  item.locationId.isEmpty ? '—' : item.locationId,
+                ),
+                if (item.createdAt != null)
+                  _detailRow('Created', _formatCloudDate(item.createdAt!)),
+                if (item.updatedAt != null)
+                  _detailRow('Updated', _formatCloudDate(item.updatedAt!)),
+              ],
+            ),
+            if (item.isVideo && _videoController != null) ...[
+              const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: () {
                   final controller = _videoController!;
@@ -530,6 +587,7 @@ class _LocationMediaViewerPageState
                   _videoController!.value.isPlaying ? 'Pause' : 'Play',
                 ),
               ),
+            ],
           ],
         ),
       ),
@@ -537,6 +595,7 @@ class _LocationMediaViewerPageState
   }
 
   Widget _detailRow(String label, String value) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -546,13 +605,89 @@ class _LocationMediaViewerPageState
             width: 92,
             child: Text(
               label,
-              style: const TextStyle(
+              style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: Colors.black54,
               ),
             ),
           ),
-          Expanded(child: Text(value)),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MediaSection extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _MediaSection({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: Colors.black54,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _MediaMetaChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+
+  const _MediaMetaChip({required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.black54),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
