@@ -238,6 +238,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               (e) => _PlacedMarker(
                 id: e['id'].toString(),
                 point: _extractMarkerPoint(e),
+                label: _extractMarkerLabel(e),
                 createdAt: DateTime.tryParse(e['createdAt']?.toString() ?? ''),
               ),
             )
@@ -271,21 +272,36 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     );
   }
 
+  String _extractMarkerLabel(Map<String, dynamic> item) {
+    final direct = item['label']?.toString().trim() ?? '';
+    if (direct.isNotEmpty) return direct;
+
+    final labels = item['labels'];
+    if (labels is List && labels.isNotEmpty) {
+      final first = labels.first?.toString().trim() ?? '';
+      if (first.isNotEmpty) return first;
+    }
+    return '';
+  }
+
   Future<void> _addMarkerAt(LatLng point) async {
     if (_isMarkerSaving) return;
-    final name = await _promptMarkerName();
-    if (name == null) return;
+    final draft = await _promptMarkerDetails();
+    if (draft == null) return;
     setState(() => _isMarkerSaving = true);
     try {
       final box = Hive.box('landbox');
       final ellipsoid = ref.read(referenceEllipsoidProvider);
       final id = const Uuid().v4();
       final now = DateTime.now().toIso8601String();
+      final label = draft.label.trim();
       final payload = {
         'id': id,
         'entityType': 'point',
         'type': 'point',
-        'name': name,
+        'name': draft.name,
+        if (label.isNotEmpty) 'label': label,
+        if (label.isNotEmpty) 'labels': [label],
         'referenceEllipsoid': ellipsoid.name,
         'points': [
           {'order': 0, 'lat': point.latitude, 'lng': point.longitude},
@@ -306,9 +322,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }
   }
 
-  Future<String?> _promptMarkerName() async {
-    final controller = TextEditingController();
-    final result = await showModalBottomSheet<String>(
+  Future<_MarkerDraft?> _promptMarkerDetails() async {
+    final nameController = TextEditingController();
+    final labelController = TextEditingController();
+    final result = await showModalBottomSheet<_MarkerDraft>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -344,7 +361,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               ),
               const SizedBox(height: 4),
               Text(
-                'Give this location a name before saving.',
+                'Add location name and point label before saving.',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: Colors.grey.shade600,
@@ -352,19 +369,33 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               ),
               const SizedBox(height: 20),
               TextField(
-                controller: controller,
+                controller: nameController,
                 autofocus: true,
                 textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.done,
+                textInputAction: TextInputAction.next,
                 onSubmitted: (value) {
-                  final trimmed = value.trim();
-                  if (trimmed.isNotEmpty) {
-                    Navigator.of(sheetContext).pop(trimmed);
-                  }
+                  FocusScope.of(sheetContext).nextFocus();
                 },
                 decoration: _sheetInputDecoration(
                   hint: 'e.g. Home, Office, Farm Entrace',
                   icon: Icons.place_outlined,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: labelController,
+                textCapitalization: TextCapitalization.characters,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
+                  Navigator.of(sheetContext).pop(
+                    _MarkerDraft(name: name, label: labelController.text.trim()),
+                  );
+                },
+                decoration: _sheetInputDecoration(
+                  hint: 'Point label (e.g. A1, P1)',
+                  icon: Icons.label_outline,
                 ),
               ),
               const SizedBox(height: 16),
@@ -386,9 +417,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        final trimmed = controller.text.trim();
-                        if (trimmed.isNotEmpty) {
-                          Navigator.of(sheetContext).pop(trimmed);
+                        final name = nameController.text.trim();
+                        if (name.isNotEmpty) {
+                          Navigator.of(sheetContext).pop(
+                            _MarkerDraft(
+                              name: name,
+                              label: labelController.text.trim(),
+                            ),
+                          );
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -413,7 +449,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.dispose();
+      nameController.dispose();
+      labelController.dispose();
     });
     return result;
   }
@@ -1100,7 +1137,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             point: marker.point,
             child: GestureDetector(
               onTap: () => _showMarkerActions(marker),
-              child: const _SavedMarkerPin(),
+              child: _SavedMarkerPin(label: marker.label),
             ),
           ),
       if (navigationTarget != null && navigationTargetKind == 'point')
@@ -3025,10 +3062,16 @@ class _CurrentMarker extends StatelessWidget {
 }
 
 class _SavedMarkerPin extends StatelessWidget {
-  const _SavedMarkerPin();
+  final String label;
+
+  const _SavedMarkerPin({required this.label});
 
   @override
   Widget build(BuildContext context) {
+    final clean = label.trim();
+    final markerLabel = clean.isEmpty
+        ? ''
+        : clean.substring(0, min(2, clean.length)).toUpperCase();
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -3042,7 +3085,20 @@ class _SavedMarkerPin extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(Icons.push_pin, color: Colors.white, size: 20),
+      child: markerLabel.isEmpty
+          ? const Icon(Icons.push_pin, color: Colors.white, size: 20)
+          : Center(
+              child: Text(
+                markerLabel,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 10,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
     );
   }
 }
@@ -3159,13 +3215,22 @@ class _DistancePointMarker extends StatelessWidget {
 class _PlacedMarker {
   final String id;
   final LatLng point;
+  final String label;
   final DateTime? createdAt;
 
   const _PlacedMarker({
     required this.id,
     required this.point,
+    required this.label,
     required this.createdAt,
   });
+}
+
+class _MarkerDraft {
+  final String name;
+  final String label;
+
+  const _MarkerDraft({required this.name, required this.label});
 }
 
 class CompassWidget extends StatefulWidget {

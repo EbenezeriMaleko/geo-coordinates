@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class ApiClient {
-  static const String baseUrl = 'https://ardhi.co.tz/api/v1';
+  static const String baseUrl = 'http://10.160.38.178:8000/api/v1';
   static const Duration timeout = Duration(seconds: 30);
 
   static Uri uri(String path, {Map<String, dynamic>? queryParameters}) {

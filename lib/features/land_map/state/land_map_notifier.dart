@@ -200,9 +200,14 @@ class LandMapNotifier extends Notifier<LandMapState> {
               'order': e.key,
               'lat': e.value.latitude,
               'lng': e.value.longitude,
+              'label': '${e.key + 1}',
             },
           )
           .toList();
+      final pointLabels = List<String>.generate(
+        state.points.length,
+        (index) => '${index + 1}',
+      );
 
       if (state.activeFieldId != null) {
         final existing = await repo.getById(state.activeFieldId!);
@@ -221,6 +226,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'updatedAt': now.toIso8601String(),
           'syncStatus': 'pending',
           'points': pointsPayload,
+          'labels': pointLabels,
         };
         if (placeValue.isNotEmpty) {
           updated['place'] = placeValue;
@@ -250,6 +256,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'createdAt': now.toIso8601String(),
           'syncStatus': 'pending',
           'points': pointsPayload,
+          'labels': pointLabels,
         };
         if (placeValue.isNotEmpty) {
           payload['place'] = placeValue;

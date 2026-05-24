@@ -4,6 +4,9 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,6 +44,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
   static const String _latestPhotoKey = 'my_location_latest_photo';
   static const String _recentMediaKey = 'my_location_recent_media';
   static const String _photosDirName = 'geo_photos';
+  static const String _galleryAlbumName = 'TaREF GPS - Coordinates';
 
   StreamSubscription<Position>? _locationSubscription;
   late final LandMapNotifier _landMapNotifier;
@@ -322,6 +326,16 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     final locationService = LocationMediaService();
 
     try {
+      _debugLog(
+        'Uploading media: type=${capture.mediaType}, path=${capture.imagePath}',
+      );
+      final file = File(capture.imagePath);
+      if (await file.exists()) {
+        final size = await file.length();
+        _debugLog('Upload file size: $size bytes');
+      } else {
+        _debugLog('Upload file missing on disk.');
+      }
       final location = await locationService.createLocation(
         session.token,
         CreateLocationRequest(
@@ -341,16 +355,19 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         capture.imagePath,
         capture.mediaType,
       );
+      _debugLog('Upload finished. Location id=${location.id}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$mediaTypeName uploaded to cloud')),
       );
     } on AuthException catch (error) {
+      _debugLog('Upload auth error: ${error.message}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Saved locally: ${error.message}')),
       );
     } catch (e) {
+      _debugLog('Upload failed: $e');
       if (!mounted) return;
       final mediaTypeName = capture.mediaType == 'video' ? 'Video' : 'Photo';
       ScaffoldMessenger.of(context).showSnackBar(
@@ -378,7 +395,11 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           : '${safeName}_$timestamp$ext';
       final destination = File('${photosDir.path}/$fileName');
       final copied = capture.mediaType == 'video'
-          ? await source.copy(destination.path)
+          ? await _copyVideoWithLocationOverlay(
+              source: source,
+              destination: destination,
+              capture: capture,
+            )
           : keepOriginal
           ? await source.copy(destination.path)
           : await _copyImageWithLocationOverlay(
@@ -408,11 +429,11 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       final saved = capture.mediaType == 'video'
           ? await GallerySaver.saveVideo(
               capture.imagePath,
-              albumName: 'GeoCoordinates',
+              albumName: _galleryAlbumName,
             )
           : await GallerySaver.saveImage(
               capture.imagePath,
-              albumName: 'GeoCoordinates',
+              albumName: _galleryAlbumName,
             );
       if (!mounted) return;
       if (saved == true) {
@@ -478,6 +499,161 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     } catch (_) {
       return source.copy(destination.path);
     }
+  }
+
+  Future<File> _copyVideoWithLocationOverlay({
+    required File source,
+    required File destination,
+    required _GeoTaggedPhoto capture,
+  }) async {
+    File? overlayCard;
+    final tempOutput = File('${destination.path}.processing.mp4');
+    try {
+      overlayCard = await _createVideoOverlayCard(capture: capture);
+      if (overlayCard == null || !await overlayCard.exists()) {
+        _debugLog('Video overlay card missing. Using original video.');
+        return source.copy(destination.path);
+      }
+
+     final command =
+         '-y '
+         '-i ${_ffmpegQuotePath(source.path)} '
+        '-i ${_ffmpegQuotePath(overlayCard.path)} '
+        '-filter_complex '
+        '"[1:v]scale=350:-1[overlay];'
+        '[0:v][overlay]overlay=x=W-w-34:y=H-h-34" '
+        '-map 0:v:0 '
+        '-map 0:a? '
+        '-c:v mpeg4 '
+        '-b:v 2500k '
+        '-pix_fmt yuv420p '
+        '-c:a aac '
+        '${_ffmpegQuotePath(tempOutput.path)}';
+      final session = await FFmpegKit.execute(command);
+      final rc = await session.getReturnCode();
+      _debugLog('FFmpeg return code: ${rc?.getValue()}');
+      final logs = await session.getLogs();
+      if (logs.isNotEmpty) {
+        _debugLog('FFmpeg logs: ${logs.map((e) => e.getMessage()).join('\n')}');
+      }
+      if (ReturnCode.isSuccess(rc) && await tempOutput.exists()) {
+        if (await destination.exists()) {
+          await destination.delete();
+        }
+        return tempOutput.rename(destination.path);
+      }
+    } catch (_) {
+      // Falls back to copying original video below.
+    } finally {
+      try {
+        if (overlayCard != null && await overlayCard.exists()) {
+          await overlayCard.delete();
+        }
+      } catch (_) {}
+      try {
+        if (await tempOutput.exists()) {
+          await tempOutput.delete();
+        }
+      } catch (_) {}
+    }
+    return source.copy(destination.path);
+  }
+
+  Future<File?> _createVideoOverlayCard({
+    required _GeoTaggedPhoto capture,
+  }) async {
+    try {
+      final format = ref.read(coordinateFormatProvider);
+      final ellipsoid = ref.read(referenceEllipsoidProvider);
+      final unit = ref.read(distanceUnitProvider);
+      final lines = _buildOverlayLines(
+        capture: capture,
+        coordinateFormat: format,
+        referenceEllipsoid: ellipsoid,
+        unit: unit,
+        includeLocationNote: false,
+      );
+      final title = capture.name.trim();
+      final maxWidth = 620.0;
+      const padding = 32.0;
+      const spacing = 8.0;
+      final painters = <TextPainter>[];
+
+      if (title.isNotEmpty) {
+        painters.add(
+          _overlayPainter(
+            title,
+            fontSize: 26,
+            weight: FontWeight.w800,
+            maxWidth: maxWidth,
+          ),
+        );
+      }
+      for (final line in lines) {
+        painters.add(
+          _overlayPainter(
+            line,
+            fontSize: 20,
+            weight: FontWeight.w700,
+            maxWidth: maxWidth,
+          ),
+        );
+      }
+      if (painters.isEmpty) return null;
+
+      final textHeight =
+          painters.fold<double>(0, (sum, p) => sum + p.height) +
+          spacing * (painters.length - 1);
+      final textWidth = painters.fold<double>(
+        0,
+        (maxLine, p) => max(maxLine, p.width),
+      );
+      final cardWidth = textWidth + padding * 1.8;
+      final cardHeight = textHeight + padding * 1.4;
+
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final size = Size(cardWidth, cardHeight);
+      final backgroundRect = RRect.fromRectAndRadius(
+        Offset.zero & size,
+        const Radius.circular(22),
+      );
+      canvas.drawRRect(
+        backgroundRect,
+        Paint()..color = Colors.black.withValues(alpha: 0.42),
+      );
+
+      var y = padding * 0.7;
+      for (final painter in painters) {
+        painter.paint(canvas, Offset(cardWidth - padding - painter.width, y));
+        y += painter.height + spacing;
+      }
+
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(cardWidth.ceil(), cardHeight.ceil());
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      picture.dispose();
+      image.dispose();
+      if (data == null) return null;
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/geo_overlay_${DateTime.now().microsecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      return file;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _ffmpegQuotePath(String path) {
+    return '\'${path.replaceAll('\'', '\'\\\\\'\'')}\'';
+  }
+
+  void _debugLog(String message) {
+    if (!kDebugMode) return;
+    debugPrint('[MyLocationPage] $message');
   }
 
   void _paintPersistedLocationOverlay({
