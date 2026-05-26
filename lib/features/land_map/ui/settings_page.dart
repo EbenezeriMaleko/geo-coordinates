@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -106,18 +107,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             subtitle: _captureModeLabel(captureMode),
             onTap: _showCaptureModeSelector,
           ),
-          _sectionDivider(),
-          _sectionHeader('Saved locations', theme),
-          _item(
-            title: 'View modes',
-            subtitle: '[Combined, Basic, Text, Photo]',
-            onTap: _comingSoon('View modes'),
-          ),
 
           _sectionDivider(),
 
           _sectionHeader('Other', theme),
-          _item(title: 'Privacy policy', onTap: _comingSoon('Privacy policy')),
+          _item(title: 'Privacy policy', onTap: _openPrivacyPolicy),
           _sectionDivider(),
 
           _sectionHeader('Cache', theme),
@@ -452,6 +446,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _openContactUsPage() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (_) => const ContactUsPage()),
+    );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final uri = Uri.parse('https://www.databenki.com/privacy/');
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (ok) return;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open privacy policy')),
     );
   }
 

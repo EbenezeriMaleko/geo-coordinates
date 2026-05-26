@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/auth_provider.dart';
 import 'forgot_password_page.dart';
@@ -124,41 +125,43 @@ class AccountPage extends ConsumerWidget {
                     subtitle: 'Update your account password',
                     onTap: () => _showChangePasswordSheet(context),
                   ),
+                  _divider(),
+                  _ActionTile(
+                    title: 'Open TaREF web app',
+                    subtitle: 'Manage your data at ardhi.co.tz',
+                    onTap: () => _openArdhiWebApp(context),
+                    trailing: const HugeIcon(
+                      icon: HugeIcons.strokeRoundedGlobe02,
+                      color: Color(0xFF001F3F),
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            const _SectionLabel('Verification'),
-            _PanelCard(
-              child: _ActionTile(
-                title: session.isVerified
-                    ? 'Email verified'
-                    : 'Resend verification email',
-                subtitle: session.isVerified
-                    ? 'Your account email is already verified'
-                    : 'Send a new verification email to ${user?.email ?? ''}',
-                onTap: session.isVerified
-                    ? null
-                    : () async {
-                        final result = await ref
-                            .read(resendVerificationProvider.notifier)
-                            .send();
-                        if (!context.mounted || result == null) return;
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(result.message)));
-                      },
-                trailing: session.isVerified
-                    ? const HugeIcon(
-                        icon: HugeIcons.strokeRoundedCheckmarkCircle01,
-                        color: Colors.green,
-                      )
-                    : const HugeIcon(
-                        icon: HugeIcons.strokeRoundedArrowRight01,
-                        color: Colors.black45,
-                      ),
+            if (!session.isVerified) ...[
+              const SizedBox(height: 16),
+              const _SectionLabel('Verification'),
+              _PanelCard(
+                child: _ActionTile(
+                  title: 'Resend verification email',
+                  subtitle:
+                      'Send a new verification email to ${user?.email ?? ''}',
+                  onTap: () async {
+                    final result = await ref
+                        .read(resendVerificationProvider.notifier)
+                        .send();
+                    if (!context.mounted || result == null) return;
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(result.message)));
+                  },
+                  trailing: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedArrowRight01,
+                    color: Colors.black45,
+                  ),
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: 16),
             const _SectionLabel('Session'),
             _PanelCard(
@@ -227,6 +230,16 @@ class AccountPage extends ConsumerWidget {
     );
   }
 
+  Future<void> _openArdhiWebApp(BuildContext context) async {
+    final uri = Uri.parse('https://ardhi.co.tz');
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (ok) return;
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open Ardhi web app')),
+    );
+  }
+
   static Widget _divider() => Divider(height: 1, color: Colors.grey.shade300);
 }
 
@@ -272,13 +285,28 @@ class _ProfileCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          if (isVerified)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 6),
+                              child: HugeIcon(
+                                icon: HugeIcons.strokeRoundedCheckmarkCircle01,
+                                color: Color(0xFF1B7F46),
+                                size: 22,
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -298,25 +326,26 @@ class _ProfileCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isVerified
-                    ? const Color(0xFFE8F7EE)
-                    : const Color(0xFFFFF4E5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                isVerified ? 'Email verified' : 'Email not verified',
-                style: TextStyle(
-                  color: isVerified
-                      ? const Color(0xFF1B7F46)
-                      : const Color(0xFFB26A00),
-                  fontWeight: FontWeight.w600,
+            if (!isVerified) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4E5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Email not verified',
+                  style: TextStyle(
+                    color: Color(0xFFB26A00),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),

@@ -566,6 +566,64 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return '${meters.toStringAsFixed(1)} m';
   }
 
+  List<Marker> _buildSegmentDistanceMarkers(
+    List<LatLng> points, {
+    required DistanceUnit unit,
+    required Color color,
+    bool closeLoop = false,
+  }) {
+    if (points.length < 2) return const [];
+
+    final out = <Marker>[];
+    for (int i = 0; i < points.length - 1; i++) {
+      final a = points[i];
+      final b = points[i + 1];
+      final meters = _distanceCalculator.as(LengthUnit.Meter, a, b);
+      final text = _formatDistance(meters, unit);
+      final mid = LatLng(
+        (a.latitude + b.latitude) / 2,
+        (a.longitude + b.longitude) / 2,
+      );
+      final markerWidth = (text.length * 7.5 + 28).clamp(60.0, 120.0);
+      out.add(
+        Marker(
+          width: markerWidth,
+          height: 34,
+          point: mid,
+          child: _SegmentDistancePill(
+            text: text,
+            color: color,
+          ),
+        ),
+      );
+    }
+
+    if (closeLoop && points.length >= 3) {
+      final a = points.last;
+      final b = points.first;
+      final meters = _distanceCalculator.as(LengthUnit.Meter, a, b);
+      final text = _formatDistance(meters, unit);
+      final mid = LatLng(
+        (a.latitude + b.latitude) / 2,
+        (a.longitude + b.longitude) / 2,
+      );
+      final markerWidth = (text.length * 7.5 + 28).clamp(60.0, 120.0);
+      out.add(
+        Marker(
+          width: markerWidth,
+          height: 34,
+          point: mid,
+          child: _SegmentDistancePill(
+            text: text,
+            color: color,
+          ),
+        ),
+      );
+    }
+
+    return out;
+  }
+
   Future<void> _toggleFullscreen() async {
     if (_isFullscreen) {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -1180,6 +1238,24 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         ? navigationTarget.point
         : _navigationPointForCurrent(st.current!, navigationTarget);
 
+    final fieldSegmentLabels = _showFieldLayer
+        ? _buildSegmentDistanceMarkers(
+            st.points,
+            unit: distanceUnit,
+            color: const Color(0xFF001F3F),
+            closeLoop: st.points.length >= 3,
+          )
+        : const <Marker>[];
+
+    final distanceSegmentLabels = _showDistanceLayer
+        ? _buildSegmentDistanceMarkers(
+            _distancePoints,
+            unit: distanceUnit,
+            color: Colors.orange.shade700,
+            closeLoop: false,
+          )
+        : const <Marker>[];
+
     final markers = <Marker>[
       if (_showFieldLayer)
         for (int i = 0; i < st.points.length; i++)
@@ -1189,6 +1265,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             point: st.points[i],
             child: _PointMarker(index: i + 1),
           ),
+      ...fieldSegmentLabels,
 
       if (st.current != null)
         Marker(
@@ -1248,6 +1325,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   : '${i + 1}',
             ),
           ),
+      ...distanceSegmentLabels,
     ];
 
     final polygons = <Polygon>[
@@ -3409,6 +3487,47 @@ class _DistancePointMarker extends StatelessWidget {
           ),
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _SegmentDistancePill extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _SegmentDistancePill({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.translate(
+      offset: const Offset(0, -14),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withValues(alpha: 0.35), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ),
     );
