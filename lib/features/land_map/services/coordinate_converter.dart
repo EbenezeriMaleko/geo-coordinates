@@ -6,38 +6,37 @@ import '../models/reference_ellipsoid.dart';
 class CoordinateConverter {
   /// Proj4 strings for each ellipsoid with WGS84 base for consistency
   static final Map<ReferenceEllipsoid, String> _projectionStrings = {
-  // North America — NAD27 is correct here
-  ReferenceEllipsoid.clarke1866:
-      '+proj=longlat +ellps=clrk66 +datum=NAD27 +no_defs',
+    // North America — NAD27 is correct here
+    ReferenceEllipsoid.clarke1866:
+        '+proj=longlat +ellps=clrk66 +datum=NAD27 +no_defs',
 
-  // East Africa (Arc 1960) — Kenya + Tanzania mean solution ✅ EPSG verified
-  ReferenceEllipsoid.clarke1880:
-      '+proj=longlat +a=6378249.145 +rf=293.465 +towgs84=-160,-6,-302,0,0,0,0 +no_defs',
+    // East Africa (Arc 1960) — Kenya + Tanzania mean solution ✅ EPSG verified
+    ReferenceEllipsoid.clarke1880:
+        '+proj=longlat +a=6378249.145 +rf=293.465 +towgs84=-160,-6,-302,0,0,0,0 +no_defs',
 
-  // GRS 1967
-  ReferenceEllipsoid.grs1967:
-      '+proj=longlat +ellps=GRS67 +towgs84=-57,1,-41,0,0,0,0 +no_defs',
+    // GRS 1967
+    ReferenceEllipsoid.grs1967:
+        '+proj=longlat +ellps=GRS67 +towgs84=-57,1,-41,0,0,0,0 +no_defs',
 
-  // GRS 1980 — nearly identical to WGS84
-  ReferenceEllipsoid.grs1980:
-      '+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs',
+    // GRS 1980 — nearly identical to WGS84
+    ReferenceEllipsoid.grs1980:
+        '+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs',
 
-  // WGS 60
-  ReferenceEllipsoid.wgs60:
-      '+proj=longlat +ellps=WGS60 +towgs84=0,18,-181,0,0,0,0 +no_defs',
+    // WGS 60
+    ReferenceEllipsoid.wgs60:
+        '+proj=longlat +ellps=WGS60 +towgs84=0,18,-181,0,0,0,0 +no_defs',
 
-  // WGS 66
-  ReferenceEllipsoid.wgs66:
-      '+proj=longlat +ellps=WGS66 +towgs84=0,0,-4.5,0,0,0,0 +no_defs',
+    // WGS 66
+    ReferenceEllipsoid.wgs66:
+        '+proj=longlat +ellps=WGS66 +towgs84=0,0,-4.5,0,0,0,0 +no_defs',
 
-  // WGS 72 — 7-parameter, EPSG/PROJ verified ✅
-  ReferenceEllipsoid.wgs72:
-      '+proj=longlat +ellps=WGS72 +towgs84=0,0,4.5,0,0,0.554,0.219 +no_defs',
+    // WGS 72 — 7-parameter, EPSG/PROJ verified ✅
+    ReferenceEllipsoid.wgs72:
+        '+proj=longlat +ellps=WGS72 +towgs84=0,0,4.5,0,0,0.554,0.219 +no_defs',
 
-  // WGS 84 — modern GPS standard
-  ReferenceEllipsoid.wgs84:
-      '+proj=longlat +datum=WGS84 +no_defs',
-};
+    // WGS 84 — modern GPS standard
+    ReferenceEllipsoid.wgs84: '+proj=longlat +datum=WGS84 +no_defs',
+  };
 
   static final Map<String, Projection> _projectionCache = {};
 

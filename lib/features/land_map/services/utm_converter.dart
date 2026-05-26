@@ -45,13 +45,15 @@ class UtmConverter {
     final cosLat = _cos(latRad);
     final tanLat = _tan(latRad);
 
-    final n = config.equatorialRadius /
+    final n =
+        config.equatorialRadius /
         _sqrt(1 - config.eccSquared * sinLat * sinLat);
     final t = tanLat * tanLat;
     final c = eccPrimeSquared * cosLat * cosLat;
     final a = cosLat * (lonRad - longOriginRad);
 
-    final m = config.equatorialRadius *
+    final m =
+        config.equatorialRadius *
         ((1 -
                     config.eccSquared / 4 -
                     3 * _pow2(config.eccSquared) / 64 -
@@ -66,7 +68,8 @@ class UtmConverter {
                 _sin(4 * latRad) -
             (35 * _pow3(config.eccSquared) / 3072) * _sin(6 * latRad));
 
-    var easting = _k0 *
+    var easting =
+        _k0 *
             n *
             (a +
                 (1 - t + c) * _pow3(a) / 6 +
@@ -75,7 +78,8 @@ class UtmConverter {
                     120) +
         500000.0;
 
-    var northing = _k0 *
+    var northing =
+        _k0 *
         (m +
             n *
                 tanLat *

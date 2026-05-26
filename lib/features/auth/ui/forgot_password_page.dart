@@ -65,10 +65,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
           opacity: _fadeAnim,
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 32,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

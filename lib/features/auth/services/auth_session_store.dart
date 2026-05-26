@@ -31,7 +31,9 @@ class AuthSessionStore {
       final lastName = _string(_box.get(_lastNameKey));
       user = AuthUser(
         id: userId,
-        name: name.isNotEmpty ? name : [firstName, lastName].where((e) => e.isNotEmpty).join(' ').trim(),
+        name: name.isNotEmpty
+            ? name
+            : [firstName, lastName].where((e) => e.isNotEmpty).join(' ').trim(),
         firstName: firstName,
         lastName: lastName,
         email: email,

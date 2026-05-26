@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/ui/account_page.dart';
+import 'contact_us_page.dart';
 import '../models/coordinate_format.dart';
 import '../models/reference_ellipsoid.dart';
 import '../state/settings_provider.dart';
@@ -132,7 +133,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             title: 'Contact us',
             subtitle:
                 'Send suggestions or report a bug. We appreciate your feedback.',
-            onTap: _comingSoon('Contact us'),
+            onTap: _openContactUsPage,
           ),
           _item(
             title: 'Version',
@@ -446,6 +447,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await Navigator.of(
       context,
     ).push<void>(MaterialPageRoute<void>(builder: (_) => const AccountPage()));
+  }
+
+  Future<void> _openContactUsPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => const ContactUsPage()),
+    );
   }
 
   void _showCoordinateFormatSelector() {

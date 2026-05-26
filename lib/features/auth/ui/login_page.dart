@@ -83,10 +83,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
           opacity: _fadeAnim,
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 32,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -247,7 +244,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.3,
                         ),
-                ),
+                      ),
               ),
             ),
             Align(

@@ -29,12 +29,9 @@ class RemoteLandsNotifier extends AsyncNotifier<PaginatedLands?> {
 
     state = const AsyncLoading();
     state = await AsyncValue.guard(
-      () => ref.read(landCloudServiceProvider).listLands(
-            token,
-            search: search,
-            perPage: perPage,
-            page: page,
-          ),
+      () => ref
+          .read(landCloudServiceProvider)
+          .listLands(token, search: search, perPage: perPage, page: page),
     );
     return switch (state) {
       AsyncData<PaginatedLands?>(:final value) => value,
@@ -108,8 +105,8 @@ final remoteSettingsProvider =
       RemoteSettingsNotifier.new,
     );
 
-final remoteLandDetailProvider =
-    FutureProvider.autoDispose.family<LandDetail, String>((ref, landId) async {
+final remoteLandDetailProvider = FutureProvider.autoDispose
+    .family<LandDetail, String>((ref, landId) async {
       final session = ref.read(authSessionProvider);
       final token = session.token.trim();
       if (token.isEmpty) {

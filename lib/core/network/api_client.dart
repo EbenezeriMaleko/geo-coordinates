@@ -73,7 +73,9 @@ class ApiClient {
           .timeout(timeout);
 
       debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint(
+        '[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}',
+      );
       return response;
     } catch (error) {
       debugPrint('[API][$requestTag] ERROR $error');
@@ -98,7 +100,9 @@ class ApiClient {
           .timeout(timeout);
 
       debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint(
+        '[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}',
+      );
       return response;
     } catch (error) {
       debugPrint('[API][$requestTag] ERROR $error');
@@ -129,7 +133,9 @@ class ApiClient {
           .timeout(timeout);
 
       debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint(
+        '[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}',
+      );
       return response;
     } catch (error) {
       debugPrint('[API][$requestTag] ERROR $error');
@@ -154,7 +160,9 @@ class ApiClient {
           .timeout(timeout);
 
       debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint(
+        '[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}',
+      );
       return response;
     } catch (error) {
       debugPrint('[API][$requestTag] ERROR $error');
@@ -185,7 +193,9 @@ class ApiClient {
           .timeout(timeout);
 
       debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
-      debugPrint('[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}');
+      debugPrint(
+        '[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}',
+      );
       return response;
     } catch (error) {
       debugPrint('[API][$requestTag] ERROR $error');

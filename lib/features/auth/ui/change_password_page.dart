@@ -7,8 +7,7 @@ class ChangePasswordPage extends ConsumerStatefulWidget {
   const ChangePasswordPage({super.key});
 
   @override
-  ConsumerState<ChangePasswordPage> createState() =>
-      _ChangePasswordPageState();
+  ConsumerState<ChangePasswordPage> createState() => _ChangePasswordPageState();
 }
 
 class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
