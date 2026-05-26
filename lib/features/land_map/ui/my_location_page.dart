@@ -137,7 +137,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     _locationSubscription =
         Geolocator.getPositionStream(
           locationSettings: AndroidSettings(
-            accuracy: LocationAccuracy.best,
+            accuracy: LocationAccuracy.bestForNavigation,
             distanceFilter: 1,
             intervalDuration: const Duration(seconds: 2),
             foregroundNotificationConfig: const ForegroundNotificationConfig(
@@ -1640,7 +1640,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
     try {
       final current = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
+          accuracy: LocationAccuracy.bestForNavigation,
         ),
       );
       _livePosition = current;
@@ -1653,7 +1653,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
     _positionSubscription =
         Geolocator.getPositionStream(
           locationSettings: AndroidSettings(
-            accuracy: LocationAccuracy.best,
+            accuracy: LocationAccuracy.bestForNavigation,
             distanceFilter: 1,
             intervalDuration: const Duration(seconds: 2),
             foregroundNotificationConfig: const ForegroundNotificationConfig(
