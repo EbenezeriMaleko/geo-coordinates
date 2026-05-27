@@ -1758,7 +1758,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               ),
               const SizedBox(height: 10),
               _ToolButton(
-                label: 'Root',
+                label: 'Route',
                 icon: SvgPicture.asset(
                   'lib/assets/icons/map-location-track.svg',
                   width: 20,
@@ -2174,8 +2174,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               const SizedBox(height: 14),
                               Text(
                                 mapState.activeFieldId != null
-                                    ? 'Update Field'
-                                    : 'Create Field',
+                                    ? 'Update Area'
+                                    : 'Create Area',
                                 style: GoogleFonts.inter(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w800,
@@ -2556,8 +2556,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               )
                                             : Text(
                                                 mapState.activeFieldId != null
-                                                    ? 'Update Field'
-                                                    : 'Save Field',
+                                                    ? 'Update Area'
+                                                    : 'Save Area',
                                                 style: GoogleFonts.inter(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w700,

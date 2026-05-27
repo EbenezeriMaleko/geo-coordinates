@@ -405,7 +405,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                             ),
                             const SizedBox(width: 8),
                             _SectionChip(
-                              label: 'Markers',
+                              label: 'Points',
                               count: counts.markers,
                               selected:
                                   _contentSection ==
@@ -417,7 +417,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                             ),
                             const SizedBox(width: 8),
                             _SectionChip(
-                              label: 'Fields',
+                              label: 'Area',
                               count: counts.fields,
                               selected:
                                   _contentSection ==
@@ -429,7 +429,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                             ),
                             const SizedBox(width: 8),
                             _SectionChip(
-                              label: 'Distance',
+                              label: 'Route',
                               count: counts.distances,
                               selected:
                                   _contentSection ==
