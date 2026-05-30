@@ -48,26 +48,50 @@ const _saveToGalleryKey = 'prefs_photo_save_to_gallery';
 const _photoQualityKey = 'prefs_photo_quality';
 const _photoCaptureModeKey = 'prefs_photo_capture_mode';
 const _referenceEllipsoidKey = 'prefs_reference_ellipsoid';
+const _coordinateFormatKey = 'prefs_coordinate_format';
+const _distanceUnitKey = 'prefs_distance_unit';
 
 class CoordinateFormatNotifier extends Notifier<CoordinateFormat> {
   @override
   CoordinateFormat build() {
-    return CoordinateFormat.decimalDegrees;
+    final box = Hive.box('landbox');
+    final raw = box.get(_coordinateFormatKey)?.toString();
+    return _formatFromRaw(raw);
   }
 
-  void setFormat(CoordinateFormat format) {
+  Future<void> setFormat(CoordinateFormat format) async {
     state = format;
+    final box = Hive.box('landbox');
+    await box.put(_coordinateFormatKey, format.name);
+  }
+
+  CoordinateFormat _formatFromRaw(String? raw) {
+    for (final format in CoordinateFormat.values) {
+      if (format.name == raw) return format;
+    }
+    return CoordinateFormat.decimalDegrees;
   }
 }
 
 class DistanceUnitNotifier extends Notifier<DistanceUnit> {
   @override
   DistanceUnit build() {
-    return DistanceUnit.meters;
+    final box = Hive.box('landbox');
+    final raw = box.get(_distanceUnitKey)?.toString();
+    return _unitFromRaw(raw);
   }
 
-  void setUnit(DistanceUnit unit) {
+  Future<void> setUnit(DistanceUnit unit) async {
     state = unit;
+    final box = Hive.box('landbox');
+    await box.put(_distanceUnitKey, unit.name);
+  }
+
+  DistanceUnit _unitFromRaw(String? raw) {
+    for (final unit in DistanceUnit.values) {
+      if (unit.name == raw) return unit;
+    }
+    return DistanceUnit.meters;
   }
 }
 

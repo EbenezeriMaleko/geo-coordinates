@@ -269,14 +269,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Divider(height: 1, color: Colors.grey.shade300);
   }
 
-  VoidCallback _comingSoon(String feature) {
-    return () {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$feature - Coming soon')));
-    };
-  }
-
   void _showVersionDetails() {
     showModalBottomSheet<void>(
       context: context,

@@ -136,20 +136,40 @@ class _MainNavigationState extends State<MainNavigation> {
           );
           return;
         }
+        final customName = await _promptForLocationName();
+        if (!mounted) return;
+        if (customName == null) return;
         final id = const Uuid().v4();
         final box = Hive.box('landbox');
+        final now = DateTime.now().toIso8601String();
+        final ellipsoid = container.read(referenceEllipsoidProvider);
+        final name = customName.trim().isEmpty
+            ? 'My location $now'
+            : customName.trim();
         await box.put(id, {
           'id': id,
-          'entityType': 'marker',
-          'name': 'Marker ${DateTime.now().toIso8601String()}',
-          'lat': current.latitude,
-          'lng': current.longitude,
-          'createdAt': DateTime.now().toIso8601String(),
+          'entityType': 'point',
+          'type': 'point',
+          'name': name,
+          'referenceEllipsoid': ellipsoid.name,
+          'labels': ['1'],
+          'points': [
+            {
+              'order': 0,
+              'lat': current.latitude,
+              'lng': current.longitude,
+              'label': '1',
+            },
+          ],
+          'syncStatus': 'pending',
+          'createdAt': now,
+          'updatedAt': now,
         });
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Current point saved')));
+        ).showSnackBar(const SnackBar(content: Text('Location saved')));
+        await _runBackgroundSync();
         return;
 
       case MyLocationAction.copyBoth:
@@ -181,6 +201,36 @@ class _MainNavigationState extends State<MainNavigation> {
     }
   }
 
+  Future<String?> _promptForLocationName() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Save location'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            hintText: 'Enter location name (optional)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    return result;
+  }
+
   String _buildMyLocationPayload({
     required LatLng current,
     required double? accuracy,
@@ -193,10 +243,12 @@ class _MainNavigationState extends State<MainNavigation> {
     );
     final buffer = StringBuffer()
       ..writeln('My current location')
-      ..writeln('Latitude: ${current.latitude.toStringAsFixed(6)}')
-      ..writeln('Longitude: ${current.longitude.toStringAsFixed(6)}')
-      ..writeln('Easting: ${utm?.easting.toStringAsFixed(2) ?? '—'}')
-      ..writeln('Northing: ${utm?.northing.toStringAsFixed(2) ?? '—'}')
+      ..writeln(
+        'Lat/Long: ${current.latitude.toStringAsFixed(6)}, ${current.longitude.toStringAsFixed(6)}',
+      )
+      ..writeln(
+        'E/N: ${utm?.easting.toStringAsFixed(2) ?? '—'}, ${utm?.northing.toStringAsFixed(2) ?? '—'}',
+      )
       ..writeln('UTM Zone: ${utm?.zone ?? '—'}')
       ..writeln(
         'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',

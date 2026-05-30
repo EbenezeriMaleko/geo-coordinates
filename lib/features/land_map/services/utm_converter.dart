@@ -152,6 +152,89 @@ class UtmConverter {
     return letters[index];
   }
 
+  /// Converts UTM coordinates back to latitude/longitude.
+  /// [hemisphere] should be 'N' or 'S'.
+  static ({double latitude, double longitude})? toLatLng({
+    required double easting,
+    required double northing,
+    required int zoneNumber,
+    required String zoneLetter,
+    required ReferenceEllipsoid ellipsoid,
+    String hemisphere = 'S',
+  }) {
+    final config = _ellipsoidConfig(ellipsoid);
+    final isNorthernHemisphere =
+        hemisphere.toUpperCase() == 'N' || zoneLetter.toUpperCase().compareTo('N') >= 0;
+
+    final x = easting - 500000.0;
+    final y = isNorthernHemisphere ? northing : northing - 10000000.0;
+
+    final longOrigin = (zoneNumber - 1) * 6 - 180 + 3;
+    final eccPrimeSquared = config.eccSquared / (1 - config.eccSquared);
+    final m = y / _k0;
+    final mu = m /
+        (config.equatorialRadius *
+            (1 -
+                config.eccSquared / 4 -
+                3 * _pow2(config.eccSquared) / 64 -
+                5 * _pow3(config.eccSquared) / 256));
+
+    final e1 = (1 - _sqrt(1 - config.eccSquared)) /
+        (1 + _sqrt(1 - config.eccSquared));
+
+    final phi1Rad = mu +
+        (3 * e1 / 2 - 27 * _pow3(e1) / 32) * _sin(2 * mu) +
+        (21 * _pow2(e1) / 16 - 55 * _pow4(e1) / 32) * _sin(4 * mu) +
+        (151 * _pow3(e1) / 96) * _sin(6 * mu) +
+        (1097 * _pow4(e1) / 512) * _sin(8 * mu);
+
+    final sinPhi1 = _sin(phi1Rad);
+    final cosPhi1 = _cos(phi1Rad);
+    final tanPhi1 = _tan(phi1Rad);
+
+    final n1 = config.equatorialRadius /
+        _sqrt(1 - config.eccSquared * sinPhi1 * sinPhi1);
+    final t1 = tanPhi1 * tanPhi1;
+    final c1 = eccPrimeSquared * cosPhi1 * cosPhi1;
+    final r1 = config.equatorialRadius *
+        (1 - config.eccSquared) /
+        math.pow(1 - config.eccSquared * sinPhi1 * sinPhi1, 1.5);
+    final d = x / (n1 * _k0);
+
+    final lat = phi1Rad -
+        (n1 * tanPhi1 / r1) *
+            (_pow2(d) / 2 -
+                (5 + 3 * t1 + 10 * c1 - 4 * _pow2(c1) - 9 * eccPrimeSquared) *
+                    _pow4(d) /
+                    24 +
+                (61 +
+                        90 * t1 +
+                        298 * c1 +
+                        45 * _pow2(t1) -
+                        252 * eccPrimeSquared -
+                        3 * _pow2(c1)) *
+                    _pow6(d) /
+                    720);
+
+    final lng = (d -
+                (1 + 2 * t1 + c1) * _pow3(d) / 6 +
+                (5 -
+                        2 * c1 +
+                        28 * t1 -
+                        3 * _pow2(c1) +
+                        8 * eccPrimeSquared +
+                        24 * _pow2(t1)) *
+                    _pow5(d) /
+                    120) /
+            cosPhi1 +
+        _degToRad(longOrigin.toDouble());
+
+    return (
+      latitude: lat * 180.0 / math.pi,
+      longitude: lng * 180.0 / math.pi,
+    );
+  }
+
   static double _degToRad(double degrees) => degrees * 0.017453292519943295;
   static double _sqrt(double value) => value >= 0 ? math.sqrt(value) : 0;
   static double _sin(double value) => math.sin(value);

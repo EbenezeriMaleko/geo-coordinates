@@ -15,6 +15,7 @@ import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
 import '../services/utm_converter.dart';
+import 'package:uuid/uuid.dart';
 
 enum _ViewMode { combined, basic, text, photo }
 
@@ -209,351 +210,396 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final remoteLandsState = ref.watch(remoteLandsProvider);
     final canUseCloud = authSession.isLoggedIn && authSession.isVerified;
 
-    return Container(
-      color: Colors.white70,
-      child: Column(
-        children: [
-          if (widget.showEmbeddedToolbar)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                children: [
-                  if (_selectionMode)
-                    Text(
-                      '${_selectedIds.length} selected',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  const Spacer(),
-                  if (_selectionMode)
-                    IconButton(
-                      onPressed: _selectedIds.isEmpty
-                          ? null
-                          : _setGroupForSelectedItems,
-                      icon: const Icon(Icons.folder_outlined, size: 20),
-                      tooltip: 'Set group',
-                    ),
-                  if (_selectionMode)
-                    IconButton(
-                      onPressed: _selectedIds.isEmpty
-                          ? null
-                          : _shareSelectedItems,
-                      icon: const Icon(Icons.share_outlined, size: 20),
-                      tooltip: 'Share selected',
-                    ),
-                  if (_selectionMode)
-                    IconButton(
-                      onPressed: _selectedIds.isEmpty
-                          ? null
-                          : _deleteSelectedItems,
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                      tooltip: 'Delete selected',
-                    ),
-                  if (_selectionMode)
-                    IconButton(
-                      onPressed: _exitSelectionMode,
-                      icon: const Icon(Icons.close, size: 20),
-                      tooltip: 'Exit selection',
-                    ),
-                  if (!_selectionMode) ...[
-                    IconButton(
-                      onPressed: _showFilterSheet,
-                      icon: const Icon(Icons.tune, size: 20),
-                    ),
-                    IconButton(
-                      onPressed: _showSortSheet,
-                      icon: const Icon(Icons.sort, size: 20),
-                    ),
-                    IconButton(
-                      onPressed: _showPageMenu,
-                      icon: const Icon(Icons.more_vert, size: 20),
-                    ),
-                  ],
-                ],
+    return Stack(
+      children: [
+        Container(
+          color: Colors.white70,
+          child: Column(
+            children: [
+              if (widget.showEmbeddedToolbar)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    children: [
+                      if (_selectionMode)
+                        Text(
+                          '${_selectedIds.length} selected',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      const Spacer(),
+                      if (_selectionMode)
+                        IconButton(
+                          onPressed: _selectedIds.isEmpty
+                              ? null
+                              : _setGroupForSelectedItems,
+                          icon: const Icon(Icons.folder_outlined, size: 20),
+                          tooltip: 'Set group',
+                        ),
+                      if (_selectionMode)
+                        IconButton(
+                          onPressed: _selectedIds.isEmpty
+                              ? null
+                              : _shareSelectedItems,
+                          icon: const Icon(Icons.share_outlined, size: 20),
+                          tooltip: 'Share selected',
+                        ),
+                      if (_selectionMode)
+                        IconButton(
+                          onPressed: _selectedIds.isEmpty
+                              ? null
+                              : _deleteSelectedItems,
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          tooltip: 'Delete selected',
+                        ),
+                      if (_selectionMode)
+                        IconButton(
+                          onPressed: _exitSelectionMode,
+                          icon: const Icon(Icons.close, size: 20),
+                          tooltip: 'Exit selection',
+                        ),
+                      if (!_selectionMode) ...[
+                        IconButton(
+                          onPressed: _showFilterSheet,
+                          icon: const Icon(Icons.tune, size: 20),
+                        ),
+                        IconButton(
+                          onPressed: _showSortSheet,
+                          icon: const Icon(Icons.sort, size: 20),
+                        ),
+                        IconButton(
+                          onPressed: _showPageMenu,
+                          icon: const Icon(Icons.more_vert, size: 20),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value.trim());
+                    if (canUseCloud) {
+                      _fetchRemoteData();
+                    }
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search saved locations',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                              if (canUseCloud) {
+                                _fetchRemoteData();
+                              }
+                            },
+                            icon: const Icon(Icons.close),
+                          )
+                        : null,
+                  ),
+                ),
               ),
-            ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() => _searchQuery = value.trim());
-                if (canUseCloud) {
-                  _fetchRemoteData();
-                }
-              },
-              decoration: InputDecoration(
-                hintText: 'Search saved locations',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                          if (canUseCloud) {
-                            _fetchRemoteData();
-                          }
-                        },
-                        icon: const Icon(Icons.close),
-                      )
-                    : null,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (_searchQuery.isNotEmpty ||
-              _filter != _SavedFilter.all ||
-              _sort != _SavedSort.newest ||
-              _groupFilter != 'All groups')
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  if (_searchQuery.isNotEmpty)
-                    _ActiveTag(
-                      label: 'Search: $_searchQuery',
-                      onClear: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
-                  if (_filter != _SavedFilter.all)
-                    _ActiveTag(
-                      label: 'Filter: ${_filterLabel(_filter)}',
-                      onClear: () => setState(() => _filter = _SavedFilter.all),
-                    ),
-                  if (_sort != _SavedSort.newest)
-                    _ActiveTag(
-                      label: 'Sort: ${_sortLabel(_sort)}',
-                      onClear: () => setState(() => _sort = _SavedSort.newest),
-                    ),
-                  if (_groupFilter != 'All groups')
-                    _ActiveTag(
-                      label: 'Group: $_groupFilter',
-                      onClear: () =>
-                          setState(() => _groupFilter = 'All groups'),
-                    ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ValueListenableBuilder(
-              valueListenable: box.listenable(),
-              builder: (context, Box box, _) {
-                final localItems = box.values
-                    .whereType<Map>()
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList();
-
-                final remoteItems =
-                    remoteLandsState.asData?.value?.items ??
-                    const <LandListItem>[];
-                final items = _buildDisplayItems(
-                  localItems: localItems,
-                  remoteItems: remoteItems,
-                  canUseCloud: canUseCloud,
-                );
-
-                final counts = _contentCounts(items);
-                final sectioned = _applyContentSection(items);
-                final filteredSorted = _applyFilterAndSort(sectioned);
-                final searched = _applySearch(filteredSorted);
-                final groups = _groupOptions(items);
-
-                return Column(
-                  children: [
-                    if (groups.length > 1)
-                      SizedBox(
-                        height: 40,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          scrollDirection: Axis.horizontal,
-                          itemCount: groups.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final group = groups[index];
-                            return ChoiceChip(
-                              label: Text(group),
-                              selected: _groupFilter == group,
-                              onSelected: (_) =>
-                                  setState(() => _groupFilter = group),
-                            );
+              const SizedBox(height: 8),
+              if (_searchQuery.isNotEmpty ||
+                  _filter != _SavedFilter.all ||
+                  _sort != _SavedSort.newest ||
+                  _groupFilter != 'All groups')
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (_searchQuery.isNotEmpty)
+                        _ActiveTag(
+                          label: 'Search: $_searchQuery',
+                          onClear: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
                           },
                         ),
-                      ),
-                    if (groups.length > 1) const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _SectionChip(
-                              label: 'All',
-                              count: items.length,
-                              selected:
-                                  _contentSection == _SavedContentSection.all,
-                              onTap: () => setState(
-                                () =>
-                                    _contentSection = _SavedContentSection.all,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _SectionChip(
-                              label: 'Points',
-                              count: counts.markers,
-                              selected:
-                                  _contentSection ==
-                                  _SavedContentSection.markers,
-                              onTap: () => setState(
-                                () => _contentSection =
-                                    _SavedContentSection.markers,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _SectionChip(
-                              label: 'Area',
-                              count: counts.fields,
-                              selected:
-                                  _contentSection ==
-                                  _SavedContentSection.fields,
-                              onTap: () => setState(
-                                () => _contentSection =
-                                    _SavedContentSection.fields,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _SectionChip(
-                              label: 'Route',
-                              count: counts.distances,
-                              selected:
-                                  _contentSection ==
-                                  _SavedContentSection.distances,
-                              onTap: () => setState(
-                                () => _contentSection =
-                                    _SavedContentSection.distances,
-                              ),
-                            ),
-                          ],
+                      if (_filter != _SavedFilter.all)
+                        _ActiveTag(
+                          label: 'Filter: ${_filterLabel(_filter)}',
+                          onClear: () =>
+                              setState(() => _filter = _SavedFilter.all),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (searched.isEmpty)
-                      Expanded(
-                        child:
-                            _searchQuery.isNotEmpty ||
-                                _filter != _SavedFilter.all ||
-                                _sort != _SavedSort.newest ||
-                                _groupFilter != 'All groups' ||
-                                _contentSection != _SavedContentSection.all
-                            ? const _EmptyState(
-                                title: 'No matching saved locations',
-                                subtitle:
-                                    'Try changing search text, filter, sort, or group.',
-                              )
-                            : const _EmptyState(),
-                      )
-                    else ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '${searched.length} result${searched.length == 1 ? '' : 's'}',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Colors.black54,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
+                      if (_sort != _SavedSort.newest)
+                        _ActiveTag(
+                          label: 'Sort: ${_sortLabel(_sort)}',
+                          onClear: () =>
+                              setState(() => _sort = _SavedSort.newest),
                         ),
-                      ),
-                      Expanded(
-                        child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          itemCount: searched.length,
-                          separatorBuilder: (_, _) =>
-                              SizedBox(height: _compactMode ? 8 : 12),
-                          itemBuilder: (context, index) {
-                            final item = searched[index];
-                            final id = _selectionKey(item);
-                            final isSelected = _selectedIds.contains(id);
-                            final isRemote = _isRemoteItem(item);
-                            return _SavedLocationCard(
-                              id: id,
-                              name:
-                                  item['name']?.toString() ??
-                                  item['place']?.toString() ??
-                                  'Saved location',
-                              group: _groupOf(item),
-                              createdAt: item['createdAt']?.toString(),
-                              updatedAt: item['updatedAt']?.toString(),
-                              points: _pointsCount(item),
-                              isCloudSynced: _isCloudSynced(item),
-                              viewMode: _viewMode,
-                              compactMode: _compactMode,
-                              selectionMode: _selectionMode,
-                              isSelected: isSelected,
-                              onTap: () {
-                                if (_selectionMode) {
-                                  _toggleSelection(id);
-                                  return;
-                                }
-                                if (isRemote) {
-                                  final remoteLand = _remoteLandFromItem(item);
-                                  if (remoteLand != null) {
-                                    _showRemoteLandDetails(remoteLand);
-                                    return;
-                                  }
-                                }
-                                final linkedCloudId = _linkedCloudId(item);
-                                if (linkedCloudId != null && canUseCloud) {
-                                  _openCloudDetailsById(
-                                    linkedCloudId,
-                                    fallbackName:
-                                        item['name']?.toString() ??
-                                        'Cloud land',
-                                  );
-                                  return;
-                                }
-                                _showDetails(context, item);
-                              },
-                              onLongPress: () {
-                                if (_selectionMode) {
-                                  _toggleSelection(id);
-                                  return;
-                                }
-                                _enterSelectionModeWith(id);
-                              },
-                              onMore: () {
-                                if (_selectionMode) {
-                                  _toggleSelection(id);
-                                  return;
-                                }
-                                _showActions(
-                                  context,
-                                  id,
-                                  item,
-                                  isRemote: isRemote,
+                      if (_groupFilter != 'All groups')
+                        _ActiveTag(
+                          label: 'Group: $_groupFilter',
+                          onClear: () =>
+                              setState(() => _groupFilter = 'All groups'),
+                        ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ValueListenableBuilder(
+                  valueListenable: box.listenable(),
+                  builder: (context, Box box, _) {
+                    final localItems = box.values
+                        .whereType<Map>()
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList();
+
+                    final remoteItems =
+                        remoteLandsState.asData?.value?.items ??
+                        const <LandListItem>[];
+                    final items = _buildDisplayItems(
+                      localItems: localItems,
+                      remoteItems: remoteItems,
+                      canUseCloud: canUseCloud,
+                    );
+
+                    final counts = _contentCounts(items);
+                    final sectioned = _applyContentSection(items);
+                    final filteredSorted = _applyFilterAndSort(sectioned);
+                    final searched = _applySearch(filteredSorted);
+                    final groups = _groupOptions(items);
+
+                    return Column(
+                      children: [
+                        if (groups.length > 1)
+                          SizedBox(
+                            height: 40,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              scrollDirection: Axis.horizontal,
+                              itemCount: groups.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (context, index) {
+                                final group = groups[index];
+                                return ChoiceChip(
+                                  label: Text(group),
+                                  selected: _groupFilter == group,
+                                  onSelected: (_) =>
+                                      setState(() => _groupFilter = group),
                                 );
                               },
-                            );
-                          },
+                            ),
+                          ),
+                        if (groups.length > 1) const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _SectionChip(
+                                  label: 'All',
+                                  count: items.length,
+                                  selected:
+                                      _contentSection ==
+                                      _SavedContentSection.all,
+                                  onTap: () => setState(
+                                    () => _contentSection =
+                                        _SavedContentSection.all,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _SectionChip(
+                                  label: 'Points',
+                                  count: counts.markers,
+                                  selected:
+                                      _contentSection ==
+                                      _SavedContentSection.markers,
+                                  onTap: () => setState(
+                                    () => _contentSection =
+                                        _SavedContentSection.markers,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _SectionChip(
+                                  label: 'Area',
+                                  count: counts.fields,
+                                  selected:
+                                      _contentSection ==
+                                      _SavedContentSection.fields,
+                                  onTap: () => setState(
+                                    () => _contentSection =
+                                        _SavedContentSection.fields,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _SectionChip(
+                                  label: 'Route',
+                                  count: counts.distances,
+                                  selected:
+                                      _contentSection ==
+                                      _SavedContentSection.distances,
+                                  onTap: () => setState(
+                                    () => _contentSection =
+                                        _SavedContentSection.distances,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
-                  ],
-                );
-              },
+                        const SizedBox(height: 8),
+                        if (searched.isEmpty)
+                          Expanded(
+                            child:
+                                _searchQuery.isNotEmpty ||
+                                    _filter != _SavedFilter.all ||
+                                    _sort != _SavedSort.newest ||
+                                    _groupFilter != 'All groups' ||
+                                    _contentSection != _SavedContentSection.all
+                                ? const _EmptyState(
+                                    title: 'No matching saved locations',
+                                    subtitle:
+                                        'Try changing search text, filter, sort, or group.',
+                                  )
+                                : const _EmptyState(),
+                          )
+                        else ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '${searched.length} result${searched.length == 1 ? '' : 's'}',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Colors.black54,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              itemCount: searched.length,
+                              separatorBuilder: (_, _) =>
+                                  SizedBox(height: _compactMode ? 8 : 12),
+                              itemBuilder: (context, index) {
+                                final item = searched[index];
+                                final id = _selectionKey(item);
+                                final isSelected = _selectedIds.contains(id);
+                                final isRemote = _isRemoteItem(item);
+                                return _SavedLocationCard(
+                                  id: id,
+                                  name:
+                                      item['name']?.toString() ??
+                                      item['place']?.toString() ??
+                                      'Saved location',
+                                  group: _groupOf(item),
+                                  createdAt: item['createdAt']?.toString(),
+                                  updatedAt: item['updatedAt']?.toString(),
+                                  points: _pointsCount(item),
+                                  isCloudSynced: _isCloudSynced(item),
+                                  viewMode: _viewMode,
+                                  compactMode: _compactMode,
+                                  selectionMode: _selectionMode,
+                                  isSelected: isSelected,
+                                  onTap: () {
+                                    if (_selectionMode) {
+                                      _toggleSelection(id);
+                                      return;
+                                    }
+                                    if (isRemote) {
+                                      final remoteLand = _remoteLandFromItem(
+                                        item,
+                                      );
+                                      if (remoteLand != null) {
+                                        _showRemoteLandDetails(remoteLand);
+                                        return;
+                                      }
+                                    }
+                                    final linkedCloudId = _linkedCloudId(item);
+                                    if (linkedCloudId != null && canUseCloud) {
+                                      _openCloudDetailsById(
+                                        linkedCloudId,
+                                        fallbackName:
+                                            item['name']?.toString() ??
+                                            'Cloud land',
+                                      );
+                                      return;
+                                    }
+                                    _showDetails(context, item);
+                                  },
+                                  onLongPress: () {
+                                    if (_selectionMode) {
+                                      _toggleSelection(id);
+                                      return;
+                                    }
+                                    _enterSelectionModeWith(id);
+                                  },
+                                  onMore: () {
+                                    if (_selectionMode) {
+                                      _toggleSelection(id);
+                                      return;
+                                    }
+                                    _showActions(
+                                      context,
+                                      id,
+                                      item,
+                                      isRemote: isRemote,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton.extended(
+            heroTag: 'manual_coords_fab',
+            onPressed: _showManualCoordinateEntry,
+            backgroundColor: const Color(0xFF001F3F),
+            icon: const Icon(
+              Icons.add_location_alt_outlined,
+              color: Colors.white,
+            ),
+            label: const Text(
+              'Add manually',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  void _showManualCoordinateEntry() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => _ManualCoordinateEntrySheet(
+        onSaved: () {
+          _fetchRemoteData();
+        },
       ),
     );
   }
@@ -1841,13 +1887,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }) {
     final buffer = StringBuffer()
       ..writeln(title)
-      ..writeln('Latitude: ${latitude.toStringAsFixed(6)}')
-      ..writeln('Longitude: ${longitude.toStringAsFixed(6)}');
+      ..writeln(
+        'Lat/Long: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
+      );
 
     if (easting != null && northing != null) {
-      buffer
-        ..writeln('Easting: ${easting.toStringAsFixed(2)}')
-        ..writeln('Northing: ${northing.toStringAsFixed(2)}');
+      buffer.writeln(
+        'E/N: ${easting.toStringAsFixed(2)}, ${northing.toStringAsFixed(2)}',
+      );
       if (zone != null && zone.isNotEmpty) {
         buffer.writeln('Zone: $zone');
       }
@@ -1869,53 +1916,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value);
     return null;
-  }
-}
-
-class _ViewModeChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ViewModeChip({
-    required this.label,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = isSelected ? theme.colorScheme.primary : Colors.black54;
-    final bgColor = isSelected
-        ? theme.colorScheme.primary.withValues(alpha: 0.1)
-        : Colors.grey.shade100;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -2379,669 +2379,6 @@ class _SavedLocationCard extends StatelessWidget {
   }
 }
 
-class _RemoteLandDetailSheet extends ConsumerStatefulWidget {
-  final LandListItem land;
-  final Future<void> Function() onRemoteChanged;
-  final VoidCallback? onOpenMapRequested;
-
-  const _RemoteLandDetailSheet({
-    required this.land,
-    required this.onRemoteChanged,
-    this.onOpenMapRequested,
-  });
-
-  @override
-  ConsumerState<_RemoteLandDetailSheet> createState() =>
-      _RemoteLandDetailSheetState();
-}
-
-class _RemoteLandDetailSheetState
-    extends ConsumerState<_RemoteLandDetailSheet> {
-  bool _isDeleting = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final detailState = ref.watch(remoteLandDetailProvider(widget.land.id));
-
-    return SafeArea(
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.8,
-        minChildSize: 0.5,
-        maxChildSize: 0.94,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: detailState.when(
-              data: (detail) => _buildLoaded(context, detail),
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 48),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (error, _) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 36,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      error.toString(),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => ref.invalidate(
-                        remoteLandDetailProvider(widget.land.id),
-                      ),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoaded(BuildContext context, LandDetail detail) {
-    final points = _extractRemoteLatLngPoints(detail.points);
-    final pointLabels = _extractRemotePointLabels(detail.points, points.length);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Center(
-          child: Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            detail.name,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '${points.length} points · ${detail.type}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Place: ${detail.place?.trim().isNotEmpty == true ? detail.place! : '—'}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Phone: ${detail.phone?.trim().isNotEmpty == true ? detail.phone! : '—'}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Area: ${detail.area == null ? '—' : detail.area!.toStringAsFixed(2)}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Perimeter: ${detail.perimeter == null ? '—' : detail.perimeter!.toStringAsFixed(2)}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Created: ${_formatStaticDate(detail.createdAt)}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-          ),
-        ),
-        if ((detail.updatedAt ?? '').isNotEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Updated: ${_formatStaticDate(detail.updatedAt)}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-          ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Type: ${detail.type}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-          ),
-        ),
-        if ((detail.description ?? '').trim().isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              detail.description!,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
-        const SizedBox(height: 16),
-        if (points.isNotEmpty)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 180,
-              child: FlutterMap(
-                options: MapOptions(
-                  initialCenter: points.first,
-                  initialZoom: 17,
-                  interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.none,
-                  ),
-                  cameraConstraint: CameraConstraint.contain(
-                    bounds: LatLngBounds.fromPoints(points),
-                  ),
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.geo_coordinates',
-                  ),
-                  if (points.length >= 2)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: points,
-                          strokeWidth: 3,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ],
-                    ),
-                  if (detail.type == 'polygon' && points.length >= 3)
-                    PolygonLayer(
-                      polygons: [
-                        Polygon(
-                          points: points,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.16),
-                          borderStrokeWidth: 2,
-                          borderColor: Theme.of(context).colorScheme.primary,
-                        ),
-                      ],
-                    ),
-                  MarkerLayer(
-                    markers: [
-                      for (int i = 0; i < points.length; i++)
-                        Marker(
-                          width: 86,
-                          height: 42,
-                          point: points[i],
-                          child: _MapPointLabelMarker(
-                            label: pointLabels[i],
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (points.isNotEmpty) const SizedBox(height: 16),
-        if (points.isNotEmpty)
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () {
-                final target = LandNavigationTarget(
-                  point: _representativePoint(points),
-                  points: points,
-                  pointLabels: pointLabels,
-                  label: detail.name,
-                  kind: _navigationKind(detail.type, points.length),
-                );
-                ref.read(landMapProvider.notifier).setNavigationTarget(target);
-                Navigator.of(context).pop();
-                widget.onOpenMapRequested?.call();
-              },
-              icon: const Icon(Icons.navigation_outlined),
-              label: const Text('Go to'),
-            ),
-          ),
-        if (points.isNotEmpty) const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () =>
-                ref.invalidate(remoteLandDetailProvider(widget.land.id)),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Refresh'),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isDeleting ? null : () => _deleteLand(detail),
-            icon: _isDeleting
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.delete_outline, color: Colors.red),
-            label: const Text(
-              'Delete land',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _showEditMetadataSheet(detail),
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Edit metadata'),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Markers',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => _showMarkerSheet(detail),
-              icon: const Icon(Icons.add),
-              label: const Text('Add marker'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (points.isEmpty)
-          const Text('No points saved.')
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: detail.points.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final point = detail.points[index];
-              final lat = point.y;
-              final lng = point.x;
-              final label = point.label?.trim().isNotEmpty == true
-                  ? point.label!
-                  : '${index + 1}';
-              final isPolyline = detail.type == 'polyline';
-              return ListTile(
-                dense: true,
-                leading: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isPolyline
-                        ? Colors.orange.shade700
-                        : Theme.of(context).colorScheme.primary,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      label.length > 3 ? '${index + 1}' : label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                title: isPolyline && point.label?.trim().isNotEmpty == true
-                    ? Text(
-                        point.label!,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      )
-                    : Text(
-                        '${lat?.toStringAsFixed(6) ?? '—'}, ${lng?.toStringAsFixed(6) ?? '—'}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                subtitle: isPolyline && point.label?.trim().isNotEmpty == true
-                    ? Text(
-                        '${lat?.toStringAsFixed(6) ?? '—'}, ${lng?.toStringAsFixed(6) ?? '—'}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade600,
-                        ),
-                      )
-                    : point.easting != null && point.northing != null
-                    ? Text(
-                        'E ${point.easting!.toStringAsFixed(2)} N ${point.northing!.toStringAsFixed(2)} · Zone ${point.zone ?? '—'}${point.band ?? ''}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade500,
-                        ),
-                      )
-                    : null,
-              );
-            },
-          ),
-        const SizedBox(height: 16),
-        if (detail.markers.isEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'No cloud markers found for this land.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.black54),
-            ),
-          )
-        else
-          ...detail.markers.map(
-            (marker) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              leading: const Icon(Icons.place_outlined),
-              title: Text(marker.name),
-              subtitle: Text(
-                '${marker.latitude?.toStringAsFixed(6) ?? '—'}, ${marker.longitude?.toStringAsFixed(6) ?? '—'}',
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _showMarkerSheet(detail, marker: marker),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () => _deleteMarker(detail, marker),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  double? _toDouble(dynamic value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value);
-    return null;
-  }
-
-  List<LatLng> _extractRemoteLatLngPoints(List<LandPoint> remotePoints) {
-    final points = <LatLng>[];
-    for (final point in remotePoints) {
-      final lat =
-          point.y ??
-          _toDouble(point.raw['lat']) ??
-          _toDouble(point.raw['latitude']);
-      final lng =
-          point.x ??
-          _toDouble(point.raw['lng']) ??
-          _toDouble(point.raw['longitude']);
-      if (lat == null || lng == null) continue;
-      points.add(LatLng(lat, lng));
-    }
-    return points;
-  }
-
-  List<String> _extractRemotePointLabels(
-    List<LandPoint> remotePoints,
-    int pointsCount,
-  ) {
-    if (pointsCount <= 0) return const [];
-    final labels = <String>[];
-    for (int i = 0; i < pointsCount; i++) {
-      final raw = i < remotePoints.length
-          ? (remotePoints[i].label?.trim() ?? '')
-          : '';
-      labels.add(raw.isEmpty ? '${i + 1}' : raw);
-    }
-    return labels;
-  }
-
-  LatLng _representativePoint(List<LatLng> points) {
-    if (points.length == 1) return points.first;
-
-    final lat =
-        points.fold<double>(0, (sum, point) => sum + point.latitude) /
-        points.length;
-    final lng =
-        points.fold<double>(0, (sum, point) => sum + point.longitude) /
-        points.length;
-    return LatLng(lat, lng);
-  }
-
-  Future<void> _deleteLand(LandDetail detail) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete cloud land?'),
-        content: Text('This will delete "${detail.name}" from the server.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final session = ref.read(authSessionProvider);
-    final token = session.token.trim();
-    if (token.isEmpty) return;
-
-    setState(() => _isDeleting = true);
-    try {
-      await ref.read(landCloudServiceProvider).deleteLand(token, detail.id);
-      await widget.onRemoteChanged();
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Cloud land deleted')));
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
-    } finally {
-      if (mounted) {
-        setState(() => _isDeleting = false);
-      }
-    }
-  }
-
-  Future<void> _showEditMetadataSheet(LandDetail detail) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _EditRemoteLandSheet(
-        land: detail,
-        onSaved: () async {
-          ref.invalidate(remoteLandDetailProvider(detail.id));
-          await widget.onRemoteChanged();
-        },
-      ),
-    );
-  }
-
-  Future<void> _showMarkerSheet(LandDetail detail, {LandMarker? marker}) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _EditRemoteMarkerSheet(
-        land: detail,
-        marker: marker,
-        onSaved: () async {
-          ref.invalidate(remoteLandDetailProvider(detail.id));
-          await widget.onRemoteChanged();
-        },
-      ),
-    );
-  }
-
-  Future<void> _deleteMarker(LandDetail detail, LandMarker marker) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete marker?'),
-        content: Text('This will delete marker "${marker.name}".'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final token = ref.read(authSessionProvider).token.trim();
-    if (token.isEmpty) return;
-
-    try {
-      await ref
-          .read(landCloudServiceProvider)
-          .deleteMarker(token, detail.id, marker.id);
-      ref.invalidate(remoteLandDetailProvider(detail.id));
-      await widget.onRemoteChanged();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Marker deleted')));
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
-    }
-  }
-}
-
-class _MapPointLabelMarker extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _MapPointLabelMarker({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withValues(alpha: 0.30)),
-            ),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EditRemoteLandSheet extends ConsumerStatefulWidget {
   final LandDetail land;
   final Future<void> Function() onSaved;
@@ -3205,329 +2542,6 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
   }
 }
 
-class _EditRemoteMarkerSheet extends ConsumerStatefulWidget {
-  final LandDetail land;
-  final LandMarker? marker;
-  final Future<void> Function() onSaved;
-
-  const _EditRemoteMarkerSheet({
-    required this.land,
-    required this.onSaved,
-    this.marker,
-  });
-
-  @override
-  ConsumerState<_EditRemoteMarkerSheet> createState() =>
-      _EditRemoteMarkerSheetState();
-}
-
-class _EditRemoteMarkerSheetState
-    extends ConsumerState<_EditRemoteMarkerSheet> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameController;
-  late final TextEditingController _descriptionController;
-  late final TextEditingController _latitudeController;
-  late final TextEditingController _longitudeController;
-  late final TextEditingController _altitudeController;
-  late final TextEditingController _propertiesController;
-  String _markerType = 'pin';
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final marker = widget.marker;
-    _nameController = TextEditingController(text: marker?.name ?? '');
-    _descriptionController = TextEditingController(
-      text: marker?.description ?? '',
-    );
-    _latitudeController = TextEditingController(
-      text: marker?.latitude?.toString() ?? '',
-    );
-    _longitudeController = TextEditingController(
-      text: marker?.longitude?.toString() ?? '',
-    );
-    _altitudeController = TextEditingController(
-      text: marker?.altitude?.toString() ?? '',
-    );
-    _propertiesController = TextEditingController(
-      text: marker?.properties ?? '',
-    );
-    _markerType = (marker?.markerType ?? 'pin').trim().isEmpty
-        ? 'pin'
-        : marker!.markerType!;
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _latitudeController.dispose();
-    _longitudeController.dispose();
-    _altitudeController.dispose();
-    _propertiesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    final token = ref.read(authSessionProvider).token.trim();
-    if (token.isEmpty) return;
-
-    final latitude = double.tryParse(_latitudeController.text.trim());
-    final longitude = double.tryParse(_longitudeController.text.trim());
-    final altitude = double.tryParse(_altitudeController.text.trim());
-    if (latitude == null || longitude == null) return;
-
-    setState(() => _isSaving = true);
-    try {
-      if (widget.marker == null) {
-        await ref
-            .read(landCloudServiceProvider)
-            .createMarker(
-              token,
-              widget.land.id,
-              LandMarkerRequest(
-                name: _nameController.text.trim(),
-                description: _descriptionController.text.trim(),
-                latitude: latitude,
-                longitude: longitude,
-                altitude: altitude,
-                markerType: _markerType,
-                properties: _propertiesController.text.trim(),
-              ),
-            );
-      } else {
-        await ref
-            .read(landCloudServiceProvider)
-            .updateMarker(
-              token,
-              widget.land.id,
-              widget.marker!.id,
-              UpdateLandMarkerRequest(
-                name: _nameController.text.trim(),
-                description: _descriptionController.text.trim(),
-                latitude: latitude,
-                longitude: longitude,
-                altitude: altitude,
-                markerType: _markerType,
-                properties: _propertiesController.text.trim(),
-              ),
-            );
-      }
-      await widget.onSaved();
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.marker == null
-                ? 'Marker created successfully'
-                : 'Marker updated successfully',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomInset + 12),
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: SingleChildScrollView(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 44,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    widget.marker == null ? 'Add marker' : 'Edit marker',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Name'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Name is required'
-                        : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(labelText: 'Description'),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _latitudeController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          ),
-                          decoration: const InputDecoration(
-                            labelText: 'Latitude',
-                          ),
-                          validator: (value) {
-                            final parsed = double.tryParse(value?.trim() ?? '');
-                            if (parsed == null) return 'Required';
-                            if (parsed < -90 || parsed > 90) {
-                              return '-90 to 90';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _longitudeController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          ),
-                          decoration: const InputDecoration(
-                            labelText: 'Longitude',
-                          ),
-                          validator: (value) {
-                            final parsed = double.tryParse(value?.trim() ?? '');
-                            if (parsed == null) return 'Required';
-                            if (parsed < -180 || parsed > 180) {
-                              return '-180 to 180';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _altitudeController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          ),
-                          decoration: const InputDecoration(
-                            labelText: 'Altitude',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _markerType,
-                          decoration: const InputDecoration(
-                            labelText: 'Marker type',
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: 'pin', child: Text('Pin')),
-                            DropdownMenuItem(
-                              value: 'waypoint',
-                              child: Text('Waypoint'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'checkpoint',
-                              child: Text('Checkpoint'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _markerType = value);
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _propertiesController,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Properties JSON',
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _submit,
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              widget.marker == null
-                                  ? 'Create marker'
-                                  : 'Save marker',
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _formatStaticDate(String? iso) {
-  if (iso == null || iso.isEmpty) return 'Unknown';
-  final parsed = DateTime.tryParse(iso);
-  if (parsed == null) return 'Unknown';
-  final yyyy = parsed.year.toString().padLeft(4, '0');
-  final mm = parsed.month.toString().padLeft(2, '0');
-  final dd = parsed.day.toString().padLeft(2, '0');
-  return '$dd/$mm/$yyyy';
-}
-
 class _ActionTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -3678,7 +2692,6 @@ class _LandDetailSheet extends ConsumerStatefulWidget {
 class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
   bool _showAllPoints = false;
   bool _isDeleting = false;
-  bool _isSaving = false;
 
   // Local helpers
   List<LatLng> get _localPoints {
@@ -3961,7 +2974,6 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
   }
 
   Widget _buildMapCard(BuildContext context, List<LatLng> points, String type) {
-    final theme = Theme.of(context);
     final color = _typeBadgeColor(type);
     return Container(
       decoration: BoxDecoration(
@@ -4549,4 +3561,1174 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ManualCoordinateEntrySheet extends ConsumerStatefulWidget {
+  final VoidCallback onSaved;
+
+  const _ManualCoordinateEntrySheet({required this.onSaved});
+
+  @override
+  ConsumerState<_ManualCoordinateEntrySheet> createState() =>
+      _ManualCoordinateEntrySheetState();
+}
+
+enum _CoordInputMode { latLng, utm }
+
+class _ManualCoordinateEntrySheetState
+    extends ConsumerState<_ManualCoordinateEntrySheet> {
+  final _nameController = TextEditingController();
+  final _placeController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
+  _CoordInputMode _inputMode = _CoordInputMode.latLng;
+  final List<_ManualPoint> _points = [];
+  bool _isSaving = false;
+  String? _feedbackMessage;
+  bool _feedbackIsError = false;
+
+  // LatLng input controllers
+  final _latController = TextEditingController();
+  final _lngController = TextEditingController();
+  final _latLngLabelController = TextEditingController();
+
+  // UTM input controllers
+  final _eastingController = TextEditingController();
+  final _northingController = TextEditingController();
+  final _zoneController = TextEditingController();
+  final _bandController = TextEditingController();
+  String _hemisphere = 'S';
+  final _utmLabelController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _placeController.dispose();
+    _phoneController.dispose();
+    _descriptionController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
+    _latLngLabelController.dispose();
+    _eastingController.dispose();
+    _northingController.dispose();
+    _zoneController.dispose();
+    _bandController.dispose();
+    _utmLabelController.dispose();
+    super.dispose();
+  }
+
+  void _addPoint() {
+    if (_inputMode == _CoordInputMode.latLng) {
+      final lat = double.tryParse(_latController.text.trim());
+      final lng = double.tryParse(_lngController.text.trim());
+      if (lat == null || lng == null) {
+        _setFeedback('Enter valid latitude and longitude.', isError: true);
+        return;
+      }
+      if (lat < -90 || lat > 90) {
+        _setFeedback('Latitude must be between -90 and 90.', isError: true);
+        return;
+      }
+      if (lng < -180 || lng > 180) {
+        _setFeedback('Longitude must be between -180 and 180.', isError: true);
+        return;
+      }
+
+      // Convert to UTM
+      final ellipsoid = ref.read(referenceEllipsoidProvider);
+      final utm = UtmConverter.fromLatLng(lat, lng, ellipsoid);
+
+      setState(() {
+        _points.add(
+          _ManualPoint(
+            label: _latLngLabelController.text.trim().isEmpty
+                ? '${_points.length + 1}'
+                : _latLngLabelController.text.trim(),
+            lat: lat,
+            lng: lng,
+            easting: utm?.easting,
+            northing: utm?.northing,
+            zone: utm?.zoneNumber.toString(),
+            band: utm?.zoneLetter,
+            hemisphere: lat >= 0 ? 'N' : 'S',
+          ),
+        );
+        _latController.clear();
+        _lngController.clear();
+        _latLngLabelController.clear();
+      });
+      _setFeedback('Point ${_points.length} added.', isError: false);
+    } else {
+      final easting = double.tryParse(_eastingController.text.trim());
+      final northing = double.tryParse(_northingController.text.trim());
+      final zone = _zoneController.text.trim();
+      final band = _bandController.text.trim();
+
+      if (easting == null || northing == null) {
+        _setFeedback('Enter valid easting and northing.', isError: true);
+        return;
+      }
+      if (zone.isEmpty) {
+        _setFeedback('Zone number is required.', isError: true);
+        return;
+      }
+
+      // Convert UTM back to lat/lng
+      final ellipsoid = ref.read(referenceEllipsoidProvider);
+      final latLng = UtmConverter.toLatLng(
+        easting: easting,
+        northing: northing,
+        zoneNumber: int.tryParse(zone) ?? 37,
+        zoneLetter: band.isEmpty ? 'M' : band,
+        ellipsoid: ellipsoid,
+        hemisphere: _hemisphere,
+      );
+
+      setState(() {
+        _points.add(
+          _ManualPoint(
+            label: _utmLabelController.text.trim().isEmpty
+                ? '${_points.length + 1}'
+                : _utmLabelController.text.trim(),
+            lat: latLng?.latitude ?? 0,
+            lng: latLng?.longitude ?? 0,
+            easting: easting,
+            northing: northing,
+            zone: zone,
+            band: band.isEmpty ? null : band,
+            hemisphere: _hemisphere,
+          ),
+        );
+        _eastingController.clear();
+        _northingController.clear();
+        _zoneController.clear();
+        _bandController.clear();
+        _utmLabelController.clear();
+      });
+      _setFeedback('Point ${_points.length} added.', isError: false);
+    }
+  }
+
+  void _removePoint(int index) {
+    setState(() => _points.removeAt(index));
+  }
+
+  void _setFeedback(String message, {required bool isError}) {
+    setState(() {
+      _feedbackMessage = message;
+      _feedbackIsError = isError;
+    });
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _setFeedback('Name is required.', isError: true);
+      return;
+    }
+    if (_points.isEmpty) {
+      _setFeedback('Add at least one point.', isError: true);
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final box = Hive.box('landbox');
+      final id = const Uuid().v4();
+      final now = DateTime.now().toIso8601String();
+      final ellipsoid = ref.read(referenceEllipsoidProvider);
+
+      final type = _points.length == 1
+          ? 'point'
+          : _points.length == 2
+          ? 'polyline'
+          : 'polygon';
+
+      // Save locally first
+      await box.put(id, {
+        'id': id,
+        'entityType': type,
+        'type': type,
+        'name': name,
+        if (_placeController.text.trim().isNotEmpty)
+          'place': _placeController.text.trim(),
+        if (_phoneController.text.trim().isNotEmpty)
+          'phone': _phoneController.text.trim(),
+        if (_descriptionController.text.trim().isNotEmpty)
+          'description': _descriptionController.text.trim(),
+        'referenceEllipsoid': ellipsoid.name,
+        'labels': _points.map((p) => p.label).toList(),
+        'points': _points
+            .asMap()
+            .entries
+            .map(
+              (e) => {
+                'order': e.key,
+                'lat': e.value.lat,
+                'lng': e.value.lng,
+                if (e.value.easting != null) 'easting': e.value.easting,
+                if (e.value.northing != null) 'northing': e.value.northing,
+                if (e.value.zone != null) 'zone': e.value.zone,
+                if (e.value.band != null) 'band': e.value.band,
+                'hemisphere': e.value.hemisphere,
+                'label': e.value.label,
+              },
+            )
+            .toList(),
+        'syncStatus': 'pending',
+        'createdAt': now,
+        'updatedAt': now,
+      });
+
+      // Attempt cloud sync
+      final session = ref.read(authSessionProvider);
+      if (session.isLoggedIn && session.isVerified) {
+        try {
+          final service = ref.read(landCloudServiceProvider);
+          final coordinates = _points
+              .asMap()
+              .entries
+              .map(
+                (e) => LandCoordinateRequest(
+                  x: e.value.lng,
+                  y: e.value.lat,
+                  easting: e.value.easting,
+                  northing: e.value.northing,
+                  zone: e.value.zone,
+                  band: e.value.band,
+                  hemisphere: e.value.hemisphere,
+                  label: e.value.label,
+                ),
+              )
+              .toList();
+
+          final result = await service.createLand(
+            session.token,
+            CreateLandRequest(
+              type: type,
+              name: name,
+              place: _placeController.text.trim().isEmpty
+                  ? null
+                  : _placeController.text.trim(),
+              phone: _phoneController.text.trim().isEmpty
+                  ? null
+                  : _phoneController.text.trim(),
+              description: _descriptionController.text.trim().isEmpty
+                  ? null
+                  : _descriptionController.text.trim(),
+              referenceEllipsoid: ellipsoid.displayName,
+              coordinates: coordinates,
+            ),
+          );
+
+          // Update local record with cloud id
+          final saved = Map<String, dynamic>.from(box.get(id) as Map);
+          saved['cloudId'] = result.id;
+          saved['syncStatus'] = 'synced';
+          await box.put(id, saved);
+
+          if (!mounted) return;
+          _setFeedback('Saved and synced to cloud!', isError: false);
+        } catch (e) {
+          if (!mounted) return;
+          _setFeedback(
+            'Saved locally. Cloud sync failed: ${e.toString()}',
+            isError: false,
+          );
+        }
+      } else {
+        _setFeedback(
+          'Saved locally. Will sync when logged in.',
+          isError: false,
+        );
+      }
+
+      widget.onSaved();
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      _setFeedback('Failed to save: ${e.toString()}', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 16, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF001F3F).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.add_location_alt_outlined,
+                    color: Color(0xFF001F3F),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Add location manually',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF111827),
+                        ),
+                      ),
+                      Text(
+                        'Enter coordinates in your preferred format',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+
+          // Scrollable body
+          Flexible(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, bottomInset + 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Location metadata ──────────────────
+                  _SectionHeader(title: 'Location details'),
+                  const SizedBox(height: 10),
+                  _Field(
+                    controller: _nameController,
+                    label: 'Name *',
+                    hint: 'e.g. Farm boundary, Warehouse',
+                    icon: Icons.label_outline,
+                  ),
+                  const SizedBox(height: 10),
+                  _Field(
+                    controller: _placeController,
+                    label: 'Place',
+                    hint: 'e.g. Dodoma, Tanzania',
+                    icon: Icons.place_outlined,
+                  ),
+                  const SizedBox(height: 10),
+                  _Field(
+                    controller: _phoneController,
+                    label: 'Phone',
+                    hint: 'Contact number',
+                    icon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 10),
+                  _Field(
+                    controller: _descriptionController,
+                    label: 'Description',
+                    hint: 'Notes about this location',
+                    icon: Icons.notes_outlined,
+                    minLines: 2,
+                    maxLines: 3,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Coordinate input mode ──────────────
+                  _SectionHeader(title: 'Add coordinate points'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Choose your preferred coordinate format to add points one by one.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Mode toggle
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(
+                              () => _inputMode = _CoordInputMode.latLng,
+                            ),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _inputMode == _CoordInputMode.latLng
+                                    ? const Color(0xFF001F3F)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.language,
+                                    size: 16,
+                                    color: _inputMode == _CoordInputMode.latLng
+                                        ? Colors.white
+                                        : Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Lat / Lng',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color:
+                                          _inputMode == _CoordInputMode.latLng
+                                          ? Colors.white
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(
+                              () => _inputMode = _CoordInputMode.utm,
+                            ),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _inputMode == _CoordInputMode.utm
+                                    ? const Color(0xFF001F3F)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.grid_on,
+                                    size: 16,
+                                    color: _inputMode == _CoordInputMode.utm
+                                        ? Colors.white
+                                        : Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'UTM',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: _inputMode == _CoordInputMode.utm
+                                          ? Colors.white
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // ── Coordinate input fields ────────────
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: _inputMode == _CoordInputMode.latLng
+                        ? _LatLngInputSection(
+                            key: const ValueKey('latlng'),
+                            latController: _latController,
+                            lngController: _lngController,
+                            labelController: _latLngLabelController,
+                            onAdd: _addPoint,
+                          )
+                        : _UtmInputSection(
+                            key: const ValueKey('utm'),
+                            eastingController: _eastingController,
+                            northingController: _northingController,
+                            zoneController: _zoneController,
+                            bandController: _bandController,
+                            hemisphere: _hemisphere,
+                            labelController: _utmLabelController,
+                            onHemisphereChanged: (v) =>
+                                setState(() => _hemisphere = v),
+                            onAdd: _addPoint,
+                          ),
+                  ),
+
+                  // ── Feedback banner ────────────────────
+                  if (_feedbackMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _feedbackIsError
+                            ? Colors.red.shade50
+                            : Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _feedbackIsError
+                              ? Colors.red.shade200
+                              : Colors.green.shade200,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _feedbackIsError
+                                ? Icons.error_outline
+                                : Icons.check_circle_outline,
+                            size: 16,
+                            color: _feedbackIsError
+                                ? Colors.red.shade700
+                                : Colors.green.shade700,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _feedbackMessage!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _feedbackIsError
+                                    ? Colors.red.shade800
+                                    : Colors.green.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Points list ────────────────────────
+                  if (_points.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _SectionHeader(title: 'Added points (${_points.length})'),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        children: _points.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final point = entry.value;
+                          final isLast = index == _points.length - 1;
+                          return Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF001F3F),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          point.label.length > 3
+                                              ? '${index + 1}'
+                                              : point.label,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          if (point.label != '${index + 1}')
+                                            Text(
+                                              point.label,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF111827),
+                                              ),
+                                            ),
+                                          Text(
+                                            '${point.lat.toStringAsFixed(6)}, ${point.lng.toStringAsFixed(6)}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey.shade600,
+                                            ),
+                                          ),
+                                          if (point.easting != null &&
+                                              point.northing != null)
+                                            Text(
+                                              'E ${point.easting!.toStringAsFixed(2)}  N ${point.northing!.toStringAsFixed(2)}  Zone ${point.zone ?? '—'}${point.band ?? ''}',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey.shade400,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        color: Colors.red,
+                                        size: 18,
+                                      ),
+                                      onPressed: () => _removePoint(index),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!isLast)
+                                Divider(height: 1, color: Colors.grey.shade200),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // ── Save button ────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF001F3F),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: _isSaving ? 0 : 2,
+                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Save location',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Sub-widgets ──────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
+        color: Color(0xFF111827),
+        letterSpacing: 0.1,
+      ),
+    );
+  }
+}
+
+class _Field extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final TextInputType keyboardType;
+  final int minLines;
+  final int maxLines;
+
+  const _Field({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    this.keyboardType = TextInputType.text,
+    this.minLines = 1,
+    this.maxLines = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          minLines: minLines,
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+            prefixIcon: Icon(icon, color: Colors.grey.shade500, size: 18),
+            filled: true,
+            fillColor: const Color(0xFFF9FAFB),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFF001F3F),
+                width: 1.8,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 13,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LatLngInputSection extends StatelessWidget {
+  final TextEditingController latController;
+  final TextEditingController lngController;
+  final TextEditingController labelController;
+  final VoidCallback onAdd;
+
+  const _LatLngInputSection({
+    super.key,
+    required this.latController,
+    required this.lngController,
+    required this.labelController,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _CompactField(
+                  controller: latController,
+                  label: 'Latitude',
+                  hint: '-6.792453',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _CompactField(
+                  controller: lngController,
+                  label: 'Longitude',
+                  hint: '39.208328',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _CompactField(
+            controller: labelController,
+            label: 'Point label (optional)',
+            hint: 'e.g. A1, Corner 1',
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add point'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF001F3F),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UtmInputSection extends StatelessWidget {
+  final TextEditingController eastingController;
+  final TextEditingController northingController;
+  final TextEditingController zoneController;
+  final TextEditingController bandController;
+  final String hemisphere;
+  final TextEditingController labelController;
+  final ValueChanged<String> onHemisphereChanged;
+  final VoidCallback onAdd;
+
+  const _UtmInputSection({
+    super.key,
+    required this.eastingController,
+    required this.northingController,
+    required this.zoneController,
+    required this.bandController,
+    required this.hemisphere,
+    required this.labelController,
+    required this.onHemisphereChanged,
+    required this.onAdd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _CompactField(
+                  controller: eastingController,
+                  label: 'Easting',
+                  hint: '525893.68',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _CompactField(
+                  controller: northingController,
+                  label: 'Northing',
+                  hint: '9252392.60',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _CompactField(
+                  controller: zoneController,
+                  label: 'Zone number',
+                  hint: '37',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _CompactField(
+                  controller: bandController,
+                  label: 'Band letter',
+                  hint: 'M',
+                  textCapitalization: TextCapitalization.characters,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Hemisphere',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        children: ['N', 'S'].map((h) {
+                          final selected = hemisphere == h;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () => onHemisphereChanged(h),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? const Color(0xFF001F3F)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  h,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: selected
+                                        ? Colors.white
+                                        : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _CompactField(
+            controller: labelController,
+            label: 'Point label (optional)',
+            hint: 'e.g. A1, Corner 1',
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add point'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF001F3F),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String hint;
+  final TextInputType keyboardType;
+  final TextCapitalization textCapitalization;
+
+  const _CompactField({
+    required this.controller,
+    required this.label,
+    required this.hint,
+    this.keyboardType = TextInputType.text,
+    this.textCapitalization = TextCapitalization.none,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 5),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          textCapitalization: textCapitalization,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+            filled: true,
+            fillColor: Colors.white,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF001F3F),
+                width: 1.5,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 10,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManualPoint {
+  final String label;
+  final double lat;
+  final double lng;
+  final double? easting;
+  final double? northing;
+  final String? zone;
+  final String? band;
+  final String hemisphere;
+
+  const _ManualPoint({
+    required this.label,
+    required this.lat,
+    required this.lng,
+    this.easting,
+    this.northing,
+    this.zone,
+    this.band,
+    required this.hemisphere,
+  });
 }
