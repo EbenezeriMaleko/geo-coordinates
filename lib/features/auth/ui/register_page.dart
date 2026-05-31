@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/auth_provider.dart';
 import 'login_page.dart';
@@ -22,6 +23,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _acceptedTerms = false;
+  bool _termsError = false;
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnim;
 
@@ -48,6 +51,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_acceptedTerms) {
+      setState(() => _termsError = true);
+      return;
+    }
     FocusScope.of(context).unfocus();
 
     final result = await ref
@@ -64,6 +71,15 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     if (result != null && result.success) {
       _showSuccessDialog(result.message);
     }
+  }
+
+  Future<void> _openTermsLink() async {
+    final uri = Uri.parse('https://www.databenki.com/terms/');
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (ok || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open terms and conditions')),
+    );
   }
 
   void _showSuccessDialog(String message) {
@@ -380,6 +396,59 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                 return null;
               },
             ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Checkbox(
+                  value: _acceptedTerms,
+                  onChanged: (value) {
+                    setState(() {
+                      _acceptedTerms = value ?? false;
+                      if (_acceptedTerms) _termsError = false;
+                    });
+                  },
+                  side: const BorderSide(color: Colors.black45, width: 2),
+                  activeColor: const Color(0xFF0C8A8C),
+                ),
+                Expanded(
+                  child: Wrap(
+                    children: [
+                      Text(
+                        'I agree to the ',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: Colors.black.withValues(alpha: 0.8),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: _openTermsLink,
+                        child: Text(
+                          'Terms and Conditions',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF001F3F),
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_termsError) ...[
+              const SizedBox(height: 8),
+              Text(
+                'You must accept the terms to continue.',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: const Color(0xFFDC2626),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
             SizedBox(
               height: 54,

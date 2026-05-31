@@ -436,8 +436,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _openContactUsPage() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const _ContactDialog()),
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.transparent,
+      builder: (_) => const _ContactDialog(),
     );
   }
 
@@ -773,7 +776,7 @@ class _ContactDialog extends StatefulWidget {
 class _ContactDialogState extends State<_ContactDialog> {
   final _controller = TextEditingController();
   bool _isSending = false;
-  static const String _supportEmail = 'support@databenki.com';
+  static const String _supportEmail = 'databenki.group@gmail.com';
 
   @override
   void dispose() {
@@ -832,7 +835,9 @@ class _ContactDialogState extends State<_ContactDialog> {
       if (!mounted) return;
       setState(() => _isSending = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong. Please try again.')),
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
       );
     }
   }
@@ -845,6 +850,8 @@ class _ContactDialogState extends State<_ContactDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       backgroundColor: Colors.white,
+      elevation: 12,
+      shadowColor: Colors.black.withValues(alpha: 0.25),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
@@ -862,20 +869,29 @@ class _ContactDialogState extends State<_ContactDialog> {
                     color: primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.mail_outline_rounded,
-                      color: primary, size: 20),
+                  child: Icon(
+                    Icons.mail_outline_rounded,
+                    color: primary,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Send feedback',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700)),
-                      Text('We read every message',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.black45)),
+                      Text(
+                        'Send feedback',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'We read every message',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.black45,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -903,9 +919,10 @@ class _ContactDialogState extends State<_ContactDialog> {
                 hintText:
                     'Tell us what\'s on your mind — a bug, suggestion, or question…',
                 hintStyle: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontSize: 13,
-                    height: 1.5),
+                  color: Colors.grey.shade400,
+                  fontSize: 13,
+                  height: 1.5,
+                ),
                 filled: true,
                 fillColor: const Color(0xFFF5F7FA),
                 border: OutlineInputBorder(
@@ -945,11 +962,17 @@ class _ContactDialogState extends State<_ContactDialog> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
-                    : const Text('Send',
+                    : const Text(
+                        'Send',
                         style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14)),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
               ),
             ),
           ],

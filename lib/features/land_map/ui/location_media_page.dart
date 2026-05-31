@@ -26,6 +26,7 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
   bool _isLoading = true;
   String? _errorMessage;
   String? _filterType;
+  bool _showDeleteToast = false;
 
   @override
   void initState() {
@@ -64,6 +65,12 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
           ..clear()
           ..addAll(result.items);
         _isLoading = false;
+        if (_showDeleteToast) {
+          _showDeleteToast = false;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Media deleted.')));
+        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -184,11 +191,17 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
                     final item = _items[index];
                     return _MediaCard(
                       item: item,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => LocationMediaViewerPage(item: item),
-                        ),
-                      ),
+                      onTap: () async {
+                        final deleted = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute<bool>(
+                            builder: (_) => LocationMediaViewerPage(item: item),
+                          ),
+                        );
+                        if (deleted == true && mounted) {
+                          _showDeleteToast = true;
+                          await _loadMedia();
+                        }
+                      },
                     );
                   },
                 ),
@@ -346,6 +359,8 @@ class _LocationMediaViewerPageState
     extends ConsumerState<LocationMediaViewerPage> {
   VideoPlayerController? _videoController;
   bool _loadingVideo = false;
+  bool _deletingMedia = false;
+  final LocationMediaService _service = LocationMediaService();
 
   @override
   void initState() {
@@ -376,6 +391,53 @@ class _LocationMediaViewerPageState
       _videoController = controller;
       _loadingVideo = false;
     });
+  }
+
+  Future<void> _deleteMedia() async {
+    if (_deletingMedia) return;
+    final session = ref.read(authSessionProvider);
+    if (!session.isLoggedIn || !session.isVerified) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Sign in to delete media.')));
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete media?'),
+        content: const Text(
+          'This will permanently delete the media from the server.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+    setState(() => _deletingMedia = true);
+
+    try {
+      await _service.deleteMedia(session.token, widget.item.id);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _deletingMedia = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
   }
 
   @override
@@ -411,7 +473,22 @@ class _LocationMediaViewerPageState
             color: Colors.black87,
           ),
         ),
-
+        actions: [
+          IconButton(
+            onPressed: _deletingMedia ? null : _deleteMedia,
+            icon: _deletingMedia
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : HugeIcon(
+                    icon: HugeIcons.strokeRoundedDelete02,
+                    color: Colors.red.shade600,
+                    size: 20,
+                  ),
+          ),
+        ],
         backgroundColor: Colors.white,
       ),
       body: SafeArea(
