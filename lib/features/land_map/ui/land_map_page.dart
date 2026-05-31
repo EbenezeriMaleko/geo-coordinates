@@ -59,7 +59,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   bool _isLocating = false;
   bool _isMarkerSaving = false;
-  bool _isAutoFieldCapture = false;
+  bool _showBottomActionBar = false;
   bool _isFullscreen = false;
   bool _isMapTypeSwitching = false;
   double _currentZoom = _defaultMapZoom;
@@ -136,6 +136,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   @override
+  void reassemble() {
+    super.reassemble();
+    if (!mounted) return;
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).popUntil((route) => route is! PopupRoute);
+  }
+
+  @override
   void dispose() {
     _interactionCooldownTimer?.cancel();
     _landMapSubscription?.close();
@@ -152,6 +162,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _toggleBottomActionBar() {
+    setState(() => _showBottomActionBar = !_showBottomActionBar);
   }
 
   Future<void> _initLocationAndCenter() async {
@@ -342,137 +356,139 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   Future<_MarkerDraft?> _promptMarkerDetails() async {
     final nameController = TextEditingController();
     final labelController = TextEditingController();
-    final result = await showModalBottomSheet<_MarkerDraft>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(20, 14, 20, bottomInset + 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(999),
+    try {
+      return await showModalBottomSheet<_MarkerDraft>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (sheetContext) {
+          final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, bottomInset + 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Save location',
-                style: GoogleFonts.inter(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF111827),
+                const SizedBox(height: 16),
+                Text(
+                  'Save location',
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF111827),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Add location name and point label before saving.',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
+                const SizedBox(height: 4),
+                Text(
+                  'Add location name and point label before saving.',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.next,
-                onSubmitted: (value) {
-                  FocusScope.of(sheetContext).nextFocus();
-                },
-                decoration: _sheetInputDecoration(
-                  hint: 'e.g. Home, Office, Farm Entrace',
-                  icon: Icons.place_outlined,
+                const SizedBox(height: 20),
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) {
+                    FocusScope.of(sheetContext).nextFocus();
+                  },
+                  decoration: _sheetInputDecoration(
+                    hint: 'e.g. Home, Office, Farm Entrace',
+                    icon: Icons.place_outlined,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: labelController,
-                textCapitalization: TextCapitalization.characters,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
-                  final name = nameController.text.trim();
-                  if (name.isEmpty) return;
-                  Navigator.of(sheetContext).pop(
-                    _MarkerDraft(
-                      name: name,
-                      label: labelController.text.trim(),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: labelController,
+                  textCapitalization: TextCapitalization.characters,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    final name = nameController.text.trim();
+                    if (name.isEmpty) return;
+                    Navigator.of(sheetContext).pop(
+                      _MarkerDraft(
+                        name: name,
+                        label: labelController.text.trim(),
+                      ),
+                    );
+                  },
+                  decoration: _sheetInputDecoration(
+                    hint: 'Point label (e.g. A1, P1)',
+                    icon: Icons.label_outline,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(null),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
                     ),
-                  );
-                },
-                decoration: _sheetInputDecoration(
-                  hint: 'Point label (e.g. A1, P1)',
-                  icon: Icons.label_outline,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(sheetContext).pop(null),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final name = nameController.text.trim();
+                          if (name.isNotEmpty) {
+                            Navigator.of(sheetContext).pop(
+                              _MarkerDraft(
+                                name: name,
+                                label: labelController.text.trim(),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF001F3F),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          'Save',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
                         ),
                       ),
-                      child: const Text('Cancel'),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final name = nameController.text.trim();
-                        if (name.isNotEmpty) {
-                          Navigator.of(sheetContext).pop(
-                            _MarkerDraft(
-                              name: name,
-                              label: labelController.text.trim(),
-                            ),
-                          );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF001F3F),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: Text(
-                        'Save',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      nameController.dispose();
-      labelController.dispose();
-    });
-    return result;
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } finally {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        nameController.dispose();
+        labelController.dispose();
+      });
+    }
   }
 
   Future<void> _deleteMarker(String id) async {
@@ -605,10 +621,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           width: markerWidth,
           height: 34,
           point: mid,
-          child: _SegmentDistancePill(
-            text: text,
-            color: color,
-          ),
+          child: _SegmentDistancePill(text: text, color: color),
         ),
       );
     }
@@ -628,10 +641,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           width: markerWidth,
           height: 34,
           point: mid,
-          child: _SegmentDistancePill(
-            text: text,
-            color: color,
-          ),
+          child: _SegmentDistancePill(text: text, color: color),
         ),
       );
     }
@@ -859,25 +869,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return LatLng(nearestY / latScale, nearestX / lngScale);
   }
 
-  double _bearingDegrees(LatLng from, LatLng to) {
-    final fromLat = from.latitude * pi / 180.0;
-    final fromLng = from.longitude * pi / 180.0;
-    final toLat = to.latitude * pi / 180.0;
-    final toLng = to.longitude * pi / 180.0;
-
-    final y = sin(toLng - fromLng) * cos(toLat);
-    final x =
-        cos(fromLat) * sin(toLat) -
-        sin(fromLat) * cos(toLat) * cos(toLng - fromLng);
-    return (atan2(y, x) * 180.0 / pi + 360.0) % 360.0;
-  }
-
-  String _bearingLabel(double bearing) {
-    const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    final index = ((bearing + 22.5) / 45.0).floor() % labels.length;
-    return labels[index];
-  }
-
   void _clearNavigationTarget() {
     ref.read(landMapProvider.notifier).clearNavigationTarget();
     _clearRoute();
@@ -939,58 +930,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return '${sqm.toStringAsFixed(1)} sqm';
   }
 
-  Future<void> _startAutoFieldCapture() async {
-    if (_fieldTrackingSubscription != null) return;
-    final notifier = ref.read(landMapProvider.notifier);
-
-    setState(() {
-      _isAutoFieldCapture = true;
-      _followCurrentLocation = true;
-    });
-    _fieldTrackingSubscription =
-        Geolocator.getPositionStream(
-          // locationSettings: const LocationSettings(
-          //   accuracy: LocationAccuracy.best,
-          //   distanceFilter: 1,
-          // ),
-          locationSettings: AndroidSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 1,
-            intervalDuration: const Duration(seconds: 2),
-            foregroundNotificationConfig: const ForegroundNotificationConfig(
-              notificationTitle: 'TaREF GPS - Coordinates',
-              notificationText: 'Location tracking is active',
-              enableWakeLock: true,
-              notificationIcon: AndroidResource(
-                name: 'ic_launcher',
-                defType: 'mipmap',
-              ),
-            ),
-          ),
-        ).listen(
-          (position) {
-            final result = notifier.addPointFromLivePosition(
-              position,
-              maxAccuracy: 20,
-              minDistanceMeters: 2.0,
-            );
-            if (result == null) return;
-          },
-          onError: (_) {
-            if (mounted) {
-              _snack('Auto capture stopped');
-              _stopAutoFieldCapture();
-            }
-          },
-        );
-  }
-
   Future<void> _stopAutoFieldCapture() async {
     await _fieldTrackingSubscription?.cancel();
     _fieldTrackingSubscription = null;
-    if (mounted) {
-      setState(() => _isAutoFieldCapture = false);
-    }
   }
 
   Future<void> _startNavigationTracking() async {
@@ -1269,6 +1211,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             referenceEllipsoid,
           );
     final bottomFabOffset = widget.bottomInset + 16;
+    final fabBottomOffset =
+        widget.bottomInset + (_showBottomActionBar ? 240 : 16);
+    final bottomBarInset = max(0.0, widget.bottomInset - 13);
 
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
     final navigationTarget = st.navigationTarget;
@@ -1733,27 +1678,52 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               ),
             ),
 
-        if (!_isFullscreen &&
-            (_activeTool != _MapTool.none ||
-                st.activeFieldId != null ||
-                navigationTarget != null))
+        if (_showBottomActionBar)
           Positioned(
-            top: _locationError == null
-                ? 92 + MediaQuery.of(context).padding.top
-                : 202 + MediaQuery.of(context).padding.top,
-            left: 16,
-            right: 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_activeTool != _MapTool.none || st.activeFieldId != null)
-                  _buildStatusPill(st),
-                if ((_activeTool != _MapTool.none ||
-                        st.activeFieldId != null) &&
-                    navigationTarget != null)
-                  const SizedBox(height: 8),
-                if (navigationTarget != null) _buildNavigationBanner(st),
-              ],
+            left: 0,
+            right: 0,
+            bottom: bottomBarInset,
+            child: _BottomActionBar(
+              activeTool: _activeTool,
+              distancePoints: _distancePoints,
+              totalDistanceMeters: _totalDistanceMeters(),
+              fieldPoints: st.points,
+              perimeterMeters: _calculatePerimeterMeters(st.points),
+              areaSqm: _calculateAreaSqm(st.points),
+              isLocating: _isLocating,
+              isMarkerSaving: _isMarkerSaving,
+              navigationTarget: navigationTarget,
+              navigationDistanceText: _isFetchingRoute
+                  ? 'Calculating...'
+                  : _currentRoute != null
+                  ? _formatDistance(_currentRoute!.distanceMeters, distanceUnit)
+                  : st.current != null && navigationGuidancePoint != null
+                  ? _formatDistance(
+                      _distanceCalculator.as(
+                        LengthUnit.Meter,
+                        st.current!,
+                        navigationGuidancePoint,
+                      ),
+                      distanceUnit,
+                    )
+                  : null,
+              navigationDurationText: _currentRoute?.formattedDuration,
+              distanceUnit: distanceUnit,
+              onClearNavigation: _clearNavigationTarget,
+              onToolChanged: (tool) => setState(() => _activeTool = tool),
+              onAddGpsPoint: _addCurrentPointToDistance,
+              onUndoDistance: _undoDistancePoint,
+              onClearDistance: _clearDistancePoints,
+              onSaveDistance: _showDistanceDialog,
+              onAddFieldPoint: () async {
+                final err = await ref
+                    .read(landMapProvider.notifier)
+                    .addPointFromCurrent();
+                if (err != null && mounted) _snack(err);
+              },
+              onUndoField: ref.read(landMapProvider.notifier).undoLastPoint,
+              onClearField: ref.read(landMapProvider.notifier).clearPoints,
+              onSaveField: _showFieldDialog,
             ),
           ),
 
@@ -1788,88 +1758,15 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         ),
 
         Positioned(
-          left: 16,
-          bottom: bottomFabOffset,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ToolButton(
-                label: 'Area',
-                icon: SvgPicture.asset(
-                  'lib/assets/icons/golf-hole.svg',
-                  width: 20,
-                  height: 20,
-                  colorFilter: const ColorFilter.mode(
-                    Color(0xFF001F3F),
-                    BlendMode.srcIn,
-                  ),
-                ),
-                isActive: false,
-                onPressed: () {
-                  setState(() => _activeTool = _MapTool.none);
-                  _showFieldDialog();
-                },
-              ),
-              const SizedBox(height: 10),
-              _ToolButton(
-                label: 'Route',
-                icon: SvgPicture.asset(
-                  'lib/assets/icons/map-location-track.svg',
-                  width: 20,
-                  height: 20,
-                  colorFilter: ColorFilter.mode(
-                    _activeTool == _MapTool.distance
-                        ? Colors.white
-                        : const Color(0xFF001F3F),
-                    BlendMode.srcIn,
-                  ),
-                ),
-                isActive: _activeTool == _MapTool.distance,
-                onPressed: () {
-                  setState(() {
-                    _showDistanceLayer = true;
-                    _activeTool = _activeTool == _MapTool.distance
-                        ? _MapTool.none
-                        : _MapTool.distance;
-                  });
-                  _snack(
-                    _activeTool == _MapTool.distance
-                        ? 'Distance mode enabled'
-                        : 'Distance mode disabled',
-                  );
-                },
-              ),
-
-              const SizedBox(height: 10),
-              _ToolButton(
-                label: 'Point',
-                icon: SvgPicture.asset(
-                  'lib/assets/icons/marker.svg',
-                  width: 20,
-                  height: 20,
-                  colorFilter: ColorFilter.mode(
-                    _activeTool == _MapTool.marker
-                        ? Colors.white
-                        : const Color(0xFF001F3F),
-                    BlendMode.srcIn,
-                  ),
-                ),
-                isActive: _activeTool == _MapTool.marker,
-                onPressed: () {
-                  setState(() {
-                    _showMarkerLayer = true;
-                    _activeTool = _activeTool == _MapTool.marker
-                        ? _MapTool.none
-                        : _MapTool.marker;
-                  });
-                  _snack(
-                    _activeTool == _MapTool.marker
-                        ? 'Marker mode enabled'
-                        : 'Marker mode disabled',
-                  );
-                },
-              ),
-            ],
+          right: 16,
+          bottom: fabBottomOffset,
+          child: FloatingActionButton(
+            backgroundColor: const Color(0xFF001F3F),
+            onPressed: _toggleBottomActionBar,
+            child: Icon(
+              _showBottomActionBar ? Icons.close : Icons.add,
+              color: Colors.white,
+            ),
           ),
         ),
       ],
@@ -2879,183 +2776,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       },
     );
   }
-
-  Widget _buildStatusPill(LandMapState st) {
-    final Color bg;
-    final Color textColor;
-    final IconData icon;
-    final String label;
-    VoidCallback? onDismiss;
-
-    if (st.activeFieldId != null) {
-      bg = Colors.green.shade700;
-      textColor = Colors.white;
-      icon = Icons.edit_location_alt;
-      label = 'Editing: ${st.activeFieldName ?? 'Saved field'}';
-      onDismiss = () {
-        ref.read(landMapProvider.notifier).exitEditingMode();
-        _snack('Exited edit mode');
-      };
-    } else if (_activeTool == _MapTool.marker) {
-      bg = const Color(0xFF001F3F);
-      textColor = Colors.white;
-      icon = Icons.push_pin;
-      label = 'Marker — long-press to place';
-      onDismiss = () => setState(() => _activeTool = _MapTool.none);
-    } else {
-      // distance
-      bg = Colors.orange.shade800;
-      textColor = Colors.white;
-      icon = Icons.straighten;
-      label = _distancePoints.isEmpty
-          ? 'Distance — tap map or Mark GPS'
-          : _formatDistance(
-              _totalDistanceMeters(),
-              ref.read(distanceUnitProvider),
-            );
-      onDismiss = () => setState(() => _activeTool = _MapTool.none);
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: textColor, size: 14),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            // Distance-specific actions
-            if (_activeTool == _MapTool.distance &&
-                _distancePoints.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              _PillAction(
-                label: 'GPS',
-                onTap: _isLocating ? null : _addCurrentPointToDistance,
-              ),
-              if (_distancePoints.length >= 2)
-                _PillAction(label: 'Save', onTap: _showDistanceDialog),
-              _PillAction(label: 'Undo', onTap: _undoDistancePoint),
-              _PillAction(label: 'Clear', onTap: _clearDistancePoints),
-            ],
-            // Distance GPS button when no points yet
-            if (_activeTool == _MapTool.distance && _distancePoints.isEmpty)
-              _PillAction(
-                label: 'GPS',
-                onTap: _isLocating ? null : _addCurrentPointToDistance,
-              ),
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: onDismiss,
-              child: Icon(
-                Icons.close,
-                color: textColor.withValues(alpha: 0.75),
-                size: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavigationBanner(LandMapState st) {
-    final target = st.navigationTarget;
-    if (target == null) return const SizedBox.shrink();
-
-    final current = st.current;
-    final guidancePoint = current == null
-        ? target.point
-        : _navigationPointForCurrent(current, target);
-
-    // Use road distance if available, otherwise straight line
-    final distanceText = _isFetchingRoute
-        ? 'Calculating route...'
-        : _currentRoute != null
-        ? _formatDistance(
-            _currentRoute!.distanceMeters,
-            ref.read(distanceUnitProvider),
-          )
-        : current == null
-        ? 'Waiting for location'
-        : _formatDistance(
-            _distanceCalculator.as(LengthUnit.Meter, current, guidancePoint),
-            ref.read(distanceUnitProvider),
-          );
-
-    final durationText = _currentRoute != null
-        ? ' · ${_currentRoute!.formattedDuration}'
-        : '';
-
-    final bearingText = current == null || _currentRoute != null
-        ? ''
-        : ' · ${_bearingLabel(_bearingDegrees(current, guidancePoint))}';
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.teal.shade700,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.18),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.navigation, color: Colors.white, size: 14),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                '${target.label} · $distanceText$durationText$bearingText',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            GestureDetector(
-              onTap: _clearNavigationTarget,
-              child: Icon(
-                Icons.close,
-                color: Colors.white.withValues(alpha: 0.75),
-                size: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 String _formatMapUtm(
@@ -3177,91 +2897,6 @@ class _MapTypeOption extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ToolButton extends StatelessWidget {
-  final String label;
-  final Widget icon;
-  final bool isActive;
-  final VoidCallback onPressed;
-
-  const _ToolButton({
-    required this.label,
-    required this.icon,
-    required this.isActive,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: isActive ? const Color(0xFF001F3F) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isActive ? 0.25 : 0.10),
-                  blurRadius: isActive ? 8 : 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-              border: isActive
-                  ? null
-                  : Border.all(color: Colors.grey.shade200, width: 1),
-            ),
-            child: Center(child: icon),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: isActive ? const Color(0xFF001F3F) : Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillAction extends StatelessWidget {
-  final String label;
-  final VoidCallback? onTap;
-
-  const _PillAction({required this.label, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(left: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: onTap != null ? 0.20 : 0.08),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Colors.white.withValues(alpha: onTap != null ? 1.0 : 0.4),
-          ),
-        ),
       ),
     );
   }
@@ -3731,4 +3366,676 @@ class _CompassPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _BottomActionBar extends StatefulWidget {
+  final _MapTool activeTool;
+  final List<LatLng> distancePoints;
+  final double totalDistanceMeters;
+  final List<LatLng> fieldPoints;
+  final double perimeterMeters;
+  final double areaSqm;
+  final bool isLocating;
+  final bool isMarkerSaving;
+  final LandNavigationTarget? navigationTarget;
+  final String? navigationDistanceText;
+  final String? navigationDurationText;
+  final DistanceUnit distanceUnit;
+  final VoidCallback onClearNavigation;
+  final ValueChanged<_MapTool> onToolChanged;
+  final VoidCallback onAddGpsPoint;
+  final VoidCallback onUndoDistance;
+  final VoidCallback onClearDistance;
+  final VoidCallback onSaveDistance;
+  final VoidCallback onAddFieldPoint;
+  final VoidCallback onUndoField;
+  final VoidCallback onClearField;
+  final VoidCallback onSaveField;
+
+  const _BottomActionBar({
+    required this.activeTool,
+    required this.distancePoints,
+    required this.totalDistanceMeters,
+    required this.fieldPoints,
+    required this.perimeterMeters,
+    required this.areaSqm,
+    required this.isLocating,
+    required this.isMarkerSaving,
+    required this.navigationTarget,
+    required this.navigationDistanceText,
+    required this.navigationDurationText,
+    required this.distanceUnit,
+    required this.onClearNavigation,
+    required this.onToolChanged,
+    required this.onAddGpsPoint,
+    required this.onUndoDistance,
+    required this.onClearDistance,
+    required this.onSaveDistance,
+    required this.onAddFieldPoint,
+    required this.onUndoField,
+    required this.onClearField,
+    required this.onSaveField,
+  });
+
+  @override
+  State<_BottomActionBar> createState() => _BottomActionBarState();
+}
+
+class _BottomActionBarState extends State<_BottomActionBar>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  late final AnimationController _animController;
+  late final Animation<double> _expandAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _expandAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    if (_expanded) {
+      _animController.forward();
+    } else {
+      _animController.reverse();
+    }
+  }
+
+  void _selectTool(_MapTool tool) {
+    widget.onToolChanged(tool);
+    if (!_expanded) {
+      setState(() => _expanded = true);
+      _animController.forward();
+    }
+  }
+
+  String _statusLine() {
+    switch (widget.activeTool) {
+      case _MapTool.distance:
+        if (widget.distancePoints.isEmpty)
+          return 'Long-press map to add points';
+        return '${widget.distancePoints.length} pts · ${_fmt(widget.totalDistanceMeters)}';
+      case _MapTool.marker:
+        return 'Long-press map to place marker';
+      case _MapTool.none:
+        return 'Select a tool to start';
+    }
+  }
+
+  String _fmt(double meters) {
+    if (widget.distanceUnit == DistanceUnit.feet) {
+      final ft = meters * 3.28084;
+      return ft >= 5280
+          ? '${(ft / 5280).toStringAsFixed(2)} mi'
+          : '${ft.toStringAsFixed(1)} ft';
+    }
+    return meters >= 1000
+        ? '${(meters / 1000).toStringAsFixed(2)} km'
+        : '${meters.toStringAsFixed(1)} m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final nav = widget.navigationTarget;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Navigation banner — sits above the bar when active
+        if (nav != null)
+          Container(
+            margin: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: Colors.teal.shade700,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.navigation, color: Colors.white, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    [
+                      nav.label,
+                      if (widget.navigationDistanceText != null)
+                        widget.navigationDistanceText!,
+                      if (widget.navigationDurationText != null)
+                        widget.navigationDurationText!,
+                    ].join(' · '),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: widget.onClearNavigation,
+                  child: Icon(
+                    Icons.close,
+                    color: Colors.white.withValues(alpha: 0.75),
+                    size: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Main bar
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 12,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle — tap to expand/collapse
+              GestureDetector(
+                onTap: _toggle,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
+                  child: Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Mode tabs
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    _TabButton(
+                      label: 'Area',
+                      icon: Icons.crop_square_rounded,
+                      isActive: widget.activeTool == _MapTool.none,
+                      hasData: widget.fieldPoints.isNotEmpty,
+                      onTap: () => _selectTool(_MapTool.none),
+                    ),
+                    const SizedBox(width: 6),
+                    _TabButton(
+                      label: 'Distance',
+                      icon: Icons.straighten_rounded,
+                      isActive: widget.activeTool == _MapTool.distance,
+                      hasData: widget.distancePoints.isNotEmpty,
+                      onTap: () => _selectTool(
+                        widget.activeTool == _MapTool.distance
+                            ? _MapTool.none
+                            : _MapTool.distance,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    _TabButton(
+                      label: 'Marker',
+                      icon: Icons.push_pin_outlined,
+                      isActive: widget.activeTool == _MapTool.marker,
+                      hasData: false,
+                      onTap: () => _selectTool(
+                        widget.activeTool == _MapTool.marker
+                            ? _MapTool.none
+                            : _MapTool.marker,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Collapsed status line
+              AnimatedBuilder(
+                animation: _expandAnim,
+                builder: (context, child) {
+                  return ClipRect(
+                    child: Align(
+                      heightFactor: 1 - _expandAnim.value,
+                      child: child,
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+                  child: Text(
+                    _statusLine(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+
+              // Expanded content
+              AnimatedBuilder(
+                animation: _expandAnim,
+                builder: (context, child) {
+                  return ClipRect(
+                    child: Align(heightFactor: _expandAnim.value, child: child),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                  child: _buildExpandedContent(theme),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpandedContent(ThemeData theme) {
+    switch (widget.activeTool) {
+      case _MapTool.distance:
+        return _buildDistanceContent(theme);
+      case _MapTool.marker:
+        return _buildMarkerContent(theme);
+      case _MapTool.none:
+        return _buildAreaContent(theme);
+    }
+  }
+
+  Widget _buildDistanceContent(ThemeData theme) {
+    final canSave = widget.distancePoints.length >= 2;
+    final canUndo = widget.distancePoints.isNotEmpty;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Stats
+        Row(
+          children: [
+            _StatChip(
+              label: 'Points',
+              value: '${widget.distancePoints.length}',
+            ),
+            const SizedBox(width: 8),
+            _StatChip(label: 'Total', value: _fmt(widget.totalDistanceMeters)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Action buttons
+        Row(
+          children: [
+            Expanded(
+              child: _ActionBtn(
+                label: '+ GPS',
+                isLoading: widget.isLocating,
+                enabled: !widget.isLocating,
+                isPrimary: true,
+                onTap: widget.onAddGpsPoint,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _ActionBtn(
+                label: 'Undo',
+                enabled: canUndo,
+                onTap: widget.onUndoDistance,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _ActionBtn(
+                label: 'Clear',
+                enabled: canUndo,
+                onTap: widget.onClearDistance,
+              ),
+            ),
+          ],
+        ),
+        if (canSave) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: widget.onSaveDistance,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Save distance',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAreaContent(ThemeData theme) {
+    final count = widget.fieldPoints.length;
+    final canSave = count >= 3;
+    final canUndo = count > 0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            _StatChip(label: 'Points', value: '$count'),
+            const SizedBox(width: 8),
+            _StatChip(label: 'Perimeter', value: _fmt(widget.perimeterMeters)),
+            const SizedBox(width: 8),
+            _StatChip(
+              label: 'Area',
+              value: widget.areaSqm >= 10000
+                  ? '${(widget.areaSqm / 10000).toStringAsFixed(2)} ha'
+                  : '${widget.areaSqm.toStringAsFixed(1)} m²',
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionBtn(
+                label: '+ GPS',
+                isLoading: widget.isLocating,
+                enabled: !widget.isLocating,
+                isPrimary: true,
+                onTap: widget.onAddFieldPoint,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _ActionBtn(
+                label: 'Undo',
+                enabled: canUndo,
+                onTap: widget.onUndoField,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _ActionBtn(
+                label: 'Clear',
+                enabled: canUndo,
+                onTap: widget.onClearField,
+              ),
+            ),
+          ],
+        ),
+        if (canSave) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: widget.onSaveField,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF001F3F),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Save area',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMarkerContent(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF001F3F).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.touch_app_outlined,
+              color: Color(0xFF001F3F),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Long-press anywhere on the map to place a marker',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.black54,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final bool hasData;
+  final VoidCallback onTap;
+
+  const _TabButton({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.hasData,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFF001F3F) : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isActive ? Colors.white : Colors.grey.shade600,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isActive ? Colors.white : Colors.grey.shade600,
+                ),
+              ),
+              if (hasData && !isActive) ...[
+                const SizedBox(width: 4),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade500,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF001F3F),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final bool enabled;
+  final bool isPrimary;
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  const _ActionBtn({
+    required this.label,
+    this.enabled = true,
+    this.isPrimary = false,
+    this.isLoading = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnabled = enabled && !isLoading;
+    return GestureDetector(
+      onTap: isEnabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isPrimary
+              ? (isEnabled ? const Color(0xFF001F3F) : Colors.grey.shade200)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: isPrimary
+              ? null
+              : Border.all(
+                  color: isEnabled
+                      ? Colors.grey.shade300
+                      : Colors.grey.shade200,
+                ),
+        ),
+        child: Center(
+          child: isLoading
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isPrimary
+                        ? (isEnabled ? Colors.white : Colors.grey.shade500)
+                        : (isEnabled
+                              ? const Color(0xFF001F3F)
+                              : Colors.grey.shade400),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
 }
