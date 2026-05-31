@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:io';
@@ -9,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/ui/account_page.dart';
-import 'contact_us_page.dart';
 import '../models/coordinate_format.dart';
 import '../models/reference_ellipsoid.dart';
 import '../state/settings_provider.dart';
@@ -437,7 +437,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _openContactUsPage() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const ContactUsPage()),
+      MaterialPageRoute<void>(builder: (_) => const _ContactDialog()),
     );
   }
 
@@ -756,6 +756,202 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               );
             }),
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactDialog extends StatefulWidget {
+  const _ContactDialog();
+
+  @override
+  State<_ContactDialog> createState() => _ContactDialogState();
+}
+
+class _ContactDialogState extends State<_ContactDialog> {
+  final _controller = TextEditingController();
+  bool _isSending = false;
+  static const String _supportEmail = 'support@databenki.com';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final message = _controller.text.trim();
+    if (message.isEmpty) return;
+
+    setState(() => _isSending = true);
+
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final version = '${info.version}+${info.buildNumber}';
+
+      final subject = Uri.encodeComponent('[TaREF GPS] Feedback');
+      final body = Uri.encodeComponent(
+        '$message\n\n---\nApp version: $version',
+      );
+
+      final uri = Uri.parse(
+        'mailto:$_supportEmail?subject=$subject&body=$body',
+      );
+
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!mounted) return;
+
+      if (launched) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email app opened — tap Send to submit.'),
+          ),
+        );
+      } else {
+        // No email app — copy to clipboard fallback
+        await Clipboard.setData(ClipboardData(text: message));
+        if (!mounted) return;
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No email app found. Message copied — send it to $_supportEmail',
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.mail_outline_rounded,
+                      color: primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Send feedback',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700)),
+                      Text('We read every message',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.black45)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                  color: Colors.black38,
+                  iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 18),
+
+            // Message field
+            TextField(
+              controller: _controller,
+              minLines: 3,
+              maxLines: 5,
+              textCapitalization: TextCapitalization.sentences,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText:
+                    'Tell us what\'s on your mind — a bug, suggestion, or question…',
+                hintStyle: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 13,
+                    height: 1.5),
+                filled: true,
+                fillColor: const Color(0xFFF5F7FA),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: primary, width: 1.8),
+                ),
+                contentPadding: const EdgeInsets.all(14),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Send button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isSending ? null : _send,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: _isSending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Send',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
+              ),
+            ),
           ],
         ),
       ),

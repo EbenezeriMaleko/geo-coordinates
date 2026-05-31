@@ -9,6 +9,7 @@ import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:geocoding/geocoding.dart';
@@ -27,6 +28,7 @@ import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 import 'location_media_page.dart';
 import 'package:video_player/video_player.dart';
+import 'package:permission_handler/permission_handler.dart' hide ServiceStatus;
 
 enum MyLocationAction { savePoint, copyBoth, share }
 
@@ -486,6 +488,12 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       if (nav.canPop()) nav.pop();
       _blockDialogVisible = false;
     }
+  }
+
+  Future<void> _openCompassPage() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const _CompassPage()));
   }
 
   // ── Camera ──────────────────────────────────────────────
@@ -1134,11 +1142,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                       // Top row: refresh + title + menu
                       Row(
                         children: [
-                          if (widget.onRefresh != null)
-                            _HeaderIconButton(
-                              icon: Icons.refresh_rounded,
-                              onTap: widget.onRefresh!,
-                            ),
+                          _HeaderCompassButton(onTap: _openCompassPage),
                           const Spacer(),
                           Text(
                             'My Location',
@@ -1359,25 +1363,697 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 // Small header UI helpers
 // ─────────────────────────────────────────────────────────
 
-class _HeaderIconButton extends StatelessWidget {
-  final IconData icon;
+class _HeaderCompassButton extends StatelessWidget {
   final Future<void> Function() onTap;
-  const _HeaderIconButton({required this.icon, required this.onTap});
+
+  const _HeaderCompassButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          shape: BoxShape.circle,
+    return StreamBuilder<CompassEvent>(
+      stream: FlutterCompass.events,
+      builder: (context, snapshot) {
+        final heading = snapshot.data?.heading;
+        final hasHeading = heading != null;
+
+        return GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: hasHeading ? 0.35 : 0.18),
+              ),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Transform.rotate(
+                  angle: hasHeading ? -(heading * pi / 180) : 0,
+                  child: const Icon(
+                    Icons.explore_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: hasHeading
+                          ? const Color(0xFF3EE58F)
+                          : Colors.white.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CompassPage extends StatefulWidget {
+  const _CompassPage();
+
+  @override
+  State<_CompassPage> createState() => _CompassPageState();
+}
+
+class _CompassPageState extends State<_CompassPage> {
+  StreamSubscription<CompassEvent>? _compassSubscription;
+  double? _heading;
+  double? _accuracy;
+  bool _hasPermission = false;
+  bool _checkingPermission = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissionAndStart();
+  }
+
+  Future<void> _checkPermissionAndStart() async {
+    debugPrint('[Compass] checking permission...');
+
+    if (Platform.isAndroid) {
+      var status = await Permission.locationWhenInUse.status;
+      debugPrint('[Compass] initial status: $status');
+
+      if (!status.isGranted) {
+        debugPrint('[Compass] requesting permission...');
+        status = await Permission.locationWhenInUse.request();
+        debugPrint('[Compass] after request status: $status');
+        if (!mounted) return;
+        if (!status.isGranted) {
+          debugPrint('[Compass] permission denied — cannot start compass');
+          setState(() {
+            _hasPermission = false;
+            _checkingPermission = false;
+          });
+          return;
+        }
+      }
+    }
+
+    debugPrint('[Compass] permission OK — starting listener');
+    if (!mounted) return;
+    setState(() {
+      _hasPermission = true;
+      _checkingPermission = false;
+    });
+    _startListening();
+  }
+
+  void _startListening() {
+    _compassSubscription?.cancel();
+    final stream = FlutterCompass.events;
+    // debugPrint('[Compass] stream is null: ${stream == null}');
+
+    _compassSubscription = stream?.listen(
+      (event) {
+        // debugPrint(
+        //   '[Compass] heading: ${event.heading}, accuracy: ${event.accuracy}',
+        // );
+        if (!mounted) return;
+        final h = event.heading;
+        if (h == null) return;
+        setState(() {
+          _heading = h;
+          _accuracy = event.accuracy;
+        });
+      },
+      // onError: (error) {
+      //   debugPrint('[Compass] stream error: $error');
+      // },
+      // onDone: () {
+      //   debugPrint('[Compass] stream closed/done');
+      // },
+    );
+
+    if (_compassSubscription == null) {
+      debugPrint(
+        '[Compass] subscription is null — sensor unavailable on this device',
+      );
+    } else {
+      debugPrint('[Compass] subscription started successfully');
+    }
+  }
+
+  @override
+  void dispose() {
+    _compassSubscription?.cancel();
+    super.dispose();
+  }
+
+  String get _headingText {
+    final heading = _heading;
+    if (heading == null) return '--';
+    return '${heading.toStringAsFixed(0)}°';
+  }
+
+  String get _directionText {
+    final heading = _heading;
+    if (heading == null) return 'Unavailable';
+    const labels = [
+      'North',
+      'North East',
+      'East',
+      'South East',
+      'South',
+      'South West',
+      'West',
+      'North West',
+    ];
+    final index = ((heading + 22.5) / 45).floor() % labels.length;
+    return labels[index];
+  }
+
+  String get _shortDirectionText {
+    final heading = _heading;
+    if (heading == null) return '--';
+    const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    final index = ((heading + 22.5) / 45).floor() % labels.length;
+    return labels[index];
+  }
+
+  String get _accuracyText {
+    final accuracy = _accuracy;
+    if (accuracy == null) return '--';
+    return '±${accuracy.toStringAsFixed(0)}°';
+  }
+
+  String get _accuracyQualityText {
+    final accuracy = _accuracy;
+    if (accuracy == null) return 'Not reported';
+    if (accuracy <= 10) return 'High';
+    if (accuracy <= 25) return 'Moderate';
+    return 'Low';
+  }
+
+  Color _accuracyColor(Color primary) {
+    final accuracy = _accuracy;
+    if (accuracy == null) return const Color(0xFF667085);
+    if (accuracy <= 10) return const Color(0xFF14804A);
+    if (accuracy <= 25) return const Color(0xFFB54708);
+    return const Color(0xFFB42318);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final heading = _heading;
+    final headingRadians = heading == null ? 0.0 : -(heading * pi / 180);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: const Color(0xFF18212F),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Compass',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF18212F),
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _checkingPermission
+                  ? const Center(child: CircularProgressIndicator())
+                  : !_hasPermission
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.location_off_rounded,
+                              size: 48,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Location permission is required for the compass sensor on Android.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton(
+                              onPressed: () {
+                                setState(() => _checkingPermission = true);
+                                _checkPermissionAndStart();
+                              },
+                              child: const Text('Grant Permission'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final dialSize = min(constraints.maxWidth - 48, 360.0);
+                        return SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                18,
+                                20,
+                                24,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: dialSize,
+                                    height: dialSize,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.10,
+                                          ),
+                                          blurRadius: 30,
+                                          offset: const Offset(0, 16),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        CustomPaint(
+                                          size: Size.square(dialSize),
+                                          painter: _CompassDialPainter(
+                                            primaryColor: primary,
+                                          ),
+                                        ),
+                                        Transform.rotate(
+                                          angle: headingRadians,
+                                          child: CustomPaint(
+                                            size: Size(
+                                              dialSize * 0.30,
+                                              dialSize * 0.68,
+                                            ),
+                                            painter: _CompassNeedlePainter(
+                                              primaryColor: primary,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          width: dialSize * 0.19,
+                                          height: dialSize * 0.19,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: primary.withValues(
+                                                alpha: 0.16,
+                                              ),
+                                              width: 8,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.10,
+                                                ),
+                                                blurRadius: 14,
+                                                offset: const Offset(0, 6),
+                                              ),
+                                            ],
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            _shortDirectionText,
+                                            style: theme.textTheme.titleMedium
+                                                ?.copyWith(
+                                                  color: primary,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 26),
+                                  Text(
+                                    _headingText,
+                                    style: theme.textTheme.displayMedium
+                                        ?.copyWith(
+                                          color: const Color(0xFF18212F),
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _directionText,
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      color: primary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 14,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.06,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 38,
+                                            height: 38,
+                                            decoration: BoxDecoration(
+                                              color: _accuracyColor(
+                                                primary,
+                                              ).withValues(alpha: 0.10),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              Icons.adjust_rounded,
+                                              color: _accuracyColor(primary),
+                                              size: 21,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'Compass accuracy',
+                                                style: theme.textTheme.bodySmall
+                                                    ?.copyWith(
+                                                      color: const Color(
+                                                        0xFF667085,
+                                                      ),
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              RichText(
+                                                text: TextSpan(
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        color: const Color(
+                                                          0xFF18212F,
+                                                        ),
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                      ),
+                                                  children: [
+                                                    TextSpan(
+                                                      text: _accuracyText,
+                                                    ),
+                                                    TextSpan(
+                                                      text:
+                                                          '  $_accuracyQualityText',
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color:
+                                                                _accuracyColor(
+                                                                  primary,
+                                                                ),
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 22),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 16,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.06,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          heading == null
+                                              ? Icons.explore_off_rounded
+                                              : Icons.explore_rounded,
+                                          color: heading == null
+                                              ? Colors.black45
+                                              : primary,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            heading == null
+                                                ? 'Compass sensor is not available on this device.'
+                                                : 'Live compass is active.',
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
+                                                  color: const Color(
+                                                    0xFF344054,
+                                                  ),
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
+  }
+}
+
+class _CompassDialPainter extends CustomPainter {
+  final Color primaryColor;
+
+  const _CompassDialPainter({required this.primaryColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final tickPaint = Paint()
+      ..color = const Color(0xFF18212F).withValues(alpha: 0.34)
+      ..strokeCap = StrokeCap.round;
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4
+      ..color = const Color(0xFF18212F).withValues(alpha: 0.08);
+
+    canvas.drawCircle(center, radius - 13, ringPaint);
+    canvas.drawCircle(center, radius - 42, ringPaint);
+
+    for (var i = 0; i < 60; i++) {
+      final angle = (i * 6 - 90) * pi / 180;
+      final isMajor = i % 5 == 0;
+      final isCardinal = i % 15 == 0;
+      final outer = radius - 18;
+      final inner =
+          radius -
+          (isCardinal
+              ? 40
+              : isMajor
+              ? 32
+              : 25);
+      tickPaint
+        ..strokeWidth = isCardinal
+            ? 3.0
+            : isMajor
+            ? 2.0
+            : 1.0
+        ..color = isCardinal
+            ? primaryColor.withValues(alpha: 0.74)
+            : const Color(0xFF18212F).withValues(alpha: isMajor ? 0.32 : 0.18);
+
+      canvas.drawLine(
+        Offset(center.dx + cos(angle) * inner, center.dy + sin(angle) * inner),
+        Offset(center.dx + cos(angle) * outer, center.dy + sin(angle) * outer),
+        tickPaint,
+      );
+    }
+
+    _drawCompassLabel(canvas, center, radius, 'N', -90, primaryColor, 30, true);
+    _drawCompassLabel(
+      canvas,
+      center,
+      radius,
+      'E',
+      0,
+      const Color(0xFF18212F),
+      24,
+      false,
+    );
+    _drawCompassLabel(
+      canvas,
+      center,
+      radius,
+      'S',
+      90,
+      const Color(0xFF18212F),
+      24,
+      false,
+    );
+    _drawCompassLabel(
+      canvas,
+      center,
+      radius,
+      'W',
+      180,
+      const Color(0xFF18212F),
+      24,
+      false,
+    );
+  }
+
+  void _drawCompassLabel(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    String text,
+    double degrees,
+    Color color,
+    double fontSize,
+    bool isPrimary,
+  ) {
+    final angle = degrees * pi / 180;
+    final labelRadius = radius - 72;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: isPrimary ? FontWeight.w900 : FontWeight.w800,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    painter.paint(
+      canvas,
+      Offset(
+        center.dx + cos(angle) * labelRadius - painter.width / 2,
+        center.dy + sin(angle) * labelRadius - painter.height / 2,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CompassDialPainter oldDelegate) {
+    return oldDelegate.primaryColor != primaryColor;
+  }
+}
+
+class _CompassNeedlePainter extends CustomPainter {
+  final Color primaryColor;
+
+  const _CompassNeedlePainter({required this.primaryColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final northPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = primaryColor;
+    final southPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = const Color(0xFF98A2B3);
+
+    final northPath = ui.Path()
+      ..moveTo(center.dx, 0)
+      ..lineTo(center.dx - size.width * 0.22, center.dy)
+      ..lineTo(center.dx, center.dy - size.height * 0.08)
+      ..lineTo(center.dx + size.width * 0.22, center.dy)
+      ..close();
+    canvas.drawPath(northPath, northPaint);
+
+    final southPath = ui.Path()
+      ..moveTo(center.dx, size.height)
+      ..lineTo(center.dx - size.width * 0.18, center.dy)
+      ..lineTo(center.dx, center.dy + size.height * 0.08)
+      ..lineTo(center.dx + size.width * 0.18, center.dy)
+      ..close();
+    canvas.drawPath(southPath, southPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CompassNeedlePainter oldDelegate) {
+    return oldDelegate.primaryColor != primaryColor;
   }
 }
 
