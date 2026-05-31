@@ -76,6 +76,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   ProviderSubscription<LandMapState>? _landMapSubscription;
   DateTime? _lastNavigationCameraMove;
   bool _userIsInteracting = false;
+  bool _followCurrentLocation = true;
   Timer? _interactionCooldownTimer;
 
   @override
@@ -102,6 +103,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         return;
       }
 
+      if (currentChanged) {
+        _followCurrentLocationIfNeeded(next.current);
+      }
+
       if (previous?.navigationTarget != null) {
         unawaited(_stopNavigationTracking());
         _clearRoute();
@@ -111,6 +116,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
       final pointsChanged = previous == null || previous.points != next.points;
       if (!pointsChanged) return;
+
+      if (_fieldTrackingSubscription != null &&
+          _followCurrentLocation &&
+          next.current != null) {
+        _followCurrentLocationIfNeeded(next.current);
+        return;
+      }
 
       if (prevLen != nextLen || prevLen == 0) {
         _focusOnPoints(next.points);
@@ -153,6 +165,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     final st = ref.read(landMapProvider);
     if (st.current != null) {
+      _followCurrentLocation = true;
       _mapController.move(st.current!, 17);
     }
 
@@ -167,6 +180,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     final beforeRefresh = ref.read(landMapProvider).current;
     if (beforeRefresh != null) {
+      _followCurrentLocation = true;
       _mapController.move(beforeRefresh, _clampZoom(max(_currentZoom, 17)));
     }
 
@@ -180,6 +194,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     final now = ref.read(landMapProvider).current;
     if (now != null) {
+      _followCurrentLocation = true;
       _mapController.move(now, _clampZoom(max(_currentZoom, 17)));
     }
 
@@ -741,6 +756,33 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _lastNavigationCameraMove = now;
   }
 
+  bool _isUserMapEventSource(MapEventSource source) {
+    return switch (source) {
+      MapEventSource.dragStart ||
+      MapEventSource.onDrag ||
+      MapEventSource.dragEnd ||
+      MapEventSource.multiFingerGestureStart ||
+      MapEventSource.onMultiFinger ||
+      MapEventSource.multiFingerEnd ||
+      MapEventSource.flingAnimationController ||
+      MapEventSource.doubleTap ||
+      MapEventSource.doubleTapHold ||
+      MapEventSource.doubleTapZoomAnimationController ||
+      MapEventSource.scrollWheel ||
+      MapEventSource.cursorKeyboardRotation ||
+      MapEventSource.keyboard => true,
+      _ => false,
+    };
+  }
+
+  void _followCurrentLocationIfNeeded(LatLng? current) {
+    if (!_followCurrentLocation || _userIsInteracting || current == null) {
+      return;
+    }
+
+    _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
+  }
+
   List<LatLng> _targetPoints(LandNavigationTarget target) {
     return target.points.isEmpty ? [target.point] : target.points;
   }
@@ -901,7 +943,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (_fieldTrackingSubscription != null) return;
     final notifier = ref.read(landMapProvider.notifier);
 
-    setState(() => _isAutoFieldCapture = true);
+    setState(() {
+      _isAutoFieldCapture = true;
+      _followCurrentLocation = true;
+    });
     _fieldTrackingSubscription =
         Geolocator.getPositionStream(
           // locationSettings: const LocationSettings(
@@ -1391,20 +1436,28 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             initialCenter: center,
             initialZoom: _defaultMapZoom,
             onMapEvent: (event) {
+              final isUserEvent = _isUserMapEventSource(event.source);
               if (event is MapEventMoveStart ||
                   event is MapEventFlingAnimationStart) {
-                _interactionCooldownTimer?.cancel();
-                setState(() => _userIsInteracting = true);
+                if (isUserEvent) {
+                  _interactionCooldownTimer?.cancel();
+                  setState(() {
+                    _userIsInteracting = true;
+                    _followCurrentLocation = false;
+                  });
+                }
               }
               if (event is MapEventMoveEnd ||
                   event is MapEventFlingAnimationEnd) {
-                _interactionCooldownTimer?.cancel();
-                _interactionCooldownTimer = Timer(
-                  const Duration(seconds: 2),
-                  () {
-                    if (mounted) setState(() => _userIsInteracting = false);
-                  },
-                );
+                if (isUserEvent) {
+                  _interactionCooldownTimer?.cancel();
+                  _interactionCooldownTimer = Timer(
+                    const Duration(seconds: 2),
+                    () {
+                      if (mounted) setState(() => _userIsInteracting = false);
+                    },
+                  );
+                }
               }
             },
             onPositionChanged: (position, _) {
@@ -1720,6 +1773,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 icon: Icons.my_location_rounded,
                 isLoading: _isLocating,
                 enabled: !_isLocating,
+                isActive: _followCurrentLocation,
                 onPressed: _recenterToCurrentLocation,
               ),
               const SizedBox(height: 8),
