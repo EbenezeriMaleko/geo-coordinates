@@ -1436,6 +1436,11 @@ class _CompassPageState extends State<_CompassPage> {
   bool _hasPermission = false;
   bool _checkingPermission = true;
 
+  // For manual rotation via drag
+  double _manualOffset = 0.0;
+  double _dragStartAngle = 0.0;
+  double _dragStartOffset = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -1443,19 +1448,12 @@ class _CompassPageState extends State<_CompassPage> {
   }
 
   Future<void> _checkPermissionAndStart() async {
-    debugPrint('[Compass] checking permission...');
-
     if (Platform.isAndroid) {
       var status = await Permission.locationWhenInUse.status;
-      debugPrint('[Compass] initial status: $status');
-
       if (!status.isGranted) {
-        debugPrint('[Compass] requesting permission...');
         status = await Permission.locationWhenInUse.request();
-        debugPrint('[Compass] after request status: $status');
         if (!mounted) return;
         if (!status.isGranted) {
-          debugPrint('[Compass] permission denied — cannot start compass');
           setState(() {
             _hasPermission = false;
             _checkingPermission = false;
@@ -1464,8 +1462,6 @@ class _CompassPageState extends State<_CompassPage> {
         }
       }
     }
-
-    debugPrint('[Compass] permission OK — starting listener');
     if (!mounted) return;
     setState(() {
       _hasPermission = true;
@@ -1476,14 +1472,8 @@ class _CompassPageState extends State<_CompassPage> {
 
   void _startListening() {
     _compassSubscription?.cancel();
-    final stream = FlutterCompass.events;
-    // debugPrint('[Compass] stream is null: ${stream == null}');
-
-    _compassSubscription = stream?.listen(
+    _compassSubscription = FlutterCompass.events?.listen(
       (event) {
-        // debugPrint(
-        //   '[Compass] heading: ${event.heading}, accuracy: ${event.accuracy}',
-        // );
         if (!mounted) return;
         final h = event.heading;
         if (h == null) return;
@@ -1492,21 +1482,7 @@ class _CompassPageState extends State<_CompassPage> {
           _accuracy = event.accuracy;
         });
       },
-      // onError: (error) {
-      //   debugPrint('[Compass] stream error: $error');
-      // },
-      // onDone: () {
-      //   debugPrint('[Compass] stream closed/done');
-      // },
     );
-
-    if (_compassSubscription == null) {
-      debugPrint(
-        '[Compass] subscription is null — sensor unavailable on this device',
-      );
-    } else {
-      debugPrint('[Compass] subscription started successfully');
-    }
   }
 
   @override
@@ -1515,65 +1491,72 @@ class _CompassPageState extends State<_CompassPage> {
     super.dispose();
   }
 
+  double get _effectiveHeading => (_heading ?? 0) + _manualOffset;
+
   String get _headingText {
-    final heading = _heading;
-    if (heading == null) return '--';
-    return '${heading.toStringAsFixed(0)}°';
+    final h = _heading;
+    if (h == null) return '--';
+    return '${(h % 360).toStringAsFixed(0)}°';
   }
 
   String get _directionText {
-    final heading = _heading;
-    if (heading == null) return 'Unavailable';
+    final h = _heading;
+    if (h == null) return 'Unavailable';
     const labels = [
-      'North',
-      'North East',
-      'East',
-      'South East',
-      'South',
-      'South West',
-      'West',
-      'North West',
+      'North', 'North East', 'East', 'South East',
+      'South', 'South West', 'West', 'North West',
     ];
-    final index = ((heading + 22.5) / 45).floor() % labels.length;
-    return labels[index];
+    return labels[((h + 22.5) / 45).floor() % labels.length];
   }
 
   String get _shortDirectionText {
-    final heading = _heading;
-    if (heading == null) return '--';
+    final h = _heading;
+    if (h == null) return '--';
     const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    final index = ((heading + 22.5) / 45).floor() % labels.length;
-    return labels[index];
+    return labels[((h + 22.5) / 45).floor() % labels.length];
   }
 
   String get _accuracyText {
-    final accuracy = _accuracy;
-    if (accuracy == null) return '--';
-    return '±${accuracy.toStringAsFixed(0)}°';
+    final a = _accuracy;
+    if (a == null) return '--';
+    return '±${a.toStringAsFixed(0)}°';
   }
 
   String get _accuracyQualityText {
-    final accuracy = _accuracy;
-    if (accuracy == null) return 'Not reported';
-    if (accuracy <= 10) return 'High';
-    if (accuracy <= 25) return 'Moderate';
+    final a = _accuracy;
+    if (a == null) return 'Not reported';
+    if (a <= 10) return 'High';
+    if (a <= 25) return 'Moderate';
     return 'Low';
   }
 
-  Color _accuracyColor(Color primary) {
-    final accuracy = _accuracy;
-    if (accuracy == null) return const Color(0xFF667085);
-    if (accuracy <= 10) return const Color(0xFF14804A);
-    if (accuracy <= 25) return const Color(0xFFB54708);
+  Color _accuracyColor() {
+    final a = _accuracy;
+    if (a == null) return const Color(0xFF667085);
+    if (a <= 10) return const Color(0xFF14804A);
+    if (a <= 25) return const Color(0xFFB54708);
     return const Color(0xFFB42318);
+  }
+
+  void _onPanStart(DragStartDetails details, Offset center) {
+    final pos = details.localPosition;
+    _dragStartAngle = atan2(pos.dy - center.dy, pos.dx - center.dx);
+    _dragStartOffset = _manualOffset;
+  }
+
+  void _onPanUpdate(DragUpdateDetails details, Offset center) {
+    final pos = details.localPosition;
+    final angle = atan2(pos.dy - center.dy, pos.dx - center.dx);
+    final delta = angle - _dragStartAngle;
+    setState(() {
+      _manualOffset = _dragStartOffset + delta * 180 / pi;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    final heading = _heading;
-    final headingRadians = heading == null ? 0.0 : -(heading * pi / 180);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -1581,7 +1564,7 @@ class _CompassPageState extends State<_CompassPage> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(4, 8, 16, 0),
               child: Row(
                 children: [
                   IconButton(
@@ -1606,285 +1589,153 @@ class _CompassPageState extends State<_CompassPage> {
               child: _checkingPermission
                   ? const Center(child: CircularProgressIndicator())
                   : !_hasPermission
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.location_off_rounded,
-                              size: 48,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Location permission is required for the compass sensor on Android.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                height: 1.5,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() => _checkingPermission = true);
-                                _checkPermissionAndStart();
-                              },
-                              child: const Text('Grant Permission'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
+                  ? _buildPermissionDenied()
                   : LayoutBuilder(
                       builder: (context, constraints) {
-                        final dialSize = min(constraints.maxWidth - 48, 360.0);
+                        final dialSize = min(
+                            constraints.maxWidth - 32, 340.0);
+                        final center = Offset(dialSize / 2, dialSize / 2);
                         return SingleChildScrollView(
                           physics: const BouncingScrollPhysics(),
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: constraints.maxHeight,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                18,
-                                20,
-                                24,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+                            child: Column(
+                              children: [
+                                // Compass dial
+                                GestureDetector(
+                                  onPanStart: (d) =>
+                                      _onPanStart(d, center),
+                                  onPanUpdate: (d) =>
+                                      _onPanUpdate(d, center),
+                                  child: SizedBox(
                                     width: dialSize,
                                     height: dialSize,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.10,
-                                          ),
-                                          blurRadius: 30,
-                                          offset: const Offset(0, 16),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        CustomPaint(
-                                          size: Size.square(dialSize),
-                                          painter: _CompassDialPainter(
-                                            primaryColor: primary,
-                                          ),
-                                        ),
-                                        Transform.rotate(
-                                          angle: headingRadians,
-                                          child: CustomPaint(
-                                            size: Size(
-                                              dialSize * 0.30,
-                                              dialSize * 0.68,
-                                            ),
-                                            painter: _CompassNeedlePainter(
-                                              primaryColor: primary,
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          width: dialSize * 0.19,
-                                          height: dialSize * 0.19,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: primary.withValues(
-                                                alpha: 0.16,
-                                              ),
-                                              width: 8,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.10,
-                                                ),
-                                                blurRadius: 14,
-                                                offset: const Offset(0, 6),
-                                              ),
-                                            ],
-                                          ),
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            _shortDirectionText,
-                                            style: theme.textTheme.titleMedium
-                                                ?.copyWith(
-                                                  color: primary,
-                                                  fontWeight: FontWeight.w900,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 26),
-                                  Text(
-                                    _headingText,
-                                    style: theme.textTheme.displayMedium
-                                        ?.copyWith(
-                                          color: const Color(0xFF18212F),
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _directionText,
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      color: primary,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 18),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 14,
+                                    child: CustomPaint(
+                                      painter: _CompassRingPainter(
+                                        heading: _effectiveHeading,
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.06,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
+                                      child: Stack(
+                                        alignment: Alignment.center,
                                         children: [
+                                          // Crosshair lines
+                                          CustomPaint(
+                                            size: Size.square(dialSize),
+                                            painter: _CrosshairPainter(),
+                                          ),
+                                          // Center circle
                                           Container(
-                                            width: 38,
-                                            height: 38,
-                                            decoration: BoxDecoration(
-                                              color: _accuracyColor(
-                                                primary,
-                                              ).withValues(alpha: 0.10),
+                                            width: 10,
+                                            height: 10,
+                                            decoration: const BoxDecoration(
+                                              color: Color(0xFF18212F),
                                               shape: BoxShape.circle,
                                             ),
-                                            child: Icon(
-                                              Icons.adjust_rounded,
-                                              color: _accuracyColor(primary),
-                                              size: 21,
-                                            ),
                                           ),
-                                          const SizedBox(width: 12),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'Compass accuracy',
-                                                style: theme.textTheme.bodySmall
-                                                    ?.copyWith(
-                                                      color: const Color(
-                                                        0xFF667085,
-                                                      ),
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              RichText(
-                                                text: TextSpan(
-                                                  style: theme
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        color: const Color(
-                                                          0xFF18212F,
-                                                        ),
-                                                        fontWeight:
-                                                            FontWeight.w900,
-                                                      ),
-                                                  children: [
-                                                    TextSpan(
-                                                      text: _accuracyText,
-                                                    ),
-                                                    TextSpan(
-                                                      text:
-                                                          '  $_accuracyQualityText',
-                                                      style: theme
-                                                          .textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(
-                                                            color:
-                                                                _accuracyColor(
-                                                                  primary,
-                                                                ),
-                                                            fontWeight:
-                                                                FontWeight.w800,
-                                                          ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
+                                          // Red north triangle — fixed at bottom
+                                          Positioned(
+                                            bottom: dialSize * 0.06,
+                                            child: CustomPaint(
+                                              size: const Size(16, 20),
+                                              painter: _NorthTrianglePainter(),
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 22),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 18,
-                                      vertical: 16,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.06,
-                                        ),
+                                ),
+
+                                const SizedBox(height: 32),
+
+                                // Heading display
+                                Text(
+                                  '$_headingText $_shortDirectionText',
+                                  style: theme.textTheme.displayMedium
+                                      ?.copyWith(
+                                        color: const Color(0xFF18212F),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 48,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _directionText,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    color: primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                // Info cards row
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _InfoCard(
+                                        label: 'Compass accuracy',
+                                        value: _accuracyText,
+                                        badge: _accuracyQualityText,
+                                        badgeColor: _accuracyColor(),
+                                        icon: Icons.adjust_rounded,
                                       ),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          heading == null
-                                              ? Icons.explore_off_rounded
-                                              : Icons.explore_rounded,
-                                          color: heading == null
-                                              ? Colors.black45
-                                              : primary,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            heading == null
-                                                ? 'Compass sensor is not available on this device.'
-                                                : 'Live compass is active.',
-                                            style: theme.textTheme.bodyMedium
-                                                ?.copyWith(
-                                                  color: const Color(
-                                                    0xFF344054,
-                                                  ),
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _InfoCard(
+                                        label: 'Current location',
+                                        value: '--',
+                                        badge: 'UTM',
+                                        badgeColor: primary,
+                                        icon: Icons.location_on_outlined,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                // Status row
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.black
+                                          .withValues(alpha: 0.06),
                                     ),
                                   ),
-                                ],
-                              ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _heading == null
+                                            ? Icons.explore_off_rounded
+                                            : Icons.explore_rounded,
+                                        color: _heading == null
+                                            ? Colors.black45
+                                            : primary,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _heading == null
+                                              ? 'Compass sensor unavailable on this device.'
+                                              : 'Live compass active. Drag the dial to rotate manually.',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: const Color(0xFF344054),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -1896,8 +1747,36 @@ class _CompassPageState extends State<_CompassPage> {
       ),
     );
   }
-}
 
+  Widget _buildPermissionDenied() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.location_off_rounded,
+                size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'Location permission is required for the compass sensor on Android.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                setState(() => _checkingPermission = true);
+                _checkPermissionAndStart();
+              },
+              child: const Text('Grant Permission'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 class _CompassDialPainter extends CustomPainter {
   final Color primaryColor;
 
@@ -2016,6 +1895,307 @@ class _CompassDialPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CompassDialPainter oldDelegate) {
     return oldDelegate.primaryColor != primaryColor;
+  }
+}
+
+/// Rotating outer ring with tick marks, degree numbers, and N/E/S/W letters.
+/// The whole ring rotates with the heading so N points correctly.
+class _CompassRingPainter extends CustomPainter {
+  final double heading;
+
+  const _CompassRingPainter({required this.heading});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final outerR = radius - 2;
+    final innerR = radius * 0.58;
+
+    // Background circle
+    canvas.drawCircle(
+      center,
+      outerR,
+      Paint()..color = const Color(0xFFF8F8F8),
+    );
+
+    // Outer border
+    canvas.drawCircle(
+      center,
+      outerR,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = const Color(0xFFE0E0E0),
+    );
+
+    // Inner empty circle (white area where crosshair lives)
+    canvas.drawCircle(
+      center,
+      innerR,
+      Paint()..color = Colors.white,
+    );
+
+    canvas.drawCircle(
+      center,
+      innerR,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..color = const Color(0xFFE0E0E0),
+    );
+
+    // Rotate the ring based on heading
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-heading * pi / 180);
+    canvas.translate(-center.dx, -center.dy);
+
+    final tickPaint = Paint()..strokeCap = StrokeCap.round;
+
+    for (int i = 0; i < 360; i += 2) {
+      final angleRad = (i - 90) * pi / 180;
+      final isCardinal = i % 90 == 0;
+      final isMajor = i % 10 == 0;
+      final isMid = i % 5 == 0;
+
+      final tickOuter = outerR - 4;
+      final tickInner = isCardinal
+          ? outerR - 28
+          : isMajor
+              ? outerR - 20
+              : isMid
+                  ? outerR - 14
+                  : outerR - 10;
+
+      tickPaint
+        ..strokeWidth = isCardinal
+            ? 2.5
+            : isMajor
+                ? 1.8
+                : 1.0
+        ..color = isCardinal
+            ? const Color(0xFF18212F)
+            : const Color(0xFF18212F).withValues(
+                alpha: isMajor ? 0.55 : 0.28);
+
+      canvas.drawLine(
+        Offset(
+          center.dx + cos(angleRad) * tickInner,
+          center.dy + sin(angleRad) * tickInner,
+        ),
+        Offset(
+          center.dx + cos(angleRad) * tickOuter,
+          center.dy + sin(angleRad) * tickOuter,
+        ),
+        tickPaint,
+      );
+
+      // Degree numbers every 30°
+      if (i % 30 == 0 && !isCardinal) {
+        final labelR = outerR - 38;
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '$i',
+            style: const TextStyle(
+              color: Color(0xFF555555),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(
+          canvas,
+          Offset(
+            center.dx + cos(angleRad) * labelR - tp.width / 2,
+            center.dy + sin(angleRad) * labelR - tp.height / 2,
+          ),
+        );
+      }
+    }
+
+    // Cardinal letters N E S W — inside the ring near the inner circle edge
+    final cardinals = {'N': 0, 'E': 90, 'S': 180, 'W': 270};
+    final labelR = innerR + (outerR - innerR) * 0.5;
+
+    cardinals.forEach((letter, deg) {
+      final angleRad = (deg - 90) * pi / 180;
+      final isNorth = letter == 'N';
+      final tp = TextPainter(
+        text: TextSpan(
+          text: letter,
+          style: TextStyle(
+            color: isNorth
+                ? const Color(0xFF18212F)
+                : const Color(0xFF444444),
+            fontSize: isNorth ? 22 : 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(
+        canvas,
+        Offset(
+          center.dx + cos(angleRad) * labelR - tp.width / 2,
+          center.dy + sin(angleRad) * labelR - tp.height / 2,
+        ),
+      );
+    });
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _CompassRingPainter old) =>
+      old.heading != heading;
+}
+
+/// Static crosshair lines inside the inner circle.
+class _CrosshairPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final innerR = size.width / 2 * 0.58;
+    final gap = 10.0;
+
+    final paint = Paint()
+      ..color = const Color(0xFF18212F).withValues(alpha: 0.25)
+      ..strokeWidth = 1.0;
+
+    // Horizontal line (left half)
+    canvas.drawLine(
+      Offset(center.dx - innerR + 8, center.dy),
+      Offset(center.dx - gap, center.dy),
+      paint,
+    );
+    // Horizontal line (right half)
+    canvas.drawLine(
+      Offset(center.dx + gap, center.dy),
+      Offset(center.dx + innerR - 8, center.dy),
+      paint,
+    );
+    // Vertical line (top half)
+    canvas.drawLine(
+      Offset(center.dx, center.dy - innerR + 8),
+      Offset(center.dx, center.dy - gap),
+      paint,
+    );
+    // Vertical line (bottom half)
+    canvas.drawLine(
+      Offset(center.dx, center.dy + gap),
+      Offset(center.dx, center.dy + innerR - 8),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+/// Fixed red triangle at the bottom of the dial pointing up toward north.
+class _NorthTrianglePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFE53E3E)
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(size.width / 2, 0)
+      ..lineTo(0, size.height)
+      ..lineTo(size.width, size.height)
+      ..close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+class _InfoCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final String badge;
+  final Color badgeColor;
+  final IconData icon;
+
+  const _InfoCard({
+    required this.label,
+    required this.value,
+    required this.badge,
+    required this.badgeColor,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: badgeColor, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF667085),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF18212F),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: badgeColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

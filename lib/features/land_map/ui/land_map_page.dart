@@ -245,14 +245,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (err != null) _snack(err);
   }
 
-  Future<void> _handleLocationIssueAction() async {
-    if ((_locationError ?? '').toLowerCase().contains('services')) {
-      await Geolocator.openLocationSettings();
-      return;
-    }
-    await Geolocator.openAppSettings();
-  }
-
   Future<void> _loadSavedMarkers() async {
     final box = Hive.box('landbox');
     final markerItems =
@@ -351,6 +343,35 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         setState(() => _isMarkerSaving = false);
       }
     }
+  }
+
+  Future<void> _addMarkerAtCurrentLocation() async {
+    if (_isLocating || _isMarkerSaving) return;
+
+    setState(() {
+      _isLocating = true;
+      _locationError = null;
+    });
+
+    final err = await ref.read(landMapProvider.notifier).refreshLocation();
+    if (!mounted) return;
+
+    final current = ref.read(landMapProvider).current;
+    setState(() {
+      _isLocating = false;
+      _locationError = err;
+    });
+
+    if (err != null) {
+      _snack(err);
+      return;
+    }
+    if (current == null) {
+      _snack('No current location available.');
+      return;
+    }
+
+    await _addMarkerAt(current);
   }
 
   Future<_MarkerDraft?> _promptMarkerDetails() async {
@@ -1210,7 +1231,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             st.current!.longitude,
             referenceEllipsoid,
           );
-    final bottomFabOffset = widget.bottomInset + 16;
     final fabBottomOffset =
         widget.bottomInset + (_showBottomActionBar ? 240 : 16);
     final bottomBarInset = max(0.0, widget.bottomInset - 13);
@@ -1418,6 +1438,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               }
               if (_activeTool == _MapTool.distance) {
                 _addDistancePoint(latLng);
+                return;
+              }
+              if (_activeTool == _MapTool.none) {
+                final err = ref
+                    .read(landMapProvider.notifier)
+                    .addPointAt(latLng);
+                if (err != null && mounted) _snack(err);
               }
             },
           ),
@@ -1618,66 +1645,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             ),
           ),
 
-        if (!_isFullscreen)
-          if (_locationError != null && !_isFullscreen)
-            Positioned(
-              top: 92 + MediaQuery.of(context).padding.top,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.orange.shade700,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _locationError!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.orange.shade900,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              OutlinedButton(
-                                onPressed: _isLocating
-                                    ? null
-                                    : _handleLocationIssueAction,
-                                child: const Text('Open settings'),
-                              ),
-                              ElevatedButton(
-                                onPressed: _isLocating
-                                    ? null
-                                    : _initLocationAndCenter,
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
         if (_showBottomActionBar)
           Positioned(
             left: 0,
@@ -1724,6 +1691,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               onUndoField: ref.read(landMapProvider.notifier).undoLastPoint,
               onClearField: ref.read(landMapProvider.notifier).clearPoints,
               onSaveField: _showFieldDialog,
+              onAddMarkerAtGps: _addMarkerAtCurrentLocation,
             ),
           ),
 
@@ -2210,8 +2178,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                           : () async {
                                               final err = await notifier
                                                   .addPointFromCurrent();
-                                              if (!sheetStateContext.mounted)
+                                              if (!sheetStateContext.mounted) {
                                                 return;
+                                              }
                                               setSheetState(() {
                                                 fieldSheetMessage =
                                                     err ?? 'Point added';
@@ -3391,6 +3360,7 @@ class _BottomActionBar extends StatefulWidget {
   final VoidCallback onUndoField;
   final VoidCallback onClearField;
   final VoidCallback onSaveField;
+  final VoidCallback onAddMarkerAtGps;
 
   const _BottomActionBar({
     required this.activeTool,
@@ -3415,6 +3385,7 @@ class _BottomActionBar extends StatefulWidget {
     required this.onUndoField,
     required this.onClearField,
     required this.onSaveField,
+    required this.onAddMarkerAtGps,
   });
 
   @override
@@ -3466,13 +3437,16 @@ class _BottomActionBarState extends State<_BottomActionBar>
   String _statusLine() {
     switch (widget.activeTool) {
       case _MapTool.distance:
-        if (widget.distancePoints.isEmpty)
+        if (widget.distancePoints.isEmpty) {
           return 'Long-press map to add points';
+        }
         return '${widget.distancePoints.length} pts · ${_fmt(widget.totalDistanceMeters)}';
       case _MapTool.marker:
         return 'Long-press map to place marker';
       case _MapTool.none:
-        return 'Select a tool to start';
+        return widget.fieldPoints.isEmpty
+            ? 'Long-press map or use + GPS to add area points'
+            : '${widget.fieldPoints.length} area pts · long-press to add more';
     }
   }
 
@@ -3773,6 +3747,16 @@ class _BottomActionBarState extends State<_BottomActionBar>
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Text(
+          'Long-press the map to add area points, or use + GPS for your current location.',
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w600,
+          ),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 10),
         Row(
           children: [
@@ -3830,41 +3814,57 @@ class _BottomActionBarState extends State<_BottomActionBar>
   }
 
   Widget _buildMarkerContent(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFF001F3F).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.touch_app_outlined,
-              color: Color(0xFF001F3F),
-              size: 18,
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
           ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Long-press anywhere on the map to place a marker',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black54,
-                fontWeight: FontWeight.w600,
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF001F3F).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.touch_app_outlined,
+                  color: Color(0xFF001F3F),
+                  size: 18,
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Long-press anywhere on the map to place a marker',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: _ActionBtn(
+            label: '+ GPS',
+            isLoading: widget.isLocating || widget.isMarkerSaving,
+            enabled: !widget.isLocating && !widget.isMarkerSaving,
+            isPrimary: true,
+            onTap: widget.onAddMarkerAtGps,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -104,6 +104,10 @@ class LandMapNotifier extends Notifier<LandMapState> {
     return _appendPointIfValid(current, minDistanceMeters: 2);
   }
 
+  String? addPointAt(LatLng point, {double minDistanceMeters = 2}) {
+    return _appendPointIfValid(point, minDistanceMeters: minDistanceMeters);
+  }
+
   String? addPointFromLivePosition(
     Position position, {
     double maxAccuracy = 20,
