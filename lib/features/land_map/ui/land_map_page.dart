@@ -77,6 +77,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   DateTime? _lastNavigationCameraMove;
   bool _userIsInteracting = false;
   bool _followCurrentLocation = true;
+  bool _skipNextFieldPointsFocus = false;
   Timer? _interactionCooldownTimer;
 
   @override
@@ -116,6 +117,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
       final pointsChanged = previous == null || previous.points != next.points;
       if (!pointsChanged) return;
+
+      if (_skipNextFieldPointsFocus) {
+        _skipNextFieldPointsFocus = false;
+        return;
+      }
 
       if (_fieldTrackingSubscription != null &&
           _followCurrentLocation &&
@@ -1441,10 +1447,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 return;
               }
               if (_activeTool == _MapTool.none) {
+                _skipNextFieldPointsFocus = true;
                 final err = ref
                     .read(landMapProvider.notifier)
                     .addPointAt(latLng);
-                if (err != null && mounted) _snack(err);
+                if (err != null && mounted) {
+                  _skipNextFieldPointsFocus = false;
+                  _snack(err);
+                }
               }
             },
           ),
@@ -2777,9 +2787,7 @@ class _MapControlButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: isActive
-            ? const Color(0xFF001F3F).withValues(alpha: 0.12)
-            : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(

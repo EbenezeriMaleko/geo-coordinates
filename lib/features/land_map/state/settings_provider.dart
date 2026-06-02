@@ -101,7 +101,7 @@ class SaveOriginalPhotoNotifier extends Notifier<bool> {
     final box = Hive.box('landbox');
     final saved = box.get(_saveOriginalPhotoKey);
     if (saved is bool) return saved;
-    return true;
+    return false;
   }
 
   Future<void> setValue(bool value) async {

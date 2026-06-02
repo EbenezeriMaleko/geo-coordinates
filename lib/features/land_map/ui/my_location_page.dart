@@ -28,6 +28,7 @@ import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 import 'location_media_page.dart';
 import 'package:video_player/video_player.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:permission_handler/permission_handler.dart' hide ServiceStatus;
 
 enum MyLocationAction { savePoint, copyBoth, share }
@@ -94,7 +95,7 @@ class _LocationRequiredDialogState extends State<_LocationRequiredDialog>
         : 'Location permission needed';
 
     final String body = isService
-        ? 'TaREF GPS needs your device location to show coordinates, track position and tag media. Please turn on location services to continue.'
+        ? 'TaREF GPS Coordinates needs your device location to show coordinates, track position and tag media. Please turn on location services to continue.'
         : isForever
         ? 'Location permission has been permanently denied. Open app settings and allow location access so TaREF GPS can function.'
         : 'Location permission is required to track your GPS position. Please grant permission to continue using this page.';
@@ -1111,7 +1112,6 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     final Color headerColor = theme.colorScheme.primary;
 
     return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
       child: Container(
         color: const Color(0xFFF5F7FA),
         child: Column(
@@ -1436,10 +1436,6 @@ class _CompassPageState extends State<_CompassPage> {
   bool _hasPermission = false;
   bool _checkingPermission = true;
 
-  // For manual rotation via drag
-  double _manualOffset = 0.0;
-  double _dragStartAngle = 0.0;
-  double _dragStartOffset = 0.0;
 
   @override
   void initState() {
@@ -1472,17 +1468,15 @@ class _CompassPageState extends State<_CompassPage> {
 
   void _startListening() {
     _compassSubscription?.cancel();
-    _compassSubscription = FlutterCompass.events?.listen(
-      (event) {
-        if (!mounted) return;
-        final h = event.heading;
-        if (h == null) return;
-        setState(() {
-          _heading = h;
-          _accuracy = event.accuracy;
-        });
-      },
-    );
+    _compassSubscription = FlutterCompass.events?.listen((event) {
+      if (!mounted) return;
+      final h = event.heading;
+      if (h == null) return;
+      setState(() {
+        _heading = h;
+        _accuracy = event.accuracy;
+      });
+    });
   }
 
   @override
@@ -1491,7 +1485,6 @@ class _CompassPageState extends State<_CompassPage> {
     super.dispose();
   }
 
-  double get _effectiveHeading => (_heading ?? 0) + _manualOffset;
 
   String get _headingText {
     final h = _heading;
@@ -1503,8 +1496,14 @@ class _CompassPageState extends State<_CompassPage> {
     final h = _heading;
     if (h == null) return 'Unavailable';
     const labels = [
-      'North', 'North East', 'East', 'South East',
-      'South', 'South West', 'West', 'North West',
+      'North',
+      'North East',
+      'East',
+      'South East',
+      'South',
+      'South West',
+      'West',
+      'North West',
     ];
     return labels[((h + 22.5) / 45).floor() % labels.length];
   }
@@ -1536,21 +1535,6 @@ class _CompassPageState extends State<_CompassPage> {
     if (a <= 10) return const Color(0xFF14804A);
     if (a <= 25) return const Color(0xFFB54708);
     return const Color(0xFFB42318);
-  }
-
-  void _onPanStart(DragStartDetails details, Offset center) {
-    final pos = details.localPosition;
-    _dragStartAngle = atan2(pos.dy - center.dy, pos.dx - center.dx);
-    _dragStartOffset = _manualOffset;
-  }
-
-  void _onPanUpdate(DragUpdateDetails details, Offset center) {
-    final pos = details.localPosition;
-    final angle = atan2(pos.dy - center.dy, pos.dx - center.dx);
-    final delta = angle - _dragStartAngle;
-    setState(() {
-      _manualOffset = _dragStartOffset + delta * 180 / pi;
-    });
   }
 
   @override
@@ -1592,9 +1576,7 @@ class _CompassPageState extends State<_CompassPage> {
                   ? _buildPermissionDenied()
                   : LayoutBuilder(
                       builder: (context, constraints) {
-                        final dialSize = min(
-                            constraints.maxWidth - 32, 340.0);
-                        final center = Offset(dialSize / 2, dialSize / 2);
+                        final dialSize = min(constraints.maxWidth - 32, 340.0);
                         return SingleChildScrollView(
                           physics: const BouncingScrollPhysics(),
                           child: Padding(
@@ -1602,45 +1584,54 @@ class _CompassPageState extends State<_CompassPage> {
                             child: Column(
                               children: [
                                 // Compass dial
-                                GestureDetector(
-                                  onPanStart: (d) =>
-                                      _onPanStart(d, center),
-                                  onPanUpdate: (d) =>
-                                      _onPanUpdate(d, center),
-                                  child: SizedBox(
-                                    width: dialSize,
-                                    height: dialSize,
-                                    child: CustomPaint(
-                                      painter: _CompassRingPainter(
-                                        heading: _effectiveHeading,
-                                      ),
-                                      child: Stack(
-                                        alignment: Alignment.center,
-                                        children: [
-                                          // Crosshair lines
-                                          CustomPaint(
+                                SizedBox(
+                                  width: dialSize,
+                                  height: dialSize,
+                                  child: CustomPaint(
+                                    painter: _CompassRingPainter(
+                                      heading: _heading ?? 0,
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        // Compass ring rotates
+                                        Transform.rotate(
+                                          angle:
+                                              -((_heading ?? 0) * pi / 180),
+                                          child: CustomPaint(
                                             size: Size.square(dialSize),
-                                            painter: _CrosshairPainter(),
-                                          ),
-                                          // Center circle
-                                          Container(
-                                            width: 10,
-                                            height: 10,
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFF18212F),
-                                              shape: BoxShape.circle,
+                                            painter: _CompassRingPainter(
+                                              heading:
+                                                  0, // ring handles labels only
                                             ),
                                           ),
-                                          // Red north triangle — fixed at bottom
-                                          Positioned(
-                                            bottom: dialSize * 0.06,
-                                            child: CustomPaint(
-                                              size: const Size(16, 20),
-                                              painter: _NorthTrianglePainter(),
-                                            ),
+                                        ),
+                                
+                                        // Crosshair stays fixed
+                                        CustomPaint(
+                                          size: Size.square(dialSize),
+                                          painter: _CrosshairPainter(),
+                                        ),
+                                
+                                        // Fixed North indicator
+                                        Positioned(
+                                          top: dialSize * 0.04,
+                                          child: CustomPaint(
+                                            size: const Size(24, 30),
+                                            painter: _NorthTrianglePainter(),
                                           ),
-                                        ],
-                                      ),
+                                        ),
+                                
+                                        // Center point
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF18212F),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -1699,13 +1690,16 @@ class _CompassPageState extends State<_CompassPage> {
                                 Container(
                                   width: double.infinity,
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                    horizontal: 16,
+                                    vertical: 14,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: Colors.black
-                                          .withValues(alpha: 0.06),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.06,
+                                      ),
                                     ),
                                   ),
                                   child: Row(
@@ -1755,8 +1749,11 @@ class _CompassPageState extends State<_CompassPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.location_off_rounded,
-                size: 48, color: Colors.grey.shade400),
+            Icon(
+              Icons.location_off_rounded,
+              size: 48,
+              color: Colors.grey.shade400,
+            ),
             const SizedBox(height: 16),
             Text(
               'Location permission is required for the compass sensor on Android.',
@@ -1777,127 +1774,6 @@ class _CompassPageState extends State<_CompassPage> {
     );
   }
 }
-class _CompassDialPainter extends CustomPainter {
-  final Color primaryColor;
-
-  const _CompassDialPainter({required this.primaryColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final tickPaint = Paint()
-      ..color = const Color(0xFF18212F).withValues(alpha: 0.34)
-      ..strokeCap = StrokeCap.round;
-    final ringPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..color = const Color(0xFF18212F).withValues(alpha: 0.08);
-
-    canvas.drawCircle(center, radius - 13, ringPaint);
-    canvas.drawCircle(center, radius - 42, ringPaint);
-
-    for (var i = 0; i < 60; i++) {
-      final angle = (i * 6 - 90) * pi / 180;
-      final isMajor = i % 5 == 0;
-      final isCardinal = i % 15 == 0;
-      final outer = radius - 18;
-      final inner =
-          radius -
-          (isCardinal
-              ? 40
-              : isMajor
-              ? 32
-              : 25);
-      tickPaint
-        ..strokeWidth = isCardinal
-            ? 3.0
-            : isMajor
-            ? 2.0
-            : 1.0
-        ..color = isCardinal
-            ? primaryColor.withValues(alpha: 0.74)
-            : const Color(0xFF18212F).withValues(alpha: isMajor ? 0.32 : 0.18);
-
-      canvas.drawLine(
-        Offset(center.dx + cos(angle) * inner, center.dy + sin(angle) * inner),
-        Offset(center.dx + cos(angle) * outer, center.dy + sin(angle) * outer),
-        tickPaint,
-      );
-    }
-
-    _drawCompassLabel(canvas, center, radius, 'N', -90, primaryColor, 30, true);
-    _drawCompassLabel(
-      canvas,
-      center,
-      radius,
-      'E',
-      0,
-      const Color(0xFF18212F),
-      24,
-      false,
-    );
-    _drawCompassLabel(
-      canvas,
-      center,
-      radius,
-      'S',
-      90,
-      const Color(0xFF18212F),
-      24,
-      false,
-    );
-    _drawCompassLabel(
-      canvas,
-      center,
-      radius,
-      'W',
-      180,
-      const Color(0xFF18212F),
-      24,
-      false,
-    );
-  }
-
-  void _drawCompassLabel(
-    Canvas canvas,
-    Offset center,
-    double radius,
-    String text,
-    double degrees,
-    Color color,
-    double fontSize,
-    bool isPrimary,
-  ) {
-    final angle = degrees * pi / 180;
-    final labelRadius = radius - 72;
-    final painter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color,
-          fontSize: fontSize,
-          fontWeight: isPrimary ? FontWeight.w900 : FontWeight.w800,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    painter.paint(
-      canvas,
-      Offset(
-        center.dx + cos(angle) * labelRadius - painter.width / 2,
-        center.dy + sin(angle) * labelRadius - painter.height / 2,
-      ),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _CompassDialPainter oldDelegate) {
-    return oldDelegate.primaryColor != primaryColor;
-  }
-}
-
 /// Rotating outer ring with tick marks, degree numbers, and N/E/S/W letters.
 /// The whole ring rotates with the heading so N points correctly.
 class _CompassRingPainter extends CustomPainter {
@@ -1913,11 +1789,7 @@ class _CompassRingPainter extends CustomPainter {
     final innerR = radius * 0.58;
 
     // Background circle
-    canvas.drawCircle(
-      center,
-      outerR,
-      Paint()..color = const Color(0xFFF8F8F8),
-    );
+    canvas.drawCircle(center, outerR, Paint()..color = const Color(0xFFF8F8F8));
 
     // Outer border
     canvas.drawCircle(
@@ -1930,11 +1802,7 @@ class _CompassRingPainter extends CustomPainter {
     );
 
     // Inner empty circle (white area where crosshair lives)
-    canvas.drawCircle(
-      center,
-      innerR,
-      Paint()..color = Colors.white,
-    );
+    canvas.drawCircle(center, innerR, Paint()..color = Colors.white);
 
     canvas.drawCircle(
       center,
@@ -1963,21 +1831,20 @@ class _CompassRingPainter extends CustomPainter {
       final tickInner = isCardinal
           ? outerR - 28
           : isMajor
-              ? outerR - 20
-              : isMid
-                  ? outerR - 14
-                  : outerR - 10;
+          ? outerR - 20
+          : isMid
+          ? outerR - 14
+          : outerR - 10;
 
       tickPaint
         ..strokeWidth = isCardinal
             ? 2.5
             : isMajor
-                ? 1.8
-                : 1.0
+            ? 1.8
+            : 1.0
         ..color = isCardinal
             ? const Color(0xFF18212F)
-            : const Color(0xFF18212F).withValues(
-                alpha: isMajor ? 0.55 : 0.28);
+            : const Color(0xFF18212F).withValues(alpha: isMajor ? 0.55 : 0.28);
 
       canvas.drawLine(
         Offset(
@@ -2026,9 +1893,7 @@ class _CompassRingPainter extends CustomPainter {
         text: TextSpan(
           text: letter,
           style: TextStyle(
-            color: isNorth
-                ? const Color(0xFF18212F)
-                : const Color(0xFF444444),
+            color: isNorth ? const Color(0xFF18212F) : const Color(0xFF444444),
             fontSize: isNorth ? 22 : 18,
             fontWeight: FontWeight.w900,
           ),
@@ -2176,7 +2041,9 @@ class _InfoCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: badgeColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(4),
@@ -2196,44 +2063,6 @@ class _InfoCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _CompassNeedlePainter extends CustomPainter {
-  final Color primaryColor;
-
-  const _CompassNeedlePainter({required this.primaryColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final northPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = primaryColor;
-    final southPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = const Color(0xFF98A2B3);
-
-    final northPath = ui.Path()
-      ..moveTo(center.dx, 0)
-      ..lineTo(center.dx - size.width * 0.22, center.dy)
-      ..lineTo(center.dx, center.dy - size.height * 0.08)
-      ..lineTo(center.dx + size.width * 0.22, center.dy)
-      ..close();
-    canvas.drawPath(northPath, northPaint);
-
-    final southPath = ui.Path()
-      ..moveTo(center.dx, size.height)
-      ..lineTo(center.dx - size.width * 0.18, center.dy)
-      ..lineTo(center.dx, center.dy + size.height * 0.08)
-      ..lineTo(center.dx + size.width * 0.18, center.dy)
-      ..close();
-    canvas.drawPath(southPath, southPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _CompassNeedlePainter oldDelegate) {
-    return oldDelegate.primaryColor != primaryColor;
   }
 }
 
@@ -2718,6 +2547,14 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
     required this.distanceUnit,
   });
 
+  Future<void> _shareMedia(_GeoTaggedPhoto capture) async {
+    final file = XFile(capture.imagePath);
+
+    await SharePlus.instance.share(
+      ShareParams(files: [file], text: capture.name),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -2789,10 +2626,19 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    color: Colors.black54,
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => _shareMedia(capture),
+                        icon: const Icon(Icons.share),
+                        color: Colors.black54,
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                        color: Colors.black54,
+                      ),
+                    ],
                   ),
                 ],
               ),

@@ -361,7 +361,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       localItems: localItems,
                       remoteItems: remoteItems,
                       canUseCloud: canUseCloud,
-                    );
+                    ).where((item) => _pointsCount(item) > 0).toList();
 
                     final counts = _contentCounts(items);
                     final sectioned = _applyContentSection(items);
