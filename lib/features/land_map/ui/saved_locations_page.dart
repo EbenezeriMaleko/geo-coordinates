@@ -1819,6 +1819,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           easting: easting,
           northing: northing,
           zone: zone,
+          ellipsoid: ellipsoid,
         ),
       );
       if (i < pointsRaw.length - 1) {
@@ -1867,6 +1868,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           easting: easting,
           northing: northing,
           zone: point.zone,
+          ellipsoid: ellipsoid,
         ),
       );
       if (i < points.length - 1) {
@@ -1884,6 +1886,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     double? easting,
     double? northing,
     String? zone,
+    ReferenceEllipsoid? ellipsoid,
   }) {
     final buffer = StringBuffer()
       ..writeln(title)
@@ -1896,7 +1899,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         'E/N: ${easting.toStringAsFixed(2)}, ${northing.toStringAsFixed(2)}',
       );
       if (zone != null && zone.isNotEmpty) {
-        buffer.writeln('Zone: $zone');
+        final ellipsoidSuffix =
+            ellipsoid != null ? ' ${ellipsoid.displayName}' : '';
+        buffer.writeln('Zone: $zone$ellipsoidSuffix');
       }
     }
 

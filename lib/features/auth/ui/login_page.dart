@@ -119,7 +119,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
         ),
         const SizedBox(height: 20),
         Text(
-          'TAREF GPS',
+          'TaREF GPS Coordinates',
           style: GoogleFonts.inter(
             fontSize: 30,
             fontWeight: FontWeight.w800,

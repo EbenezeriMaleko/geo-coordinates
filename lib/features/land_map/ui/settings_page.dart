@@ -97,16 +97,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onChanged: (value) =>
                 ref.read(saveToGalleryProvider.notifier).setValue(value),
           ),
-          _item(
-            title: 'Image quality',
-            subtitle: _photoQualityLabel(photoQuality),
-            onTap: _showPhotoQualitySelector,
-          ),
-          _item(
-            title: 'Capture mode',
-            subtitle: _captureModeLabel(captureMode),
-            onTap: _showCaptureModeSelector,
-          ),
+          // _item(
+          //   title: 'Image quality',
+          //   subtitle: _photoQualityLabel(photoQuality),
+          //   onTap: _showPhotoQualitySelector,
+          // ),
+          // _item(
+          //   title: 'Capture mode',
+          //   subtitle: _captureModeLabel(captureMode),
+          //   onTap: _showCaptureModeSelector,
+          // ),
 
           _sectionDivider(),
 

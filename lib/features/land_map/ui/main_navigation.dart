@@ -249,7 +249,7 @@ class _MainNavigationState extends State<MainNavigation> {
       ..writeln(
         'E/N: ${utm?.easting.toStringAsFixed(2) ?? '—'}, ${utm?.northing.toStringAsFixed(2) ?? '—'}',
       )
-      ..writeln('UTM Zone: ${utm?.zone ?? '—'}')
+      ..writeln('UTM Zone: ${utm?.zone ?? '—'} ${referenceEllipsoid.displayName}')
       ..writeln(
         'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
       );
