@@ -73,12 +73,30 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   List<LatLng> _routePoints = const [];
   RouteResult? _currentRoute;
   bool _isFetchingRoute = false;
+  LatLng? _routeDestination;
   ProviderSubscription<LandMapState>? _landMapSubscription;
+  StreamSubscription<CompassEvent>? _navigationCompassSubscription;
   DateTime? _lastNavigationCameraMove;
   bool _userIsInteracting = false;
   bool _followCurrentLocation = true;
   bool _skipNextFieldPointsFocus = false;
   Timer? _interactionCooldownTimer;
+  double _navigationHeading = 0.0;
+  bool _navigationCameraActive = false;
+  Timer? _navigationCameraTimer;
+
+  double _bearingDegrees(LatLng from, LatLng to) {
+    final fromLat = from.latitude * pi / 180.0;
+    final fromLng = from.longitude * pi / 180.0;
+    final toLat = to.latitude * pi / 180.0;
+    final toLng = to.longitude * pi / 180.0;
+
+    final y = sin(toLng - fromLng) * cos(toLat);
+    final x =
+        cos(fromLat) * sin(toLat) -
+        sin(fromLat) * cos(toLat) * cos(toLng - fromLng);
+    return (atan2(y, x) * 180.0 / pi + 360.0) % 360.0;
+  }
 
   @override
   void initState() {
@@ -94,12 +112,24 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         if (targetChanged) {
           _lastNavigationCameraMove = null;
           unawaited(_startNavigationTracking());
-          // Fetch road route to the target
           final targetPoint = next.navigationTarget!.point;
           unawaited(_fetchRoute(targetPoint));
         }
-        if (targetChanged || currentChanged) {
-          _focusOnNavigationTarget(next);
+        if (currentChanged && next.current != null) {
+          // Trim route as user moves forward
+          if (_routePoints.length >= 2) {
+            final trimmed = _trimRouteToCurrentPosition(
+              _routePoints,
+              next.current!,
+            );
+            if (trimmed.length != _routePoints.length) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _routePoints = trimmed);
+              });
+            }
+          }
+          // Update navigation camera (smooth follow + rotate)
+          _updateNavigationCamera();
         }
         return;
       }
@@ -154,9 +184,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   @override
   void dispose() {
     _interactionCooldownTimer?.cancel();
+    _navigationCameraTimer?.cancel();
     _landMapSubscription?.close();
     _fieldTrackingSubscription?.cancel();
     _navigationTrackingSubscription?.cancel();
+    _navigationCompassSubscription?.cancel();
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
@@ -972,6 +1004,20 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       return;
     }
 
+    // Lock camera to navigation mode
+    setState(() {
+      _navigationCameraActive = true;
+      _followCurrentLocation = false;
+    });
+
+    // Start compass for map rotation
+    _navigationCompassSubscription?.cancel();
+    _navigationCompassSubscription = FlutterCompass.events?.listen((event) {
+      if (!mounted || event.heading == null) return;
+      setState(() => _navigationHeading = event.heading!);
+      _updateNavigationCamera();
+    });
+
     _navigationTrackingSubscription =
         Geolocator.getPositionStream(
           locationSettings: AndroidSettings(
@@ -1006,7 +1052,35 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   Future<void> _stopNavigationTracking() async {
     await _navigationTrackingSubscription?.cancel();
     _navigationTrackingSubscription = null;
+    await _navigationCompassSubscription?.cancel();
+    _navigationCompassSubscription = null;
+    _navigationCameraTimer?.cancel();
+    _navigationCameraTimer = null;
     _lastNavigationCameraMove = null;
+    if (mounted) {
+      setState(() {
+        _navigationCameraActive = false;
+        _navigationHeading = 0.0;
+        _followCurrentLocation = true;
+      });
+    }
+  }
+
+  void _updateNavigationCamera() {
+    if (!_navigationCameraActive || _userIsInteracting) return;
+    final current = ref.read(landMapProvider).current;
+    if (current == null) return;
+
+    // Throttle camera updates to every 500ms
+    _navigationCameraTimer?.cancel();
+    _navigationCameraTimer = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
+      _mapController.moveAndRotate(
+        current,
+        18.0, // Close zoom like Google Maps navigation
+        -_navigationHeading, // Rotate map with compass
+      );
+    });
   }
 
   Future<void> _fetchRoute(LatLng destination) async {
@@ -1017,6 +1091,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _isFetchingRoute = true;
       _routePoints = const [];
       _currentRoute = null;
+      _routeDestination = destination;
     });
 
     final result = await RoutingService.getRoute(
@@ -1039,10 +1114,29 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     });
   }
 
+  List<LatLng> _trimRouteToCurrentPosition(List<LatLng> route, LatLng current) {
+    if (route.length < 2) return route;
+
+    int closestIndex = 0;
+    double closestDistance = double.infinity;
+
+    for (int i = 0; i < route.length - 1; i++) {
+      final candidate = _nearestPointOnSegment(current, route[i], route[i + 1]);
+      final dist = _distanceCalculator.as(LengthUnit.Meter, current, candidate);
+      if (dist < closestDistance) {
+        closestDistance = dist;
+        closestIndex = i;
+      }
+    }
+
+    return [current, ...route.sublist(closestIndex + 1)];
+  }
+
   void _clearRoute() {
     setState(() {
       _routePoints = const [];
       _currentRoute = null;
+      _routeDestination = null;
     });
   }
 
@@ -1301,12 +1395,28 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               child: _SavedMarkerPin(label: marker.label),
             ),
           ),
+      // Destination marker — always at destination
       if (navigationTarget != null && navigationTargetKind == 'point')
         Marker(
-          width: 46,
-          height: 46,
-          point: navigationGuidancePoint ?? navigationTarget.point,
-          child: const _NavigationTargetMarker(),
+          width: 36,
+          height: 36,
+          point: navigationTarget.point,
+          child: const _NavigationDestinationMarker(),
+        ),
+      // Direction arrow — sits on user, points toward destination
+      if (navigationTarget != null && st.current != null)
+        Marker(
+          width: 48,
+          height: 48,
+          point: st.current!,
+          child: _NavigationArrowMarker(
+            bearing: _bearingDegrees(
+              st.current!,
+              _routePoints.length >= 2
+                  ? _routePoints[min(1, _routePoints.length - 1)]
+                  : navigationTarget.point,
+            ),
+          ),
         ),
       if (navigationTarget != null && navigationTargetKind != 'point')
         for (int i = 0; i < navigationTargetPoints.length; i++)
@@ -1383,19 +1493,36 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           color: Colors.teal.shade700,
         ),
       // Show road route if available, otherwise straight line
-      if (navigationTarget != null && st.current != null)
-        if (_routePoints.length >= 2)
-          Polyline(
-            points: _routePoints,
-            strokeWidth: 4,
-            color: Colors.teal.shade700,
-          )
-        else if (navigationGuidancePoint != null)
-          Polyline(
-            points: [st.current!, navigationGuidancePoint],
-            strokeWidth: 3,
-            color: Colors.teal.shade700,
-          ),
+      // Main road route (trimmed as user moves)
+      if (navigationTarget != null &&
+          st.current != null &&
+          _routePoints.length >= 2)
+        Polyline(
+          points: _routePoints,
+          strokeWidth: 4,
+          color: Colors.teal.shade700,
+        ),
+      // Dotted last-mile line from route end to exact destination
+      if (navigationTarget != null &&
+          _routeDestination != null &&
+          _routePoints.length >= 2)
+        Polyline(
+          points: [_routePoints.last, _routeDestination!],
+          strokeWidth: 2.5,
+          color: Colors.teal.shade700,
+          pattern: const StrokePattern.dotted(),
+        ),
+      // Straight line fallback when no road route
+      if (navigationTarget != null &&
+          st.current != null &&
+          _routePoints.length < 2 &&
+          navigationGuidancePoint != null)
+        Polyline(
+          points: [st.current!, navigationGuidancePoint],
+          strokeWidth: 3,
+          color: Colors.teal.shade700,
+          pattern: const StrokePattern.dotted(),
+        ),
     ];
 
     return Stack(
@@ -1423,9 +1550,19 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 if (isUserEvent) {
                   _interactionCooldownTimer?.cancel();
                   _interactionCooldownTimer = Timer(
-                    const Duration(seconds: 2),
+                    // Longer cooldown during navigation so user can look around
+                    // then camera snaps back after 5 seconds
+                    _navigationCameraActive
+                        ? const Duration(seconds: 5)
+                        : const Duration(seconds: 2),
                     () {
-                      if (mounted) setState(() => _userIsInteracting = false);
+                      if (mounted) {
+                        setState(() => _userIsInteracting = false);
+                        // Re-engage navigation camera after user stops
+                        if (_navigationCameraActive) {
+                          _updateNavigationCamera();
+                        }
+                      }
                     },
                   );
                 }
@@ -3048,6 +3185,97 @@ class _SavedMarkerPin extends StatelessWidget {
             ),
     );
   }
+}
+
+class _NavigationDestinationMarker extends StatelessWidget {
+  const _NavigationDestinationMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.teal.shade700,
+        border: Border.all(color: Colors.white, width: 2.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Icon(Icons.flag_rounded, color: Colors.white, size: 18),
+    );
+  }
+}
+
+class _NavigationArrowMarker extends StatelessWidget {
+  final double bearing;
+  const _NavigationArrowMarker({required this.bearing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: bearing * pi / 180,
+      child: Container(
+        width: 48,
+        height: 48,
+        alignment: Alignment.center,
+        child: CustomPaint(size: const Size(48, 48), painter: _ArrowPainter()),
+      ),
+    );
+  }
+}
+
+class _ArrowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    // Outer glow circle
+    canvas.drawCircle(
+      Offset(cx, cy),
+      size.width / 2,
+      Paint()..color = Colors.teal.withValues(alpha: 0.18),
+    );
+
+    // White inner circle
+    canvas.drawCircle(
+      Offset(cx, cy),
+      size.width * 0.36,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill,
+    );
+
+    canvas.drawCircle(
+      Offset(cx, cy),
+      size.width * 0.36,
+      Paint()
+        ..color = Colors.teal.shade700
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+
+    // Arrow pointing up (toward destination after rotation)
+    final arrowPaint = Paint()
+      ..color = Colors.teal.shade700
+      ..style = PaintingStyle.fill;
+
+    final arrowPath = ui.Path()
+      ..moveTo(cx, cy - size.height * 0.28)
+      ..lineTo(cx - size.width * 0.12, cy + size.height * 0.08)
+      ..lineTo(cx, cy)
+      ..lineTo(cx + size.width * 0.12, cy + size.height * 0.08)
+      ..close();
+
+    canvas.drawPath(arrowPath, arrowPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
 class _NavigationTargetMarker extends StatelessWidget {
