@@ -72,6 +72,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
         current: LatLng(pos.latitude, pos.longitude),
         accuracyMeters: pos.accuracy,
         altitudeMeters: pos.altitude,
+        speedMps: pos.speed,
         locationTimestamp: pos.timestamp,
       );
       return null;
@@ -85,6 +86,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
       current: LatLng(pos.latitude, pos.longitude),
       accuracyMeters: pos.accuracy,
       altitudeMeters: pos.altitude,
+      speedMps: pos.speed,
       locationTimestamp: pos.timestamp,
     );
   }

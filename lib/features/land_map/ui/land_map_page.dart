@@ -1698,97 +1698,173 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             top: 16 + MediaQuery.of(context).padding.top,
             left: 16,
             right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Row(
-                children: [
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF001F3F).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.gps_fixed,
+                          color: Color(0xFF001F3F),
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (st.current != null)
+                              Text(
+                                utmText ?? 'UTM unavailable',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            if (st.current != null)
+                              Text(
+                                '${referenceEllipsoid.displayName} • Accuracy: ${st.accuracyMeters == null ? '—' : _formatDistance(st.accuracyMeters!, distanceUnit)}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            Text(
+                              st.current == null
+                                  ? (_isLocating
+                                        ? 'Locating...'
+                                        : (_locationError != null
+                                              ? 'Location unavailable'
+                                              : 'Waiting for GPS...'))
+                                  : CoordinateFormatter.format(
+                                      st.current!.latitude,
+                                      st.current!.longitude,
+                                      coordinateFormat,
+                                    ),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (st.points.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF001F3F),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${st.points.length} pts',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Navigation pill — below GPS info card
+                if (navigationTarget != null) ...[
+                  const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 9,
+                    ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF001F3F).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.teal.shade700,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    child: const Icon(
-                      Icons.gps_fixed,
-                      color: Color(0xFF001F3F),
-                      size: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        if (st.current != null)
-                          Text(
-                            utmText ?? 'UTM unavailable',
-                            style: TextStyle(
+                        const Icon(
+                          Icons.navigation,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            [
+                              navigationTarget.label,
+                              if (_isFetchingRoute)
+                                'Calculating...'
+                              else if (_currentRoute != null)
+                                _formatDistance(
+                                  _currentRoute!.distanceMeters,
+                                  distanceUnit,
+                                )
+                              else if (st.current != null &&
+                                  navigationGuidancePoint != null)
+                                _formatDistance(
+                                  _distanceCalculator.as(
+                                    LengthUnit.Meter,
+                                    st.current!,
+                                    navigationGuidancePoint,
+                                  ),
+                                  distanceUnit,
+                                ),
+                              if (_currentRoute?.formattedDuration != null)
+                                _currentRoute!.formattedDuration!,
+                            ].join(' · '),
+                            style: const TextStyle(
+                              color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-
-                              color: Colors.black87,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        if (st.current != null)
-                          Text(
-                            '${referenceEllipsoid.displayName} • Accuracy: ${st.accuracyMeters == null ? '—' : _formatDistance(st.accuracyMeters!, distanceUnit)}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        Text(
-                          st.current == null
-                              ? (_isLocating
-                                    ? 'Locating...'
-                                    : (_locationError != null
-                                          ? 'Location unavailable'
-                                          : 'Waiting for GPS...'))
-                              : CoordinateFormatter.format(
-                                  st.current!.latitude,
-                                  st.current!.longitude,
-                                  coordinateFormat,
-                                ),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: _clearNavigationTarget,
+                          child: Icon(
+                            Icons.close,
+                            color: Colors.white.withValues(alpha: 0.75),
+                            size: 14,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  if (st.points.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF001F3F),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${st.points.length} pts',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
                 ],
-              ),
+              ],
             ),
           ),
 
@@ -3701,62 +3777,10 @@ class _BottomActionBarState extends State<_BottomActionBar>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final nav = widget.navigationTarget;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Navigation banner — sits above the bar when active
-        if (nav != null)
-          Container(
-            margin: const EdgeInsets.fromLTRB(10, 0, 10, 6),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: Colors.teal.shade700,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.navigation, color: Colors.white, size: 14),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    [
-                      nav.label,
-                      if (widget.navigationDistanceText != null)
-                        widget.navigationDistanceText!,
-                      if (widget.navigationDurationText != null)
-                        widget.navigationDurationText!,
-                    ].join(' · '),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: widget.onClearNavigation,
-                  child: Icon(
-                    Icons.close,
-                    color: Colors.white.withValues(alpha: 0.75),
-                    size: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
         // Main bar
         Container(
           decoration: BoxDecoration(

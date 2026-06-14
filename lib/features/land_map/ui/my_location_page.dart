@@ -1102,6 +1102,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         : '--';
 
     final altitudeText = _formatDistanceValue(st.altitudeMeters, unit);
+    final speedText = _formatSpeed(st.speedMps, unit);
     final quality = _qualityFromAccuracy(st.accuracyMeters);
     final qualityColor = _qualityColor(quality);
     final lastUpdateText = _formatLastUpdated(st.locationTimestamp);
@@ -1282,6 +1283,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                 quality: quality,
                 qualityColor: qualityColor,
                 age: ageText,
+                speed: speedText,
                 isStreaming: _isStreaming,
               ),
             ),
@@ -1357,6 +1359,16 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     }
     return '${meters.toStringAsFixed(1)} m';
   }
+
+  String _formatSpeed(double? mps, DistanceUnit unit) {
+    if (mps == null || mps < 0) return '—';
+    if (unit == DistanceUnit.feet) {
+      final mph = mps * 2.23694;
+      return '${mph.toStringAsFixed(1)} mph';
+    }
+    final kmh = mps * 3.6;
+    return '${kmh.toStringAsFixed(1)} km/h';
+  }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1431,11 +1443,12 @@ class _CompassPage extends StatefulWidget {
 
 class _CompassPageState extends State<_CompassPage> {
   StreamSubscription<CompassEvent>? _compassSubscription;
+  StreamSubscription<Position>? _positionSubscription;
   double? _heading;
   double? _accuracy;
+  Position? _currentPosition;
   bool _hasPermission = false;
   bool _checkingPermission = true;
-
 
   @override
   void initState() {
@@ -1464,6 +1477,7 @@ class _CompassPageState extends State<_CompassPage> {
       _checkingPermission = false;
     });
     _startListening();
+    _startPositionTracking();
   }
 
   void _startListening() {
@@ -1479,12 +1493,37 @@ class _CompassPageState extends State<_CompassPage> {
     });
   }
 
+  void _startPositionTracking() {
+    _positionSubscription?.cancel();
+    Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+          ),
+        )
+        .then((position) {
+          if (!mounted) return;
+          setState(() => _currentPosition = position);
+        })
+        .catchError((_) {});
+
+    _positionSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 5,
+          ),
+        ).listen((position) {
+          if (!mounted) return;
+          setState(() => _currentPosition = position);
+        }, onError: (_) {});
+  }
+
   @override
   void dispose() {
     _compassSubscription?.cancel();
+    _positionSubscription?.cancel();
     super.dispose();
   }
-
 
   String get _headingText {
     final h = _heading;
@@ -1527,6 +1566,42 @@ class _CompassPageState extends State<_CompassPage> {
     if (a <= 10) return 'High';
     if (a <= 25) return 'Moderate';
     return 'Low';
+  }
+
+  String get _utmZoneText {
+    final pos = _currentPosition;
+    if (pos == null) return '--';
+    final utm = UtmConverter.fromLatLng(
+      pos.latitude,
+      pos.longitude,
+      ReferenceEllipsoid.wgs84,
+    );
+    if (utm == null) return '--';
+    return '${utm.zoneNumber}${utm.zoneLetter}';
+  }
+
+  String get _eastingText {
+    final pos = _currentPosition;
+    if (pos == null) return '--';
+    final utm = UtmConverter.fromLatLng(
+      pos.latitude,
+      pos.longitude,
+      ReferenceEllipsoid.wgs84,
+    );
+    if (utm == null) return '--';
+    return utm.easting.toStringAsFixed(1);
+  }
+
+  String get _northingText {
+    final pos = _currentPosition;
+    if (pos == null) return '--';
+    final utm = UtmConverter.fromLatLng(
+      pos.latitude,
+      pos.longitude,
+      ReferenceEllipsoid.wgs84,
+    );
+    if (utm == null) return '--';
+    return utm.northing.toStringAsFixed(1);
   }
 
   Color _accuracyColor() {
@@ -1596,8 +1671,7 @@ class _CompassPageState extends State<_CompassPage> {
                                       children: [
                                         // Compass ring rotates
                                         Transform.rotate(
-                                          angle:
-                                              -((_heading ?? 0) * pi / 180),
+                                          angle: -((_heading ?? 0) * pi / 180),
                                           child: CustomPaint(
                                             size: Size.square(dialSize),
                                             painter: _CompassRingPainter(
@@ -1606,13 +1680,13 @@ class _CompassPageState extends State<_CompassPage> {
                                             ),
                                           ),
                                         ),
-                                
+
                                         // Crosshair stays fixed
                                         CustomPaint(
                                           size: Size.square(dialSize),
                                           painter: _CrosshairPainter(),
                                         ),
-                                
+
                                         // Fixed North indicator
                                         Positioned(
                                           top: dialSize * 0.04,
@@ -1621,7 +1695,7 @@ class _CompassPageState extends State<_CompassPage> {
                                             painter: _NorthTrianglePainter(),
                                           ),
                                         ),
-                                
+
                                         // Center point
                                         Container(
                                           width: 10,
@@ -1659,29 +1733,62 @@ class _CompassPageState extends State<_CompassPage> {
 
                                 const SizedBox(height: 24),
 
-                                // Info cards row
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _InfoCard(
+                                // GPS details — listed layout
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.06,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Compass accuracy
+                                      _CompassDetailRow(
+                                        icon: Icons.adjust_rounded,
+                                        iconColor: _accuracyColor(),
                                         label: 'Compass accuracy',
                                         value: _accuracyText,
                                         badge: _accuracyQualityText,
                                         badgeColor: _accuracyColor(),
-                                        icon: Icons.adjust_rounded,
                                       ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: _InfoCard(
-                                        label: 'Current location',
-                                        value: '--',
-                                        badge: 'UTM',
+                                      const Divider(height: 20),
+                                      // UTM Zone
+                                      _CompassDetailRow(
+                                        icon: Icons.grid_on_rounded,
+                                        iconColor: const Color(0xFF667085),
+                                        label: 'UTM Zone',
+                                        value: _utmZoneText,
+                                      ),
+                                      const Divider(height: 20),
+                                      // Easting
+                                      _CompassDetailRow(
+                                        icon: Icons.arrow_forward_rounded,
+                                        iconColor: primary,
+                                        label: 'Easting',
+                                        value: _eastingText,
+                                        badge: 'E',
                                         badgeColor: primary,
-                                        icon: Icons.location_on_outlined,
                                       ),
-                                    ),
-                                  ],
+                                      const Divider(height: 20),
+                                      // Northing
+                                      _CompassDetailRow(
+                                        icon: Icons.arrow_upward_rounded,
+                                        iconColor: primary,
+                                        label: 'Northing',
+                                        value: _northingText,
+                                        badge: 'N',
+                                        badgeColor: primary,
+                                      ),
+                                    ],
+                                  ),
                                 ),
 
                                 const SizedBox(height: 12),
@@ -1691,15 +1798,17 @@ class _CompassPageState extends State<_CompassPage> {
                                   width: double.infinity,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,
-                                    vertical: 14,
+                                    vertical: 12,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(14),
+                                    color: _heading == null
+                                        ? Colors.orange.shade50
+                                        : Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.06,
-                                      ),
+                                      color: _heading == null
+                                          ? Colors.orange.shade200
+                                          : Colors.green.shade200,
                                     ),
                                   ),
                                   child: Row(
@@ -1709,19 +1818,21 @@ class _CompassPageState extends State<_CompassPage> {
                                             ? Icons.explore_off_rounded
                                             : Icons.explore_rounded,
                                         color: _heading == null
-                                            ? Colors.black45
-                                            : primary,
-                                        size: 20,
+                                            ? Colors.orange.shade700
+                                            : Colors.green.shade700,
+                                        size: 18,
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
                                           _heading == null
                                               ? 'Compass sensor unavailable on this device.'
-                                              : 'Live compass active. Drag the dial to rotate manually.',
+                                              : 'Live compass active',
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
-                                                color: const Color(0xFF344054),
+                                                color: _heading == null
+                                                    ? Colors.orange.shade800
+                                                    : Colors.green.shade800,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                         ),
@@ -1774,6 +1885,7 @@ class _CompassPageState extends State<_CompassPage> {
     );
   }
 }
+
 /// Rotating outer ring with tick marks, degree numbers, and N/E/S/W letters.
 /// The whole ring rotates with the heading so N points correctly.
 class _CompassRingPainter extends CustomPainter {
@@ -1980,88 +2092,71 @@ class _NorthTrianglePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
-class _InfoCard extends StatelessWidget {
+class _CompassDetailRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
   final String label;
   final String value;
-  final String badge;
-  final Color badgeColor;
-  final IconData icon;
+  final String? badge;
+  final Color? badgeColor;
 
-  const _InfoCard({
+  const _CompassDetailRow({
+    required this.icon,
+    required this.iconColor,
     required this.label,
     required this.value,
-    required this.badge,
-    required this.badgeColor,
-    required this.icon,
+    this.badge,
+    this.badgeColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        children: [
+    return Row(
+      children: [
+        Icon(icon, color: iconColor, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF667085),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF18212F),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (badge != null && badgeColor != null)
           Container(
-            width: 36,
-            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.10),
-              shape: BoxShape.circle,
+              color: badgeColor!.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(icon, color: badgeColor, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF667085),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF18212F),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    badge,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: badgeColor,
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              badge!,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: badgeColor,
+              ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -2296,6 +2391,7 @@ class _StatsGrid extends StatelessWidget {
   final String quality;
   final Color qualityColor;
   final String age;
+  final String speed;
   final bool isStreaming;
 
   const _StatsGrid({
@@ -2304,6 +2400,7 @@ class _StatsGrid extends StatelessWidget {
     required this.quality,
     required this.qualityColor,
     required this.age,
+    required this.speed,
     required this.isStreaming,
   });
 
@@ -2357,17 +2454,31 @@ class _StatsGrid extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        _StatCard(
-          icon: Icons.wifi_tethering_rounded,
-          label: 'Tracking status',
-          value: isStreaming ? 'Live' : 'Stopped',
-          valueColor: isStreaming
-              ? const Color(0xFF1B8F4B)
-              : const Color(0xFFC94835),
-          iconColor: isStreaming
-              ? const Color(0xFF1B8F4B)
-              : const Color(0xFFC94835),
-          fullWidth: true,
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                icon: Icons.wifi_tethering_rounded,
+                label: 'Tracking',
+                value: isStreaming ? 'Live' : 'Stopped',
+                valueColor: isStreaming
+                    ? const Color(0xFF1B8F4B)
+                    : const Color(0xFFC94835),
+                iconColor: isStreaming
+                    ? const Color(0xFF1B8F4B)
+                    : const Color(0xFFC94835),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.speed_rounded,
+                label: 'Speed',
+                value: speed,
+                iconColor: const Color(0xFF0369A1),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -2380,7 +2491,6 @@ class _StatCard extends StatelessWidget {
   final String value;
   final Color? valueColor;
   final Color iconColor;
-  final bool fullWidth;
 
   const _StatCard({
     required this.icon,
@@ -2388,18 +2498,13 @@ class _StatCard extends StatelessWidget {
     required this.value,
     required this.iconColor,
     this.valueColor,
-    this.fullWidth = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      width: fullWidth ? double.infinity : null,
-      padding: EdgeInsets.symmetric(
-        horizontal: fullWidth ? 20 : 16,
-        vertical: 14,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),

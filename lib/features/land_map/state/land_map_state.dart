@@ -20,6 +20,7 @@ class LandMapState {
   final LatLng? current;
   final double? accuracyMeters;
   final double? altitudeMeters;
+  final double? speedMps;
   final DateTime? locationTimestamp;
   final List<LatLng> points;
   final bool isSaving;
@@ -31,6 +32,7 @@ class LandMapState {
     required this.current,
     required this.accuracyMeters,
     required this.altitudeMeters,
+    required this.speedMps,
     required this.locationTimestamp,
     required this.points,
     required this.isSaving,
@@ -43,6 +45,7 @@ class LandMapState {
     current: null,
     accuracyMeters: null,
     altitudeMeters: null,
+    speedMps: null,
     locationTimestamp: null,
     points: [],
     isSaving: false,
@@ -55,6 +58,7 @@ class LandMapState {
     LatLng? current,
     double? accuracyMeters,
     double? altitudeMeters,
+    double? speedMps,
     DateTime? locationTimestamp,
     List<LatLng>? points,
     bool? isSaving,
@@ -68,6 +72,7 @@ class LandMapState {
       current: current ?? this.current,
       accuracyMeters: accuracyMeters ?? this.accuracyMeters,
       altitudeMeters: altitudeMeters ?? this.altitudeMeters,
+      speedMps: speedMps ?? this.speedMps,
       locationTimestamp: locationTimestamp ?? this.locationTimestamp,
       points: points ?? this.points,
       isSaving: isSaving ?? this.isSaving,
