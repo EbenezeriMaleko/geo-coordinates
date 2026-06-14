@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 import '../../auth/providers/auth_provider.dart';
 import '../models/coordinate_format.dart';
@@ -440,6 +444,38 @@ class _LocationMediaViewerPageState
     }
   }
 
+  Future<void> _shareMedia() async {
+    final item = widget.item;
+    try {
+      // Download file to temp dir then share
+      final response = await http.get(Uri.parse(item.resolvedUrl));
+      if (response.statusCode != 200) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to download media for sharing.'),
+          ),
+        );
+        return;
+      }
+      final tempDir = await getTemporaryDirectory();
+      final ext = item.isVideo ? '.mp4' : '.jpg';
+      final tempFile = File('${tempDir.path}/share_${item.id}$ext');
+      await tempFile.writeAsBytes(response.bodyBytes);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(tempFile.path)],
+          text: item.location?.name ?? item.fileName,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to share media.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -474,6 +510,14 @@ class _LocationMediaViewerPageState
           ),
         ),
         actions: [
+          IconButton(
+            onPressed: _shareMedia,
+            icon: HugeIcon(
+              icon: HugeIcons.strokeRoundedShare01,
+              color: Colors.black87,
+              size: 20,
+            ),
+          ),
           IconButton(
             onPressed: _deletingMedia ? null : _deleteMedia,
             icon: _deletingMedia

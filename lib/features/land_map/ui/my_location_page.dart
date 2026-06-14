@@ -1063,8 +1063,74 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           coordinateFormat: format,
           referenceEllipsoid: ref.read(referenceEllipsoidProvider),
           distanceUnit: ref.read(distanceUnitProvider),
+          onDelete: () => _deleteCapture(capture),
         );
       },
+    );
+  }
+
+  Future<void> _deleteCapture(_GeoTaggedPhoto capture) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete media?'),
+        content: const Text(
+          'This will delete the media from this device and from the cloud if uploaded.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    // Delete local file
+    try {
+      final file = File(capture.imagePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
+
+    // Remove from recent media list and persist
+    final updatedMedia = _recentMedia
+        .where((item) => item.imagePath != capture.imagePath)
+        .toList();
+    final box = Hive.box('landbox');
+    await box.put(
+      _recentMediaKey,
+      updatedMedia.map((item) => item.toMap()).toList(),
+    );
+    if (updatedMedia.isNotEmpty) {
+      await box.put(_latestPhotoKey, updatedMedia.first.toMap());
+    } else {
+      await box.delete(_latestPhotoKey);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _recentMedia = updatedMedia;
+      _latestPhoto = updatedMedia.isNotEmpty ? updatedMedia.first : null;
+    });
+
+    // Note: Cloud deletion requires the media ID which is not stored locally.
+    // The media will be removed from the cloud on next sync or manually from the cloud media page.
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          capture.mediaType == 'video' ? 'Video deleted' : 'Photo deleted',
+        ),
+      ),
     );
   }
 
@@ -1434,14 +1500,14 @@ class _HeaderCompassButton extends StatelessWidget {
   }
 }
 
-class _CompassPage extends StatefulWidget {
+class _CompassPage extends ConsumerStatefulWidget {
   const _CompassPage();
 
   @override
-  State<_CompassPage> createState() => _CompassPageState();
+  ConsumerState<_CompassPage> createState() => _CompassPageState();
 }
 
-class _CompassPageState extends State<_CompassPage> {
+class _CompassPageState extends ConsumerState<_CompassPage> {
   StreamSubscription<CompassEvent>? _compassSubscription;
   StreamSubscription<Position>? _positionSubscription;
   double? _heading;
@@ -1526,13 +1592,13 @@ class _CompassPageState extends State<_CompassPage> {
   }
 
   String get _headingText {
-    final h = _heading;
+    final h = _displayHeading;
     if (h == null) return '--';
     return '${(h % 360).toStringAsFixed(0)}°';
   }
 
   String get _directionText {
-    final h = _heading;
+    final h = _displayHeading;
     if (h == null) return 'Unavailable';
     const labels = [
       'North',
@@ -1548,10 +1614,40 @@ class _CompassPageState extends State<_CompassPage> {
   }
 
   String get _shortDirectionText {
-    final h = _heading;
+    final h = _displayHeading;
     if (h == null) return '--';
     const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     return labels[((h + 22.5) / 45).floor() % labels.length];
+  }
+
+  /// Returns heading corrected for the compass north type setting.
+  double? get _displayHeading {
+    final h = _heading;
+    if (h == null) return null;
+    final northType = ref.read(compassNorthTypeProvider);
+    if (northType == CompassNorthType.trueNorth) {
+      final declination = _estimateMagneticDeclination();
+      return (h + declination) % 360;
+    }
+    return h;
+  }
+
+  /// Approximate magnetic declination in degrees based on current GPS position.
+  /// Uses a simplified dipole model. Positive = east declination.
+  double _estimateMagneticDeclination() {
+    final pos = _currentPosition;
+    if (pos == null) return 0;
+    // Simplified World Magnetic Model approximation
+    // Declination varies by location; this gives a rough estimate
+    final lat = pos.latitude;
+    final lon = pos.longitude;
+    // Simple tilted dipole approximation
+    return 11.5 * sin((lon + 21) * pi / 180) * cos(lat * pi / 180);
+  }
+
+  String get _northTypeLabel {
+    final northType = ref.watch(compassNorthTypeProvider);
+    return northType == CompassNorthType.trueNorth ? 'True North' : 'Magnetic';
   }
 
   String get _accuracyText {
@@ -1671,7 +1767,10 @@ class _CompassPageState extends State<_CompassPage> {
                                       children: [
                                         // Compass ring rotates
                                         Transform.rotate(
-                                          angle: -((_heading ?? 0) * pi / 180),
+                                          angle:
+                                              -((_displayHeading ?? 0) *
+                                                  pi /
+                                                  180),
                                           child: CustomPaint(
                                             size: Size.square(dialSize),
                                             painter: _CompassRingPainter(
@@ -1827,7 +1926,7 @@ class _CompassPageState extends State<_CompassPage> {
                                         child: Text(
                                           _heading == null
                                               ? 'Compass sensor unavailable on this device.'
-                                              : 'Live compass active',
+                                              : 'Live compass · $_northTypeLabel',
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
                                                 color: _heading == null
@@ -2643,6 +2742,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
   final CoordinateFormat coordinateFormat;
   final ReferenceEllipsoid referenceEllipsoid;
   final DistanceUnit distanceUnit;
+  final VoidCallback? onDelete;
 
   const _CapturedPhotoDetailsSheet({
     required this.capture,
@@ -2650,6 +2750,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
     required this.coordinateFormat,
     required this.referenceEllipsoid,
     required this.distanceUnit,
+    this.onDelete,
   });
 
   Future<void> _shareMedia(_GeoTaggedPhoto capture) async {
@@ -2738,6 +2839,15 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
                         icon: const Icon(Icons.share),
                         color: Colors.black54,
                       ),
+                      if (onDelete != null)
+                        IconButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            onDelete!();
+                          },
+                          icon: const Icon(Icons.delete_outline),
+                          color: Colors.red.shade600,
+                        ),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.close),

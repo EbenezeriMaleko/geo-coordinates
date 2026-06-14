@@ -9,6 +9,8 @@ enum PhotoCaptureQuality { low, medium, high }
 
 enum PhotoCaptureMode { inApp, systemCamera }
 
+enum CompassNorthType { magnetic, trueNorth }
+
 final coordinateFormatProvider =
     NotifierProvider<CoordinateFormatNotifier, CoordinateFormat>(
       CoordinateFormatNotifier.new,
@@ -43,6 +45,11 @@ final referenceEllipsoidProvider =
       ReferenceEllipsoidNotifier.new,
     );
 
+final compassNorthTypeProvider =
+    NotifierProvider<CompassNorthTypeNotifier, CompassNorthType>(
+      CompassNorthTypeNotifier.new,
+    );
+
 const _saveOriginalPhotoKey = 'prefs_photo_save_original';
 const _saveToGalleryKey = 'prefs_photo_save_to_gallery';
 const _photoQualityKey = 'prefs_photo_quality';
@@ -50,6 +57,7 @@ const _photoCaptureModeKey = 'prefs_photo_capture_mode';
 const _referenceEllipsoidKey = 'prefs_reference_ellipsoid';
 const _coordinateFormatKey = 'prefs_coordinate_format';
 const _distanceUnitKey = 'prefs_distance_unit';
+const _compassNorthTypeKey = 'prefs_compass_north_type';
 
 class CoordinateFormatNotifier extends Notifier<CoordinateFormat> {
   @override
@@ -189,5 +197,27 @@ class ReferenceEllipsoidNotifier extends Notifier<ReferenceEllipsoid> {
     state = ellipsoid;
     final box = Hive.box('landbox');
     await box.put(_referenceEllipsoidKey, ellipsoid.name);
+  }
+}
+
+class CompassNorthTypeNotifier extends Notifier<CompassNorthType> {
+  @override
+  CompassNorthType build() {
+    final box = Hive.box('landbox');
+    final raw = box.get(_compassNorthTypeKey)?.toString();
+    return _northTypeFromRaw(raw);
+  }
+
+  Future<void> setNorthType(CompassNorthType type) async {
+    state = type;
+    final box = Hive.box('landbox');
+    await box.put(_compassNorthTypeKey, type.name);
+  }
+
+  CompassNorthType _northTypeFromRaw(String? raw) {
+    for (final t in CompassNorthType.values) {
+      if (t.name == raw) return t;
+    }
+    return CompassNorthType.magnetic;
   }
 }

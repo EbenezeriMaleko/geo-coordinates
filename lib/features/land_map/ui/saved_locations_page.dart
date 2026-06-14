@@ -1899,8 +1899,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         'E/N: ${easting.toStringAsFixed(2)}, ${northing.toStringAsFixed(2)}',
       );
       if (zone != null && zone.isNotEmpty) {
-        final ellipsoidSuffix =
-            ellipsoid != null ? ' ${ellipsoid.displayName}' : '';
+        final ellipsoidSuffix = ellipsoid != null
+            ? ' ${ellipsoid.displayName}'
+            : '';
         buffer.writeln('Zone: $zone$ellipsoidSuffix');
       }
     }
@@ -3225,25 +3226,29 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                             color: Colors.grey.shade600,
                           ),
                         ),
-                        // Show easting/northing for cloud points
-                        if (widget.isCloud &&
-                            cloudDetail != null &&
-                            index < cloudDetail.points.length)
-                          Builder(
-                            builder: (context) {
-                              final cp = cloudDetail.points[index];
-                              if (cp.easting == null || cp.northing == null) {
-                                return const SizedBox.shrink();
-                              }
-                              return Text(
-                                'E ${cp.easting!.toStringAsFixed(2)}  N ${cp.northing!.toStringAsFixed(2)}  Zone ${cp.zone ?? '—'}${cp.band ?? ''}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade400,
-                                ),
-                              );
-                            },
-                          ),
+                        // Always show easting/northing computed from lat/lng
+                        Builder(
+                          builder: (context) {
+                            final ellipsoid = ref.read(
+                              referenceEllipsoidProvider,
+                            );
+                            final utm = UtmConverter.fromLatLng(
+                              p.latitude,
+                              p.longitude,
+                              ellipsoid,
+                            );
+                            if (utm == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Text(
+                              'E ${utm.easting.toStringAsFixed(2)}  N ${utm.northing.toStringAsFixed(2)}  Zone ${utm.zoneNumber}${utm.zoneLetter}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade400,
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),

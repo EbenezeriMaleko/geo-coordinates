@@ -72,6 +72,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: _showReferenceEllipsoidSelector,
           ),
 
+          _item(
+            title: 'Compass north reference',
+            subtitle: _compassNorthLabel(ref.watch(compassNorthTypeProvider)),
+            onTap: _showCompassNorthSelector,
+          ),
+
           _sectionDivider(),
 
           _sectionHeader('Units', theme),
@@ -97,6 +103,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onChanged: (value) =>
                 ref.read(saveToGalleryProvider.notifier).setValue(value),
           ),
+
           // _item(
           //   title: 'Image quality',
           //   subtitle: _photoQualityLabel(photoQuality),
@@ -107,7 +114,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           //   subtitle: _captureModeLabel(captureMode),
           //   onTap: _showCaptureModeSelector,
           // ),
-
           _sectionDivider(),
 
           _sectionHeader('Other', theme),
@@ -658,6 +664,69 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       );
     }
+  }
+
+  String _compassNorthLabel(CompassNorthType type) {
+    switch (type) {
+      case CompassNorthType.magnetic:
+        return 'Magnetic North';
+      case CompassNorthType.trueNorth:
+        return 'True North (geographic)';
+    }
+  }
+
+  void _showCompassNorthSelector() {
+    final current = ref.read(compassNorthTypeProvider);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            const Text(
+              'Compass north reference',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              title: const Text('Magnetic North'),
+              subtitle: const Text(
+                'Uses raw compass sensor reading. No correction applied.',
+              ),
+              trailing: current == CompassNorthType.magnetic
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () {
+                ref
+                    .read(compassNorthTypeProvider.notifier)
+                    .setNorthType(CompassNorthType.magnetic);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('True North'),
+              subtitle: const Text(
+                'Corrects for magnetic declination to point to geographic north.',
+              ),
+              trailing: current == CompassNorthType.trueNorth
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () {
+                ref
+                    .read(compassNorthTypeProvider.notifier)
+                    .setNorthType(CompassNorthType.trueNorth);
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   String _getFormatExample(CoordinateFormat format) {
