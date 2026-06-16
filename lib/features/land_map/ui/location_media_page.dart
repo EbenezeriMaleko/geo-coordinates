@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/ui/login_page.dart';
 import '../models/coordinate_format.dart';
 import '../models/location_media_models.dart';
 import '../models/reference_ellipsoid.dart';
@@ -45,8 +46,7 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage =
-            'Sign in with a verified account to see uploaded media.';
+        _errorMessage = 'not_logged_in';
       });
       return;
     }
@@ -159,16 +159,77 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
                   child: Center(child: CircularProgressIndicator()),
                 )
               else if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 48),
-                  child: Text(
-                    _errorMessage!,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.black54,
-                    ),
-                  ),
-                )
+                _errorMessage == 'not_logged_in'
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 48),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.cloud_off_rounded,
+                              size: 52,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Sign in to view uploaded media',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Your cloud media will appear here once you sign in with a verified account.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.black54,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final result = await Navigator.of(context)
+                                    .push<bool>(
+                                      MaterialPageRoute<bool>(
+                                        builder: (_) => const LoginPage(
+                                          returnToPreviousPage: true,
+                                        ),
+                                      ),
+                                    );
+                                if (result == true && mounted) {
+                                  _loadMedia();
+                                }
+                              },
+                              icon: const Icon(Icons.login_rounded, size: 18),
+                              label: const Text('Sign In'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF001F3F),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 28,
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 48),
+                        child: Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.black54,
+                          ),
+                        ),
+                      )
               else if (_items.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 48),

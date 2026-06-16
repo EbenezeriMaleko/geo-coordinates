@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -863,9 +864,30 @@ class _ContactDialogState extends State<_ContactDialog> {
       final info = await PackageInfo.fromPlatform();
       final version = '${info.version}+${info.buildNumber}';
 
+      // Gather safe device details (no PII, no advertising IDs)
+      final deviceInfo = DeviceInfoPlugin();
+      String deviceDetails = '';
+      if (Platform.isAndroid) {
+        final android = await deviceInfo.androidInfo;
+        deviceDetails =
+            'Device: ${android.manufacturer} ${android.model}\n'
+            'Android: ${android.version.release} (SDK ${android.version.sdkInt})\n'
+            'Product: ${android.product}';
+      } else if (Platform.isIOS) {
+        final ios = await deviceInfo.iosInfo;
+        deviceDetails =
+            'Device: ${ios.utsname.machine}\n'
+            'iOS: ${ios.systemVersion}\n'
+            'Model: ${ios.model}';
+      }
+
       final subject = Uri.encodeComponent('[TaREF GPS] Feedback');
       final body = Uri.encodeComponent(
-        '$message\n\n---\nApp version: $version',
+        '$message\n\n'
+        '---\n'
+        'App version: $version\n'
+        '$deviceDetails\n'
+        'Platform: ${Platform.operatingSystem}',
       );
 
       final uri = Uri.parse(

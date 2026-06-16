@@ -1667,23 +1667,17 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
   String get _utmZoneText {
     final pos = _currentPosition;
     if (pos == null) return '--';
-    final utm = UtmConverter.fromLatLng(
-      pos.latitude,
-      pos.longitude,
-      ReferenceEllipsoid.wgs84,
-    );
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
+    final utm = UtmConverter.fromLatLng(pos.latitude, pos.longitude, ellipsoid);
     if (utm == null) return '--';
-    return '${utm.zoneNumber}${utm.zoneLetter}';
+    return '${utm.zoneNumber}${utm.zoneLetter} ${ellipsoid.displayName}';
   }
 
   String get _eastingText {
     final pos = _currentPosition;
     if (pos == null) return '--';
-    final utm = UtmConverter.fromLatLng(
-      pos.latitude,
-      pos.longitude,
-      ReferenceEllipsoid.wgs84,
-    );
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
+    final utm = UtmConverter.fromLatLng(pos.latitude, pos.longitude, ellipsoid);
     if (utm == null) return '--';
     return utm.easting.toStringAsFixed(1);
   }
@@ -1691,11 +1685,8 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
   String get _northingText {
     final pos = _currentPosition;
     if (pos == null) return '--';
-    final utm = UtmConverter.fromLatLng(
-      pos.latitude,
-      pos.longitude,
-      ReferenceEllipsoid.wgs84,
-    );
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
+    final utm = UtmConverter.fromLatLng(pos.latitude, pos.longitude, ellipsoid);
     if (utm == null) return '--';
     return utm.northing.toStringAsFixed(1);
   }

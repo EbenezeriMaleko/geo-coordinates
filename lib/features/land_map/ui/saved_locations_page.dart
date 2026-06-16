@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -1725,12 +1727,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     Map<String, dynamic> item,
   ) async {
     final text = _buildLocalShareText(item);
-    await Clipboard.setData(ClipboardData(text: text));
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Share text copied')));
-    }
+    await SharePlus.instance.share(ShareParams(text: text));
   }
 
   String _formatDate(String? iso) {
@@ -2961,6 +2958,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                             createdAt: createdAt,
                             updatedAt: updatedAt,
                             type: type,
+                            points: points,
                           ),
                           const SizedBox(height: 12),
                           // Points card
@@ -3062,7 +3060,39 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
     required String? createdAt,
     required String? updatedAt,
     required String type,
+    List<LatLng> points = const [],
   }) {
+    // Compute perimeter and area from points
+    final distanceCalc = const Distance();
+    final normalizedType = type.toLowerCase();
+    String? perimeterText;
+    String? areaText;
+
+    if (points.length >= 2) {
+      double perimeter = 0;
+      for (int i = 0; i < points.length - 1; i++) {
+        perimeter += distanceCalc.as(
+          LengthUnit.Meter,
+          points[i],
+          points[i + 1],
+        );
+      }
+      // Close loop for polygons
+      if (normalizedType == 'polygon' && points.length >= 3) {
+        perimeter += distanceCalc.as(
+          LengthUnit.Meter,
+          points.last,
+          points.first,
+        );
+      }
+      perimeterText = _formatMeasurement(perimeter);
+    }
+
+    if ((normalizedType == 'polygon') && points.length >= 3) {
+      final area = _computeAreaSqm(points);
+      areaText = _formatArea(area);
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -3102,12 +3132,54 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             _InfoRow(label: 'Phone', value: phone!),
           if (description?.trim().isNotEmpty == true)
             _InfoRow(label: 'Description', value: description!),
+          if (perimeterText != null)
+            _InfoRow(label: 'Perimeter', value: perimeterText),
+          if (areaText != null) _InfoRow(label: 'Area', value: areaText),
           _InfoRow(label: 'Created', value: _formatDate(createdAt)),
           if (updatedAt?.trim().isNotEmpty == true)
             _InfoRow(label: 'Updated', value: _formatDate(updatedAt)),
         ],
       ),
     );
+  }
+
+  String _formatMeasurement(double meters) {
+    if (meters >= 1000) {
+      return '${(meters / 1000).toStringAsFixed(2)} km';
+    }
+    return '${meters.toStringAsFixed(1)} m';
+  }
+
+  String _formatArea(double sqm) {
+    if (sqm >= 10000) {
+      return '${(sqm / 10000).toStringAsFixed(4)} ha (${sqm.toStringAsFixed(1)} m²)';
+    }
+    return '${sqm.toStringAsFixed(1)} m²';
+  }
+
+  double _computeAreaSqm(List<LatLng> points) {
+    if (points.length < 3) return 0;
+    const radius = 6378137.0;
+    final lat0 =
+        points.map((e) => e.latitude).reduce((a, b) => a + b) / points.length;
+    final lon0 =
+        points.map((e) => e.longitude).reduce((a, b) => a + b) / points.length;
+    final lat0Rad = lat0 * pi / 180.0;
+    final lon0Rad = lon0 * pi / 180.0;
+    final projected = points.map((p) {
+      final latRad = p.latitude * pi / 180.0;
+      final lonRad = p.longitude * pi / 180.0;
+      final x = radius * (lonRad - lon0Rad) * cos(lat0Rad);
+      final y = radius * (latRad - lat0Rad);
+      return Offset(x, y);
+    }).toList();
+    double sum = 0;
+    for (int i = 0; i < projected.length; i++) {
+      final j = (i + 1) % projected.length;
+      sum += projected[i].dx * projected[j].dy;
+      sum -= projected[j].dx * projected[i].dy;
+    }
+    return sum.abs() / 2.0;
   }
 
   Widget _buildPointsCard(BuildContext context, List<LatLng> points) {
@@ -3593,6 +3665,7 @@ class _ManualCoordinateEntrySheetState
   final _descriptionController = TextEditingController();
 
   _CoordInputMode _inputMode = _CoordInputMode.latLng;
+  String _recordType = 'auto'; // auto, point, polyline, polygon
   final List<_ManualPoint> _points = [];
   bool _isSaving = false;
   String? _feedbackMessage;
@@ -3644,6 +3717,20 @@ class _ManualCoordinateEntrySheetState
         _setFeedback('Longitude must be between -180 and 180.', isError: true);
         return;
       }
+      if (lat == 0 && lng == 0) {
+        _setFeedback(
+          'Coordinates 0, 0 point to the Gulf of Guinea. Please enter real coordinates.',
+          isError: true,
+        );
+        return;
+      }
+      if (lat.abs() < 0.001 && lng.abs() < 0.001) {
+        _setFeedback(
+          'These coordinates are near 0,0 which is unlikely to be a real location.',
+          isError: true,
+        );
+        return;
+      }
 
       // Convert to UTM
       final ellipsoid = ref.read(referenceEllipsoidProvider);
@@ -3684,16 +3771,72 @@ class _ManualCoordinateEntrySheetState
         return;
       }
 
+      final zoneNumber = int.tryParse(zone);
+      if (zoneNumber == null || zoneNumber < 1 || zoneNumber > 60) {
+        _setFeedback('Zone must be between 1 and 60.', isError: true);
+        return;
+      }
+
+      if (easting < 100000 || easting > 900000) {
+        _setFeedback(
+          'Easting must be between 100,000 and 900,000 meters.',
+          isError: true,
+        );
+        return;
+      }
+
+      if (northing < 0 || northing > 10000000) {
+        _setFeedback(
+          'Northing must be between 0 and 10,000,000 meters.',
+          isError: true,
+        );
+        return;
+      }
+
+      if (band.isNotEmpty) {
+        final upper = band.toUpperCase();
+        if (upper.length != 1 ||
+            !RegExp(r'[C-X]').hasMatch(upper) ||
+            upper == 'I' ||
+            upper == 'O') {
+          _setFeedback(
+            'Band letter must be C-X (excluding I and O).',
+            isError: true,
+          );
+          return;
+        }
+      }
+
       // Convert UTM back to lat/lng
       final ellipsoid = ref.read(referenceEllipsoidProvider);
       final latLng = UtmConverter.toLatLng(
         easting: easting,
         northing: northing,
-        zoneNumber: int.tryParse(zone) ?? 37,
-        zoneLetter: band.isEmpty ? 'M' : band,
+        zoneNumber: zoneNumber,
+        zoneLetter: band.isEmpty ? 'M' : band.toUpperCase(),
         ellipsoid: ellipsoid,
         hemisphere: _hemisphere,
       );
+
+      if (latLng == null) {
+        _setFeedback(
+          'Could not convert these UTM values to coordinates. Check your input.',
+          isError: true,
+        );
+        return;
+      }
+
+      // Sanity check the resulting lat/lng
+      if (latLng.latitude < -90 ||
+          latLng.latitude > 90 ||
+          latLng.longitude < -180 ||
+          latLng.longitude > 180) {
+        _setFeedback(
+          'UTM values produce invalid coordinates. Please verify easting, northing, and zone.',
+          isError: true,
+        );
+        return;
+      }
 
       setState(() {
         _points.add(
@@ -3701,12 +3844,12 @@ class _ManualCoordinateEntrySheetState
             label: _utmLabelController.text.trim().isEmpty
                 ? '${_points.length + 1}'
                 : _utmLabelController.text.trim(),
-            lat: latLng?.latitude ?? 0,
-            lng: latLng?.longitude ?? 0,
+            lat: latLng.latitude,
+            lng: latLng.longitude,
             easting: easting,
             northing: northing,
             zone: zone,
-            band: band.isEmpty ? null : band,
+            band: band.isEmpty ? null : band.toUpperCase(),
             hemisphere: _hemisphere,
           ),
         );
@@ -3750,11 +3893,13 @@ class _ManualCoordinateEntrySheetState
       final now = DateTime.now().toIso8601String();
       final ellipsoid = ref.read(referenceEllipsoidProvider);
 
-      final type = _points.length == 1
-          ? 'point'
-          : _points.length == 2
-          ? 'polyline'
-          : 'polygon';
+      final type = _recordType == 'auto'
+          ? (_points.length == 1
+                ? 'point'
+                : _points.length == 2
+                ? 'polyline'
+                : 'polygon')
+          : _recordType;
 
       // Save locally first
       await box.put(id, {
@@ -3979,6 +4124,58 @@ class _ManualCoordinateEntrySheetState
                     minLines: 2,
                     maxLines: 3,
                   ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Record type selector ─────────────
+                  _SectionHeader(title: 'Record type'),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        _RecordTypeChip(
+                          label: 'Auto',
+                          icon: Icons.auto_awesome,
+                          selected: _recordType == 'auto',
+                          onTap: () => setState(() => _recordType = 'auto'),
+                        ),
+                        _RecordTypeChip(
+                          label: 'Point',
+                          icon: Icons.location_on_outlined,
+                          selected: _recordType == 'point',
+                          onTap: () => setState(() => _recordType = 'point'),
+                        ),
+                        _RecordTypeChip(
+                          label: 'Distance',
+                          icon: Icons.straighten_rounded,
+                          selected: _recordType == 'polyline',
+                          onTap: () => setState(() => _recordType = 'polyline'),
+                        ),
+                        _RecordTypeChip(
+                          label: 'Area',
+                          icon: Icons.crop_square_rounded,
+                          selected: _recordType == 'polygon',
+                          onTap: () => setState(() => _recordType = 'polygon'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_recordType == 'auto')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Type is determined by point count: 1 = Point, 2 = Distance, 3+ = Area',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
 
                   const SizedBox(height: 20),
 
@@ -4330,6 +4527,56 @@ class _SectionHeader extends StatelessWidget {
         fontWeight: FontWeight.w800,
         color: Color(0xFF111827),
         letterSpacing: 0.1,
+      ),
+    );
+  }
+}
+
+class _RecordTypeChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RecordTypeChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFF001F3F) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? Colors.white : Colors.grey.shade600,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
