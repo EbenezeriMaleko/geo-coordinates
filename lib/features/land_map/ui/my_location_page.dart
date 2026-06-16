@@ -3079,6 +3079,22 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
 
   Future<void> _initialize() async {
     try {
+      // Check camera permission first
+      var cameraStatus = await Permission.camera.status;
+      if (!cameraStatus.isGranted) {
+        cameraStatus = await Permission.camera.request();
+        if (!mounted) return;
+        if (!cameraStatus.isGranted) {
+          setState(() {
+            _isInitializing = false;
+            _setupError = cameraStatus.isPermanentlyDenied
+                ? 'camera_permanently_denied'
+                : 'camera_denied';
+          });
+          return;
+        }
+      }
+
       final cameras = await availableCameras();
       final rearCamera = cameras.where(
         (c) => c.lensDirection == CameraLensDirection.back,
@@ -3095,12 +3111,15 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
       _cameraController = controller;
       await _startLocationTracking();
       if (!mounted) return;
-      setState(() => _isInitializing = false);
+      setState(() {
+        _isInitializing = false;
+        _setupError = null;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _isInitializing = false;
-        _setupError = 'Failed to initialize the in-app camera.';
+        _setupError = 'camera_generic_error';
       });
     }
   }
@@ -3349,17 +3368,99 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Icon(
+                        _setupError == 'camera_permanently_denied'
+                            ? Icons.no_photography_outlined
+                            : Icons.camera_alt_outlined,
+                        color: Colors.white70,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
                       Text(
-                        _setupError!,
-                        style: theme.textTheme.bodyLarge?.copyWith(
+                        _setupError == 'camera_permanently_denied'
+                            ? 'Camera permission is blocked'
+                            : _setupError == 'camera_denied'
+                            ? 'Camera permission is required'
+                            : 'Failed to initialize the camera',
+                        style: theme.textTheme.titleMedium?.copyWith(
                           color: Colors.white,
+                          fontWeight: FontWeight.w700,
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _setupError == 'camera_permanently_denied'
+                            ? 'Open app settings and allow camera access to take GPS photos.'
+                            : _setupError == 'camera_denied'
+                            ? 'Grant camera permission to capture GPS-tagged photos and videos.'
+                            : 'Something went wrong. Try again or check your device camera.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white60,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      if (_setupError == 'camera_permanently_denied')
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            await openAppSettings();
+                            if (!mounted) return;
+                            setState(() {
+                              _isInitializing = true;
+                              _setupError = null;
+                            });
+                            await _initialize();
+                          },
+                          icon: const Icon(Icons.settings_outlined, size: 18),
+                          label: const Text('Open Settings'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black87,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _isInitializing = true;
+                              _setupError = null;
+                            });
+                            _initialize();
+                          },
+                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          label: Text(
+                            _setupError == 'camera_denied'
+                                ? 'Grant Permission'
+                                : 'Try Again',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black87,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 12),
-                      ElevatedButton(
+                      TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Close'),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(color: Colors.white60),
+                        ),
                       ),
                     ],
                   ),
