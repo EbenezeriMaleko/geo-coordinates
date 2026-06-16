@@ -2885,19 +2885,24 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: SizedBox(
-                    height: 360,
                     width: double.infinity,
-                    child: _GeoPhotoCanvas(
-                      imagePath: capture.imagePath,
-                      name: capture.name,
-                      mediaType: capture.mediaType,
-                      lines: _buildOverlayLines(
-                        capture: capture,
-                        coordinateFormat: coordinateFormat,
-                        referenceEllipsoid: referenceEllipsoid,
-                        unit: distanceUnit,
-                      ),
-                    ),
+                    child: capture.mediaType == 'video'
+                        ? _DetailVideoPlayer(filePath: capture.imagePath)
+                        : Image.file(
+                            File(capture.imagePath),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 300,
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 42,
+                                  color: Colors.black38,
+                                ),
+                              ),
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -3951,6 +3956,109 @@ class _TopIconButton extends StatelessWidget {
         ),
         child: Icon(icon, color: Colors.white),
       ),
+    );
+  }
+}
+
+class _DetailVideoPlayer extends StatefulWidget {
+  final String filePath;
+
+  const _DetailVideoPlayer({required this.filePath});
+
+  @override
+  State<_DetailVideoPlayer> createState() => _DetailVideoPlayerState();
+}
+
+class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVideo();
+  }
+
+  Future<void> _initVideo() async {
+    final controller = VideoPlayerController.file(File(widget.filePath));
+    _controller = controller;
+    await controller.initialize();
+    if (!mounted) return;
+    setState(() => _initialized = true);
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlayPause() {
+    final c = _controller;
+    if (c == null) return;
+    setState(() => c.value.isPlaying ? c.pause() : c.play());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (!_initialized || controller == null) {
+      return Container(
+        height: 240,
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    final isPlaying = controller.value.isPlaying;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: _togglePlayPause,
+          child: Container(
+            color: Colors.black,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AspectRatio(
+                  aspectRatio: controller.value.aspectRatio,
+                  child: VideoPlayer(controller),
+                ),
+                AnimatedOpacity(
+                  opacity: isPlaying ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        VideoProgressIndicator(
+          controller,
+          allowScrubbing: true,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          colors: const VideoProgressColors(
+            playedColor: Color(0xFF001F3F),
+            bufferedColor: Color(0xFFBBDEFB),
+            backgroundColor: Color(0xFFE0E0E0),
+          ),
+        ),
+      ],
     );
   }
 }
