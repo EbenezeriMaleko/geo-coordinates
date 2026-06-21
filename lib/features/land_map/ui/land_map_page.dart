@@ -44,6 +44,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   static const double _maxZoom = 20;
   static const double _defaultMapZoom = 16;
   static const String _mapTypePrefKey = 'prefs_land_map_type';
+  static const String _layerFieldPrefKey = 'prefs_layer_field';
+  static const String _layerDistancePrefKey = 'prefs_layer_distance';
+  static const String _layerMarkerPrefKey = 'prefs_layer_marker';
 
   final MapController _mapController = MapController();
   final TextEditingController _placeController = TextEditingController();
@@ -76,6 +79,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   LatLng? _routeDestination;
   ProviderSubscription<LandMapState>? _landMapSubscription;
   StreamSubscription<CompassEvent>? _navigationCompassSubscription;
+  StreamSubscription<CompassEvent>? _orientationCompassSubscription;
   DateTime? _lastNavigationCameraMove;
   bool _userIsInteracting = false;
   bool _followCurrentLocation = true;
@@ -84,6 +88,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   double _navigationHeading = 0.0;
   bool _navigationCameraActive = false;
   Timer? _navigationCameraTimer;
+  bool _orientationLocked = false;
+  double _orientationHeading = 0.0;
+  double _lastAppliedOrientation = 0.0;
 
   double _bearingDegrees(LatLng from, LatLng to) {
     final fromLat = from.latitude * pi / 180.0;
@@ -98,10 +105,78 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return (atan2(y, x) * 180.0 / pi + 360.0) % 360.0;
   }
 
+  /// Computes corrected heading based on user's north type setting.
+  double _correctedHeading(double magneticHeading) {
+    final northType = ref.read(compassNorthTypeProvider);
+    if (northType == CompassNorthType.trueNorth) {
+      final current = ref.read(landMapProvider).current;
+      if (current != null) {
+        final declination = _estimateMapDeclination(
+          current.latitude,
+          current.longitude,
+        );
+        return (magneticHeading + declination) % 360;
+      }
+    }
+    return magneticHeading;
+  }
+
+  /// Same simplified dipole model used by the compass page.
+  double _estimateMapDeclination(double lat, double lon) {
+    return 11.5 * sin((lon + 21) * pi / 180) * cos(lat * pi / 180);
+  }
+
+  void _startOrientationCompass() {
+    _orientationCompassSubscription?.cancel();
+    _orientationCompassSubscription = FlutterCompass.events?.listen((event) {
+      if (!mounted || event.heading == null) return;
+      if (_navigationCameraActive ||
+          _userIsInteracting ||
+          !_orientationLocked) {
+        return;
+      }
+      final corrected = _correctedHeading(event.heading!);
+      // Only apply if heading changed enough (> 3 degrees) to avoid jitter
+      final diff = (corrected - _lastAppliedOrientation).abs();
+      if (diff < 3 && diff > 357) return; // ignore tiny changes
+      _orientationHeading = corrected;
+      _lastAppliedOrientation = corrected;
+      _applyOrientationRotation();
+    });
+  }
+
+  void _stopOrientationCompass() {
+    _orientationCompassSubscription?.cancel();
+    _orientationCompassSubscription = null;
+    if (_orientationLocked && mounted) {
+      // Reset map rotation to north-up
+      _mapController.rotate(0);
+    }
+    _orientationLocked = false;
+    _orientationHeading = 0.0;
+    _lastAppliedOrientation = 0.0;
+  }
+
+  void _applyOrientationRotation() {
+    if (!mounted || !_orientationLocked || _navigationCameraActive) return;
+    _mapController.rotate(-_orientationHeading);
+  }
+
+  void _toggleOrientation() {
+    setState(() {
+      _orientationLocked = !_orientationLocked;
+    });
+    if (_orientationLocked) {
+      _startOrientationCompass();
+    } else {
+      _stopOrientationCompass();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _restoreMapTypePreference();
+    _restorePreferences();
     _landMapSubscription = ref.listenManual(landMapProvider, (previous, next) {
       final targetChanged = previous?.navigationTarget != next.navigationTarget;
       final currentChanged = previous?.current != next.current;
@@ -111,6 +186,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       if (next.navigationTarget != null) {
         if (targetChanged) {
           _lastNavigationCameraMove = null;
+          _navigationCameraTimer?.cancel();
           unawaited(_startNavigationTracking());
           final targetPoint = next.navigationTarget!.point;
           unawaited(_fetchRoute(targetPoint));
@@ -189,6 +265,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _fieldTrackingSubscription?.cancel();
     _navigationTrackingSubscription?.cancel();
     _navigationCompassSubscription?.cancel();
+    _orientationCompassSubscription?.cancel();
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
@@ -207,41 +284,51 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   Future<void> _initLocationAndCenter() async {
+    if (!mounted) return;
     setState(() {
       _isLocating = true;
       _locationError = null;
     });
 
-    final err = await ref.read(landMapProvider.notifier).initLocation();
-    if (!mounted) return;
+    try {
+      final err = await ref.read(landMapProvider.notifier).initLocation();
+      if (!mounted) return;
 
-    final st = ref.read(landMapProvider);
-    if (st.current != null) {
-      _followCurrentLocation = true;
-      _mapController.move(st.current!, 17);
+      final st = ref.read(landMapProvider);
+      if (st.current != null) {
+        _followCurrentLocation = true;
+        _mapController.move(st.current!, 17);
+      }
+
+      setState(() => _locationError = err);
+    } finally {
+      // Guaranteed to run — _isLocating can NEVER get stuck true.
+      if (mounted) setState(() => _isLocating = false);
     }
-
-    setState(() {
-      _isLocating = false;
-      _locationError = err;
-    });
   }
 
   Future<void> _recenterToCurrentLocation() async {
     if (_isLocating) return;
 
-    final beforeRefresh = ref.read(landMapProvider).current;
-    if (beforeRefresh != null) {
+    final current = ref.read(landMapProvider).current;
+
+    if (current != null) {
+      // Already have a position — center immediately, no spinner needed.
+      // Silently refresh in background so accuracy improves without blocking UI.
       _followCurrentLocation = true;
-      _mapController.move(beforeRefresh, _clampZoom(max(_currentZoom, 17)));
+      _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
+      unawaited(ref.read(landMapProvider.notifier).refreshLocation());
+      return;
     }
 
+    // No position at all yet (true first launch, or permission just granted).
+    // Show spinner until we get something.
     setState(() {
       _isLocating = true;
       _locationError = null;
     });
 
-    final err = await ref.read(landMapProvider.notifier).refreshLocation();
+    await ref.read(landMapProvider.notifier).refreshLocation();
     if (!mounted) return;
 
     final now = ref.read(landMapProvider).current;
@@ -252,12 +339,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     setState(() {
       _isLocating = false;
-      _locationError = err;
+      _locationError = null;
     });
-
-    if (err != null && beforeRefresh == null) {
-      _snack(err);
-    }
   }
 
   Future<void> _addCurrentPointToDistance() async {
@@ -375,6 +458,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       setState(() {
         _activeTool = _MapTool.none;
       });
+      await _loadSavedMarkers();
       _snack('Location saved locally. Sync queued.');
     } finally {
       if (mounted) {
@@ -723,19 +807,32 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   @override
   bool get wantKeepAlive => true;
 
-  void _restoreMapTypePreference() {
+  void _restorePreferences() {
     final box = Hive.box('landbox');
-    final raw = box.get(_mapTypePrefKey)?.toString();
-    if (raw == null) return;
+    final rawType = box.get(_mapTypePrefKey)?.toString();
+    final savedType = rawType != null ? _mapTypeFromRaw(rawType) : null;
 
-    final savedType = _mapTypeFromRaw(raw);
-    if (savedType == null || !mounted) return;
-    setState(() => _currentMapType = savedType);
+    final fieldLayer = box.get(_layerFieldPrefKey);
+    final distanceLayer = box.get(_layerDistancePrefKey);
+    final markerLayer = box.get(_layerMarkerPrefKey);
+
+    if (!mounted) return;
+    setState(() {
+      if (savedType != null) _currentMapType = savedType;
+      if (fieldLayer is bool) _showFieldLayer = fieldLayer;
+      if (distanceLayer is bool) _showDistanceLayer = distanceLayer;
+      if (markerLayer is bool) _showMarkerLayer = markerLayer;
+    });
   }
 
   Future<void> _saveMapTypePreference(MapType type) async {
     final box = Hive.box('landbox');
     await box.put(_mapTypePrefKey, type.name);
+  }
+
+  Future<void> _saveLayerPreference(String key, bool value) async {
+    final box = Hive.box('landbox');
+    await box.put(key, value);
   }
 
   MapType? _mapTypeFromRaw(String raw) {
@@ -801,28 +898,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }
 
     _mapController.move(center, _clampZoom(zoom));
-  }
-
-  void _focusOnNavigationTarget(LandMapState st) {
-    if (_userIsInteracting) return;
-    final target = st.navigationTarget;
-    if (target == null) return;
-
-    final now = DateTime.now();
-    final shouldMoveCamera =
-        _lastNavigationCameraMove == null ||
-        now.difference(_lastNavigationCameraMove!) > const Duration(seconds: 8);
-    if (!shouldMoveCamera) return;
-
-    final current = st.current;
-    if (current == null) {
-      _focusOnPoints(_targetPoints(target));
-      _lastNavigationCameraMove = now;
-      return;
-    }
-
-    _focusOnPoints([current, ..._targetPoints(target)]);
-    _lastNavigationCameraMove = now;
   }
 
   bool _isUserMapEventSource(MapEventSource source) {
@@ -933,6 +1008,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _clearRoute();
   }
 
+  void _clearViewedRecord() {
+    ref.read(landMapProvider.notifier).clearPoints();
+    ref.read(landMapProvider.notifier).exitEditingMode();
+  }
+
   double _calculatePerimeterMeters(List<LatLng> points) {
     if (points.length < 2) return 0;
     double perimeter = 0;
@@ -996,6 +1076,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   Future<void> _startNavigationTracking() async {
     if (_navigationTrackingSubscription != null) return;
+
+    // Disable orientation compass during navigation (navigation has its own rotation)
+    if (_orientationLocked) {
+      _orientationCompassSubscription?.cancel();
+    }
 
     final err = await ref.read(landMapProvider.notifier).initLocation();
     if (!mounted) return;
@@ -1063,6 +1148,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _navigationHeading = 0.0;
         _followCurrentLocation = true;
       });
+      // Re-enable orientation compass if it was locked
+      if (_orientationLocked) {
+        _startOrientationCompass();
+      }
     }
   }
 
@@ -1071,16 +1160,33 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final current = ref.read(landMapProvider).current;
     if (current == null) return;
 
-    // Throttle camera updates to every 500ms
-    _navigationCameraTimer?.cancel();
-    _navigationCameraTimer = Timer(const Duration(milliseconds: 500), () {
-      if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
-      _mapController.moveAndRotate(
-        current,
-        18.0, // Close zoom like Google Maps navigation
-        -_navigationHeading, // Rotate map with compass
-      );
-    });
+    // Debounce: only apply once every 500ms, but don't cancel pending moves
+    final now = DateTime.now();
+    if (_lastNavigationCameraMove != null &&
+        now.difference(_lastNavigationCameraMove!) <
+            const Duration(milliseconds: 500)) {
+      // Schedule a delayed update if one isn't already pending
+      _navigationCameraTimer?.cancel();
+      _navigationCameraTimer = Timer(const Duration(milliseconds: 500), () {
+        if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
+        final pos = ref.read(landMapProvider).current;
+        if (pos == null) return;
+        _lastNavigationCameraMove = DateTime.now();
+        _mapController.moveAndRotate(
+          pos,
+          _clampZoom(max(_currentZoom, 17)),
+          -_navigationHeading,
+        );
+      });
+      return;
+    }
+
+    _lastNavigationCameraMove = now;
+    _mapController.moveAndRotate(
+      current,
+      _clampZoom(max(_currentZoom, 17)),
+      -_navigationHeading,
+    );
   }
 
   Future<void> _fetchRoute(LatLng destination) async {
@@ -1130,6 +1236,28 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }
 
     return [current, ...route.sublist(closestIndex + 1)];
+  }
+
+  /// Computes remaining route distance along the current (trimmed) route points.
+  double _remainingRouteDistanceMeters() {
+    if (_routePoints.length < 2) return 0;
+    double total = 0;
+    for (int i = 0; i < _routePoints.length - 1; i++) {
+      total += _distanceCalculator.as(
+        LengthUnit.Meter,
+        _routePoints[i],
+        _routePoints[i + 1],
+      );
+    }
+    // Add last-mile distance from route end to actual destination
+    if (_routeDestination != null) {
+      total += _distanceCalculator.as(
+        LengthUnit.Meter,
+        _routePoints.last,
+        _routeDestination!,
+      );
+    }
+    return total;
   }
 
   void _clearRoute() {
@@ -1561,6 +1689,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         // Re-engage navigation camera after user stops
                         if (_navigationCameraActive) {
                           _updateNavigationCamera();
+                        } else if (_orientationLocked) {
+                          _applyOrientationRotation();
                         }
                       }
                     },
@@ -1584,6 +1714,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 return;
               }
               if (_activeTool == _MapTool.none) {
+                if (!_showFieldLayer) {
+                  _snack('Turn on the Field layer to add area points.');
+                  return;
+                }
                 _skipNextFieldPointsFocus = true;
                 final err = ref
                     .read(landMapProvider.notifier)
@@ -1601,12 +1735,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
             MarkerLayer(markers: markers),
 
+            // Compass — right side, aligned with first tool button
             Positioned(
-              top: 140 + MediaQuery.of(context).padding.top,
-              child: const Padding(
-                padding: EdgeInsets.all(10.0),
-                child: MapCompass.cupertino(hideIfRotatedNorth: true),
-              ),
+              right: 16,
+              top: _isFullscreen
+                  ? 90
+                  : 160 + MediaQuery.of(context).padding.top,
+              child: MapCompass.cupertino(hideIfRotatedNorth: true),
             ),
 
             RichAttributionWidget(
@@ -1824,9 +1959,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               navigationTarget.label,
                               if (_isFetchingRoute)
                                 'Calculating...'
-                              else if (_currentRoute != null)
+                              else if (_routePoints.length >= 2)
                                 _formatDistance(
-                                  _currentRoute!.distanceMeters,
+                                  _remainingRouteDistanceMeters(),
                                   distanceUnit,
                                 )
                               else if (st.current != null &&
@@ -1839,8 +1974,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   ),
                                   distanceUnit,
                                 ),
-                              if (_currentRoute?.formattedDuration != null)
-                                _currentRoute!.formattedDuration!,
                             ].join(' · '),
                             style: const TextStyle(
                               color: Colors.white,
@@ -1854,6 +1987,60 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         const SizedBox(width: 6),
                         GestureDetector(
                           onTap: _clearNavigationTarget,
+                          child: Icon(
+                            Icons.close,
+                            color: Colors.white.withValues(alpha: 0.75),
+                            size: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                // Viewing pill — shows when viewing a saved record (not navigating)
+                if (navigationTarget == null &&
+                    st.activeFieldId != null &&
+                    st.points.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF001F3F),
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.remove_red_eye_outlined,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Viewing: ${st.activeFieldName ?? 'Saved location'} · ${st.points.length} pts',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: _clearViewedRecord,
                           child: Icon(
                             Icons.close,
                             color: Colors.white.withValues(alpha: 0.75),
@@ -1885,8 +2072,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               navigationTarget: navigationTarget,
               navigationDistanceText: _isFetchingRoute
                   ? 'Calculating...'
-                  : _currentRoute != null
-                  ? _formatDistance(_currentRoute!.distanceMeters, distanceUnit)
+                  : _routePoints.length >= 2
+                  ? _formatDistance(
+                      _remainingRouteDistanceMeters(),
+                      distanceUnit,
+                    )
                   : st.current != null && navigationGuidancePoint != null
                   ? _formatDistance(
                       _distanceCalculator.as(
@@ -1906,6 +2096,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               onClearDistance: _clearDistancePoints,
               onSaveDistance: _showDistanceDialog,
               onAddFieldPoint: () async {
+                if (!_showFieldLayer) {
+                  _snack('Turn on the Field layer to add area points.');
+                  return;
+                }
                 final err = await ref
                     .read(landMapProvider.notifier)
                     .addPointFromCurrent();
@@ -1918,9 +2112,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             ),
           ),
 
-        // Map Controls (Right side)
+        // Map Controls (Left side)
         Positioned(
-          right: 16,
+          left: 16,
           top: _isFullscreen ? 90 : 160 + MediaQuery.of(context).padding.top,
           child: Column(
             children: [
@@ -1936,6 +2130,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 enabled: !_isLocating,
                 isActive: _followCurrentLocation,
                 onPressed: _recenterToCurrentLocation,
+              ),
+              const SizedBox(height: 8),
+              _MapControlButton(
+                icon: _orientationLocked
+                    ? Icons.explore_rounded
+                    : Icons.explore_off_rounded,
+                isActive: _orientationLocked,
+                onPressed: _toggleOrientation,
               ),
               const SizedBox(height: 8),
               _MapControlButton(
@@ -2109,10 +2311,22 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     ),
                     color: Colors.blue,
                     isSelected: _showFieldLayer,
+                    count: ref.read(landMapProvider).points.length,
+                    onClear: ref.read(landMapProvider).points.isNotEmpty
+                        ? () {
+                            ref.read(landMapProvider.notifier).clearPoints();
+                            ref
+                                .read(landMapProvider.notifier)
+                                .exitEditingMode();
+                            setState(() {});
+                            modalSetState(() {});
+                          }
+                        : null,
                     onTap: () {
                       setState(() {
                         _showFieldLayer = !_showFieldLayer;
                       });
+                      _saveLayerPreference(_layerFieldPrefKey, _showFieldLayer);
                       modalSetState(() {});
                     },
                   ),
@@ -2129,6 +2343,19 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     ),
                     color: Colors.orange,
                     isSelected: _showDistanceLayer,
+                    count: _distancePoints.length,
+                    onClear: _distancePoints.isNotEmpty
+                        ? () {
+                            setState(() {
+                              _distancePoints = const [];
+                              _distanceLabels = const [];
+                              if (_activeTool == _MapTool.distance) {
+                                _activeTool = _MapTool.none;
+                              }
+                            });
+                            modalSetState(() {});
+                          }
+                        : null,
                     onTap: () {
                       setState(() {
                         _showDistanceLayer = !_showDistanceLayer;
@@ -2137,6 +2364,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                           _activeTool = _MapTool.none;
                         }
                       });
+                      _saveLayerPreference(
+                        _layerDistancePrefKey,
+                        _showDistanceLayer,
+                      );
                       modalSetState(() {});
                     },
                   ),
@@ -2153,6 +2384,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     ),
                     color: Colors.red,
                     isSelected: _showMarkerLayer,
+                    count: _savedMarkers.length,
                     onTap: () {
                       setState(() {
                         _showMarkerLayer = !_showMarkerLayer;
@@ -2161,6 +2393,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                           _activeTool = _MapTool.none;
                         }
                       });
+                      _saveLayerPreference(
+                        _layerMarkerPrefKey,
+                        _showMarkerLayer,
+                      );
                       modalSetState(() {});
                     },
                   ),
@@ -3098,6 +3334,8 @@ class _LayerOption extends StatelessWidget {
   final Color color;
   final bool isSelected;
   final VoidCallback onTap;
+  final int count;
+  final VoidCallback? onClear;
 
   const _LayerOption({
     required this.label,
@@ -3105,40 +3343,90 @@ class _LayerOption extends StatelessWidget {
     required this.color,
     required this.isSelected,
     required this.onTap,
+    this.count = 0,
+    this.onClear,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: isSelected ? color : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected ? color : Colors.grey.shade400,
-                width: 2,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: isSelected ? color : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected ? color : Colors.grey.shade400,
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Opacity(opacity: isSelected ? 1 : 0.45, child: icon),
+                ),
               ),
-            ),
-            child: Center(
-              child: Opacity(opacity: isSelected ? 1 : 0.45, child: icon),
-            ),
+              // Count badge — top-right corner
+              if (count > 0)
+                Positioned(
+                  top: -6,
+                  right: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected ? color : Colors.grey.shade500,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isSelected ? color : Colors.grey.shade600,
-            ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? color : Colors.grey.shade600,
           ),
-        ],
-      ),
+        ),
+        // Clear action — only shown when there's active unsaved data
+        SizedBox(
+          height: 16,
+          child: onClear != null
+              ? GestureDetector(
+                  onTap: onClear,
+                  child: Text(
+                    'Clear',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.red.shade400,
+                    ),
+                  ),
+                )
+              : null,
+        ),
+      ],
     );
   }
 }

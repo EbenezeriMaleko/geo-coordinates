@@ -1338,6 +1338,15 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ),
                 if (!isRemote)
                   _ActionTile(
+                    icon: Icons.remove_red_eye_outlined,
+                    label: 'View on map',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _viewOnMap(context, item);
+                    },
+                  ),
+                if (!isRemote)
+                  _ActionTile(
                     icon: Icons.edit,
                     label: 'Rename',
                     onTap: () {
@@ -1412,6 +1421,26 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     }
 
     ref.read(landMapProvider.notifier).setNavigationTarget(target);
+    widget.onOpenMapRequested?.call();
+  }
+
+  void _viewOnMap(BuildContext context, Map<String, dynamic> item) {
+    final points = _extractLatLngPoints(item);
+    if (points.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No points to display on map')),
+      );
+      return;
+    }
+
+    final id = item['id']?.toString();
+    final name = item['name']?.toString().trim().isNotEmpty == true
+        ? item['name'].toString().trim()
+        : 'Saved location';
+
+    ref
+        .read(landMapProvider.notifier)
+        .loadSavedFieldPoints(points, fieldId: id, fieldName: name);
     widget.onOpenMapRequested?.call();
   }
 
@@ -3395,6 +3424,27 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                   }
                 }
               }
+              widget.onOpenMapRequested?.call();
+            },
+          ),
+          const Divider(height: 1, indent: 56),
+          // View on map — loads points without navigation
+          _ActionRow(
+            icon: Icons.remove_red_eye_outlined,
+            label: 'View on map',
+            onTap: () {
+              Navigator.of(context).pop();
+              final points = widget.isCloud ? _cloudPoints : _localPoints;
+              if (points.isEmpty) return;
+              final name = widget.isCloud
+                  ? widget.cloudItem!.name
+                  : widget.localItem!['name']?.toString() ?? 'Saved location';
+              final id = widget.isCloud
+                  ? widget.cloudItem!.id
+                  : widget.localItem!['id']?.toString();
+              ref
+                  .read(landMapProvider.notifier)
+                  .loadSavedFieldPoints(points, fieldId: id, fieldName: name);
               widget.onOpenMapRequested?.call();
             },
           ),

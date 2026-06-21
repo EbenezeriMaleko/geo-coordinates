@@ -2891,7 +2891,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
                         : Image.file(
                             File(capture.imagePath),
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder: (_, _, _) => Container(
                               height: 300,
                               color: Colors.grey.shade200,
                               child: const Center(

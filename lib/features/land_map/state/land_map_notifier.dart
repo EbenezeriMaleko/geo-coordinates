@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -48,24 +50,36 @@ class LandMapNotifier extends Notifier<LandMapState> {
   }
 
   Future<String?> refreshLocation() async {
+    // Step 1: getLastKnownPosition is instant — it reads from the OS cache.
+    // This resolves the first-launch stuck spinner: the foreground service
+    // used in the old code started but never fully terminated, keeping the
+    // platform channel open. Now we return almost immediately regardless.
+    try {
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        state = state.copyWith(
+          current: LatLng(lastKnown.latitude, lastKnown.longitude),
+          accuracyMeters: lastKnown.accuracy,
+          altitudeMeters: lastKnown.altitude,
+          speedMps: lastKnown.speed,
+          locationTimestamp: lastKnown.timestamp,
+        );
+      }
+    } catch (_) {}
+
+    // Step 2: fire a fresh GPS fix silently in the background.
+    // No spinner, no error shown. When it arrives the landMapProvider state
+    // updates and the map re-centers through the existing listener.
+    unawaited(_fetchFreshPositionSilently());
+    return null;
+  }
+
+  Future<void> _fetchFreshPositionSilently() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
-        // locationSettings: const LocationSettings(
-        //   accuracy: LocationAccuracy.best,
-        // ),
         locationSettings: AndroidSettings(
           accuracy: LocationAccuracy.best,
-          distanceFilter: 1,
-          intervalDuration: const Duration(seconds: 2),
-          foregroundNotificationConfig: const ForegroundNotificationConfig(
-            notificationTitle: 'TaREF GPS - Coordinates',
-            notificationText: 'Location tracking is active',
-            enableWakeLock: true,
-            notificationIcon: AndroidResource(
-              name: 'ic_launcher',
-              defType: 'mipmap',
-            ),
-          ),
+          timeLimit: const Duration(seconds: 30),
         ),
       );
       state = state.copyWith(
@@ -75,9 +89,8 @@ class LandMapNotifier extends Notifier<LandMapState> {
         speedMps: pos.speed,
         locationTimestamp: pos.timestamp,
       );
-      return null;
     } catch (_) {
-      return 'Failed to get location.';
+      // Silent — user already has a position displayed or sees the default map.
     }
   }
 
