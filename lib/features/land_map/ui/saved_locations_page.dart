@@ -1320,29 +1320,57 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   ),
                 ),
                 _ActionTile(
-                  icon: isRemote
-                      ? Icons.visibility_outlined
-                      : Icons.map_outlined,
-                  label: isRemote ? 'View cloud details' : 'Go to',
+                  icon: Icons.navigation_outlined,
+                  label: 'Go to',
                   onTap: () {
                     Navigator.pop(sheetContext);
                     if (isRemote) {
-                      final remoteLand = _remoteLandFromItem(item);
-                      if (remoteLand != null) {
-                        _showRemoteLandDetails(remoteLand);
+                      // Try local Hive copy first (has coordinates).
+                      // Most synced records have one. Cloud-only records fall
+                      // back to the detail sheet where navigation also works.
+                      final cloudId = item['id']?.toString() ?? '';
+                      final local = _localItemForCloudId(cloudId);
+                      if (local != null) {
+                        _goToSavedItem(context, local);
+                      } else {
+                        final remoteLand = _remoteLandFromItem(item);
+                        if (remoteLand != null)
+                          _showRemoteLandDetails(remoteLand);
                       }
                     } else {
                       _goToSavedItem(context, item);
                     }
                   },
                 ),
-                if (!isRemote)
+                _ActionTile(
+                  icon: Icons.remove_red_eye_outlined,
+                  label: 'View on map',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    if (isRemote) {
+                      final cloudId = item['id']?.toString() ?? '';
+                      final local = _localItemForCloudId(cloudId);
+                      if (local != null) {
+                        _viewOnMap(context, local);
+                      } else {
+                        final remoteLand = _remoteLandFromItem(item);
+                        if (remoteLand != null)
+                          _showRemoteLandDetails(remoteLand);
+                      }
+                    } else {
+                      _viewOnMap(context, item);
+                    }
+                  },
+                ),
+                if (isRemote)
                   _ActionTile(
-                    icon: Icons.remove_red_eye_outlined,
-                    label: 'View on map',
+                    icon: Icons.visibility_outlined,
+                    label: 'View details',
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      _viewOnMap(context, item);
+                      final remoteLand = _remoteLandFromItem(item);
+                      if (remoteLand != null)
+                        _showRemoteLandDetails(remoteLand);
                     },
                   ),
                 if (!isRemote)
@@ -1442,6 +1470,22 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .read(landMapProvider.notifier)
         .loadSavedFieldPoints(points, fieldId: id, fieldName: name);
     widget.onOpenMapRequested?.call();
+  }
+
+  /// Finds the local Hive copy for a cloud record using its cloud ID.
+  /// Synced records keep a local copy with `cloudId` pointing back to the cloud.
+  /// Cloud-only records (created on another device) won't have a local copy.
+  Map<String, dynamic>? _localItemForCloudId(String cloudId) {
+    if (cloudId.isEmpty) return null;
+    final box = Hive.box('landbox');
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+      final local = Map<String, dynamic>.from(raw);
+      final localId = local['id']?.toString().trim() ?? '';
+      final localCloudId = local['cloudId']?.toString().trim() ?? '';
+      if (localId == cloudId || localCloudId == cloudId) return local;
+    }
+    return null;
   }
 
   LandNavigationTarget? _buildNavigationTarget(Map<String, dynamic> item) {
@@ -3422,6 +3466,46 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                         .read(landMapProvider.notifier)
                         .setNavigationTarget(target);
                   }
+                }
+              } else {
+                // Local item — coordinates are available directly.
+                final points = _localPoints;
+                if (points.isNotEmpty) {
+                  final item = widget.localItem!;
+                  final name =
+                      item['name']?.toString().trim().isNotEmpty == true
+                      ? item['name'].toString().trim()
+                      : 'Saved location';
+                  final type =
+                      item['entityType']?.toString().trim().isNotEmpty == true
+                      ? item['entityType'].toString().trim()
+                      : item['type']?.toString().trim() ?? 'polygon';
+
+                  // Extract per-point labels from the raw points list.
+                  final rawPts = (item['points'] as List?) ?? const [];
+                  final topLabels = (item['labels'] as List?) ?? const [];
+                  final pointLabels = List<String>.generate(points.length, (i) {
+                    if (i < rawPts.length && rawPts[i] is Map) {
+                      final l = rawPts[i]['label']?.toString().trim() ?? '';
+                      if (l.isNotEmpty) return l;
+                    }
+                    if (i < topLabels.length) {
+                      final l = topLabels[i]?.toString().trim() ?? '';
+                      if (l.isNotEmpty) return l;
+                    }
+                    return '${i + 1}';
+                  });
+
+                  final target = LandNavigationTarget(
+                    point: _representativePoint(points),
+                    points: points,
+                    pointLabels: pointLabels,
+                    label: name,
+                    kind: _navigationKind(type, points.length),
+                  );
+                  ref
+                      .read(landMapProvider.notifier)
+                      .setNavigationTarget(target);
                 }
               }
               widget.onOpenMapRequested?.call();
