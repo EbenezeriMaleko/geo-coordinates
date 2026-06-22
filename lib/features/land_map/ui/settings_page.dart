@@ -292,7 +292,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 final info = snapshot.data;
                 final versionText = info == null
                     ? 'Loading version...'
-                    : '${info.version}+${info.buildNumber}';
+                    : info.version;
 
                 return Column(
                   mainAxisSize: MainAxisSize.min,
