@@ -75,6 +75,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
     final authState = ref.watch(loginProvider);
     final isLoading = authState.isLoading;
     final errorMsg = authState.hasError ? authState.error.toString() : null;
+    final isCompact = MediaQuery.of(context).size.width < 700;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -83,13 +84,13 @@ class _LoginPageState extends ConsumerState<LoginPage>
           opacity: _fadeAnim,
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: isCompact ? 16 : 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildHeader(),
+                  _buildHeader(isCompact),
                   const SizedBox(height: 40),
-                  _buildCard(isLoading, errorMsg),
+                  _buildCard(isLoading, errorMsg, isCompact),
                   const SizedBox(height: 24),
                   _buildFooter(),
                 ],
@@ -101,172 +102,174 @@ class _LoginPageState extends ConsumerState<LoginPage>
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.black.withValues(alpha: 0.3),
-              width: 2,
-            ),
-          ),
-          child: Image.asset('lib/assets/databenki_latest_logo.png'),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'TaREF GPS Coordinates',
-          style: GoogleFonts.inter(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            color: Colors.black,
-            letterSpacing: -0.5,
+  Widget _buildHeader(bool isCompact) {
+  return Column(
+    children: [
+      Container(
+        width: isCompact ? 56 : 80,
+        height: isCompact ? 56 : 80,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.black.withValues(alpha: 0.3),
+            width: 2,
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Sign in to your account',
-          style: GoogleFonts.inter(
-            fontSize: 15,
-            color: Colors.black.withValues(alpha: 0.75),
-            fontWeight: FontWeight.w400,
-          ),
+        child: Image.asset('lib/assets/databenki_latest_logo.png'),
+      ),
+      SizedBox(height: isCompact ? 12 : 20),
+      Text(
+        'TaREF GPS Coordinates',
+        textAlign: TextAlign.center,
+        style: GoogleFonts.inter(
+          fontSize: isCompact ? 22 : 30,
+          fontWeight: FontWeight.w800,
+          color: Colors.black,
+          letterSpacing: -0.5,
+          height: 1.1,
+        ),
+      ),
+      SizedBox(height: isCompact ? 4 : 8),
+      Text(
+        'Sign in to your account',
+        style: GoogleFonts.inter(
+          fontSize: isCompact ? 13 : 15,
+          color: Colors.black.withValues(alpha: 0.75),
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+    ],
+  );
+}
+
+  Widget _buildCard(bool isLoading, String? errorMsg, bool isCompact) {
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.18),
+          blurRadius: 32,
+          offset: const Offset(0, 12),
         ),
       ],
-    );
-  }
-
-  Widget _buildCard(bool isLoading, String? errorMsg) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
+    ),
+    padding: EdgeInsets.all(isCompact ? 20 : 28),
+    child: Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (errorMsg != null) ...[
+            _buildErrorBanner(errorMsg),
+            SizedBox(height: isCompact ? 14 : 20),
+          ],
+          _buildLabel('Email address'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            enabled: !isLoading,
+            decoration: _inputDecoration(
+              hint: 'you@example.com',
+              icon: Icons.email_outlined,
+            ),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'Email is required';
+              final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
+              if (!emailRegex.hasMatch(v.trim())) {
+                return 'Enter a valid email';
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: isCompact ? 14 : 20),
+          _buildLabel('Password'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            textInputAction: TextInputAction.done,
+            enabled: !isLoading,
+            onFieldSubmitted: (_) => _submit(),
+            decoration: _inputDecoration(
+              hint: 'Enter your password',
+              icon: Icons.lock_outline_rounded,
+              suffix: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: Colors.grey.shade500,
+                  size: 22,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Password is required';
+              if (v.length < 6) {
+                return 'Password must be at least 6 characters';
+              }
+              return null;
+            },
+          ),
+          SizedBox(height: isCompact ? 22 : 32),
+          SizedBox(
+            height: isCompact ? 48 : 54,
+            child: ElevatedButton(
+              onPressed: isLoading ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF001F3F),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: isLoading ? 0 : 2,
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      'Sign In',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: isLoading
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ForgotPasswordPage(),
+                        ),
+                      );
+                    },
+              child: const Text('Forgot password?'),
+            ),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(28),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (errorMsg != null) ...[
-              _buildErrorBanner(errorMsg),
-              const SizedBox(height: 20),
-            ],
-            _buildLabel('Email address'),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              enabled: !isLoading,
-              decoration: _inputDecoration(
-                hint: 'you@example.com',
-                icon: Icons.email_outlined,
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Email is required';
-                final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
-                if (!emailRegex.hasMatch(v.trim())) {
-                  return 'Enter a valid email';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-            _buildLabel('Password'),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              textInputAction: TextInputAction.done,
-              enabled: !isLoading,
-              onFieldSubmitted: (_) => _submit(),
-              decoration: _inputDecoration(
-                hint: 'Enter your password',
-                icon: Icons.lock_outline_rounded,
-                suffix: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: Colors.grey.shade500,
-                    size: 22,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                ),
-              ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Password is required';
-                if (v.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              height: 54,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF001F3F),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: isLoading ? 0 : 2,
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        'Sign In',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: isLoading
-                    ? null
-                    : () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ForgotPasswordPage(),
-                          ),
-                        );
-                      },
-                child: const Text('Forgot password?'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildFooter() {
     return Row(

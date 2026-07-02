@@ -73,6 +73,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   bool _showFieldLayer = true;
   bool _showDistanceLayer = true;
   bool _showMarkerLayer = true;
+  bool _bottomBarExpanded = false;
   List<LatLng> _routePoints = const [];
   RouteResult? _currentRoute;
   bool _isFetchingRoute = false;
@@ -280,8 +281,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   void _toggleBottomActionBar() {
-    setState(() => _showBottomActionBar = !_showBottomActionBar);
-  }
+  setState(() {
+    _showBottomActionBar = !_showBottomActionBar;
+    if (!_showBottomActionBar) {
+      _bottomBarExpanded = false;
+    }
+  });
+}
 
   Future<void> _initLocationAndCenter() async {
     if (!mounted) return;
@@ -1459,8 +1465,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             st.current!.longitude,
             referenceEllipsoid,
           );
+    final screenSize = MediaQuery.sizeOf(context);
+    final isCompactHeight = screenSize.height <  700;
     final fabBottomOffset =
-        widget.bottomInset + (_showBottomActionBar ? 240 : 16);
+        widget.bottomInset + (_showBottomActionBar ? (isCompactHeight ? 200 : 240) : 16);
     final bottomBarInset = max(0.0, widget.bottomInset - 13);
 
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
@@ -2109,59 +2117,101 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               onClearField: ref.read(landMapProvider.notifier).clearPoints,
               onSaveField: _showFieldDialog,
               onAddMarkerAtGps: _addMarkerAtCurrentLocation,
+              onExpandedChanged: (expanded) {
+                setState(() => _bottomBarExpanded = expanded);
+              },
+              onClose: () {
+    setState(() {
+      _showBottomActionBar = false;
+      _bottomBarExpanded = false;
+    });
+  },
             ),
           ),
 
         // Map Controls (Left side)
         Positioned(
-          left: 16,
-          top: _isFullscreen ? 90 : 160 + MediaQuery.of(context).padding.top,
-          child: Column(
-            children: [
-              _MapControlButton(
-                icon: _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                isActive: _isFullscreen,
-                onPressed: _toggleFullscreen,
-              ),
-              const SizedBox(height: 8),
-              _MapControlButton(
-                icon: Icons.my_location_rounded,
-                isLoading: _isLocating,
-                enabled: !_isLocating,
-                isActive: _followCurrentLocation,
-                onPressed: _recenterToCurrentLocation,
-              ),
-              const SizedBox(height: 8),
-              _MapControlButton(
-                icon: _orientationLocked
-                    ? Icons.explore_rounded
-                    : Icons.explore_off_rounded,
-                isActive: _orientationLocked,
-                onPressed: _toggleOrientation,
-              ),
-              const SizedBox(height: 8),
-              _MapControlButton(
-                icon: Icons.layers,
-                onPressed: () {
-                  _showMapTypeSelector();
-                },
-              ),
-            ],
+  left: 16,
+  top: _isFullscreen
+      ? 90
+      : (isCompactHeight ? 130 : 160) + MediaQuery.of(context).padding.top,
+  child: AnimatedOpacity(
+    duration: const Duration(milliseconds: 200),
+    opacity: (isCompactHeight && _bottomBarExpanded) ? 0.0 : 1.0,
+    child: IgnorePointer(
+      ignoring: isCompactHeight && _bottomBarExpanded,
+      child: Column(
+        children: [
+          _MapControlButton(
+            icon: _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+            isActive: _isFullscreen,
+            onPressed: _toggleFullscreen,
           ),
-        ),
+          const SizedBox(height: 8),
+          _MapControlButton(
+            icon: Icons.my_location_rounded,
+            isLoading: _isLocating,
+            enabled: !_isLocating,
+            isActive: _followCurrentLocation,
+            onPressed: _recenterToCurrentLocation,
+          ),
+          const SizedBox(height: 8),
+          _MapControlButton(
+            icon: _orientationLocked
+                ? Icons.explore_rounded
+                : Icons.explore_off_rounded,
+            isActive: _orientationLocked,
+            onPressed: _toggleOrientation,
+          ),
+          const SizedBox(height: 8),
+          _MapControlButton(
+            icon: Icons.layers,
+            onPressed: () => _showMapTypeSelector(),
+          ),
+        ],
+      ),
+    ),
+  ),
+),
 
-        Positioned(
-          right: 16,
-          bottom: fabBottomOffset,
-          child: FloatingActionButton(
-            backgroundColor: const Color(0xFF001F3F),
-            onPressed: _toggleBottomActionBar,
-            child: Icon(
-              _showBottomActionBar ? Icons.close : Icons.add,
-              color: Colors.white,
+        if (!_showBottomActionBar)
+  Positioned(
+    right: 16,
+    bottom: widget.bottomInset + 16,
+    child: GestureDetector(
+      onTap: () => setState(() => _showBottomActionBar = true),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-          ),
+          ],
         ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tune_rounded, size: 16, color: Colors.grey.shade700),
+            const SizedBox(width: 6),
+            Text(
+              'Tools',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
       ],
     );
   }
@@ -2224,6 +2274,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   void _showMapTypeSelector() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -3961,6 +4012,8 @@ class _BottomActionBar extends StatefulWidget {
   final VoidCallback onClearField;
   final VoidCallback onSaveField;
   final VoidCallback onAddMarkerAtGps;
+  final ValueChanged<bool>? onExpandedChanged;
+  final VoidCallback? onClose;
 
   const _BottomActionBar({
     required this.activeTool,
@@ -3986,6 +4039,8 @@ class _BottomActionBar extends StatefulWidget {
     required this.onClearField,
     required this.onSaveField,
     required this.onAddMarkerAtGps,
+    this.onExpandedChanged,
+    this.onClose,
   });
 
   @override
@@ -4019,6 +4074,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
 
   void _toggle() {
     setState(() => _expanded = !_expanded);
+    widget.onExpandedChanged?.call(_expanded);
     if (_expanded) {
       _animController.forward();
     } else {
@@ -4030,6 +4086,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
     widget.onToolChanged(tool);
     if (!_expanded) {
       setState(() => _expanded = true);
+      widget.onExpandedChanged?.call(_expanded);
       _animController.forward();
     }
   }
@@ -4086,23 +4143,52 @@ class _BottomActionBarState extends State<_BottomActionBar>
             mainAxisSize: MainAxisSize.min,
             children: [
               // Drag handle — tap to expand/collapse
-              GestureDetector(
-                onTap: _toggle,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
-                  child: Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                ),
+              Padding(
+  padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
+  child: Stack(
+    alignment: Alignment.center,
+    children: [
+      GestureDetector(
+        onTap: _toggle,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: double.infinity,
+          height: 20,
+          child: Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(999),
               ),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        right: 8,
+        top: -4,
+        child: GestureDetector(
+          onTap: widget.onClose,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.close_rounded,
+              size: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ),
+      ),
+    ],
+  ),
+),
 
               // Mode tabs
               Padding(
@@ -4177,10 +4263,14 @@ class _BottomActionBarState extends State<_BottomActionBar>
                     child: Align(heightFactor: _expandAnim.value, child: child),
                   );
                 },
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                  child: _buildExpandedContent(theme),
-                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.45
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                    child: _buildExpandedContent(theme)
+                  )),
               ),
             ],
           ),
