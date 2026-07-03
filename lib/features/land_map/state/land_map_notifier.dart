@@ -19,6 +19,35 @@ final landMapProvider = NotifierProvider<LandMapNotifier, LandMapState>(
   LandMapNotifier.new,
 );
 
+/// Serializes concurrent [Geolocator.requestPermission] calls.
+/// On first install the map page and my-location page both mount at once
+/// (IndexedStack); without this gate one caller can hang forever.
+class _LocationPermissionCoordinator {
+  static Future<LocationPermission>? _inFlight;
+
+  static Future<LocationPermission> resolve() async {
+    var permission = await Geolocator.checkPermission();
+    if (permission != LocationPermission.denied) {
+      return permission;
+    }
+
+    final existing = _inFlight;
+    if (existing != null) {
+      return existing;
+    }
+
+    final request = Geolocator.requestPermission();
+    _inFlight = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_inFlight, request)) {
+        _inFlight = null;
+      }
+    }
+  }
+}
+
 class LandMapNotifier extends Notifier<LandMapState> {
   @override
   LandMapState build() {
@@ -33,20 +62,22 @@ class LandMapNotifier extends Notifier<LandMapState> {
     state = state.copyWith(clearNavigationTarget: true);
   }
 
-  Future<String?> initLocation() async {
+  Future<String?> ensureLocationAccess() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) return 'Please enable location services.';
 
-    LocationPermission perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
+    final perm = await _LocationPermissionCoordinator.resolve();
     if (perm == LocationPermission.denied) return 'Location Permission denied';
     if (perm == LocationPermission.deniedForever) {
       return 'Location permission permanently denied. Enable it in settings.';
     }
+    return null;
+  }
 
-    return await refreshLocation();
+  Future<String?> initLocation() async {
+    final err = await ensureLocationAccess();
+    if (err != null) return err;
+    return refreshLocation();
   }
 
   Future<String?> refreshLocation() async {

@@ -224,9 +224,15 @@ class _LocationRequiredDialogState extends State<_LocationRequiredDialog>
 // ─────────────────────────────────────────────────────────
 
 class MyLocationPage extends ConsumerStatefulWidget {
+  final bool isTabActive;
   final Future<void> Function()? onRefresh;
   final Future<void> Function(MyLocationAction action)? onMenuAction;
-  const MyLocationPage({super.key, this.onRefresh, this.onMenuAction});
+  const MyLocationPage({
+    super.key,
+    this.isTabActive = false,
+    this.onRefresh,
+    this.onMenuAction,
+  });
 
   @override
   ConsumerState<MyLocationPage> createState() => _MyLocationPageState();
@@ -262,9 +268,34 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     _landMapNotifier = ref.read(landMapProvider.notifier);
     Future.microtask(() async {
       await _restoreRecentMedia();
-      await _startServiceStatusListener();
-      await _initializeTracking();
+      if (widget.isTabActive) {
+        await _activateTracking();
+      }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant MyLocationPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isTabActive && !oldWidget.isTabActive) {
+      unawaited(_activateTracking());
+    } else if (!widget.isTabActive && oldWidget.isTabActive) {
+      unawaited(_pauseTracking());
+    }
+  }
+
+  Future<void> _activateTracking() async {
+    await _startServiceStatusListener();
+    await _initializeTracking();
+  }
+
+  Future<void> _pauseTracking() async {
+    await _locationSubscription?.cancel();
+    _locationSubscription = null;
+    await _serviceStatusSubscription?.cancel();
+    _serviceStatusSubscription = null;
+    if (!mounted) return;
+    setState(() => _isStreaming = false);
   }
 
   @override
@@ -286,7 +317,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
   // ── Tracking setup ──────────────────────────────────────
 
   Future<void> _initializeTracking() async {
-    if (!mounted) return;
+    if (!mounted || !widget.isTabActive) return;
     setState(() {
       _isInitializing = true;
       _isStreaming = false;
@@ -300,26 +331,29 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       return;
     }
 
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
+    final accessErr = await _landMapNotifier.ensureLocationAccess();
+    if (!mounted || !widget.isTabActive) return;
 
-    if (!mounted) return;
-
-    if (permission == LocationPermission.deniedForever) {
+    if (accessErr != null) {
+      if (accessErr.contains('permanently denied')) {
+        setState(() {
+          _isInitializing = false;
+          _blockReason = _LocationBlockReason.permissionForever;
+        });
+        _showBlockDialog();
+        return;
+      }
+      if (accessErr.contains('Permission denied')) {
+        setState(() {
+          _isInitializing = false;
+          _blockReason = _LocationBlockReason.permissionDenied;
+        });
+        _showBlockDialog();
+        return;
+      }
       setState(() {
         _isInitializing = false;
-        _blockReason = _LocationBlockReason.permissionForever;
-      });
-      _showBlockDialog();
-      return;
-    }
-
-    if (permission == LocationPermission.denied) {
-      setState(() {
-        _isInitializing = false;
-        _blockReason = _LocationBlockReason.permissionDenied;
+        _blockReason = _LocationBlockReason.serviceOff;
       });
       _showBlockDialog();
       return;
@@ -397,8 +431,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           await _handleLocationServiceDisabled();
           return;
         }
-        // Service just turned on — re-init quietly
-        if (!_isInitializing) {
+        // Service just turned on — re-init quietly when this tab is visible.
+        if (!_isInitializing && widget.isTabActive) {
           _initializeTracking();
         }
       },
@@ -410,7 +444,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
   }
 
   Future<void> _syncLocationAvailability() async {
-    if (!mounted || _isInitializing) return;
+    if (!mounted || _isInitializing || !widget.isTabActive) return;
 
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!mounted) return;

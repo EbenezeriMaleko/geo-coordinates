@@ -38,28 +38,6 @@ class _MainNavigationState extends State<MainNavigation> {
   static const Color _unselectedColor = Color(0xFF7C7C7C);
   static const Duration _syncInterval = Duration(seconds: 60);
 
-  late final List<Widget> _pages = [
-    LandMapPage(
-      bottomInset:
-          _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom,
-    ),
-    MyLocationPage(
-      onRefresh: _refreshMyLocation,
-      onMenuAction: _handleMyLocationMenu,
-    ),
-    SavedLocationsPage(
-      toolbarController: _savedLocationsToolbarController,
-      onOpenMapRequested: () => _navigateToPage(0),
-      onToolbarStateChanged: () {
-        if (mounted && _currentIndex == 2) {
-          setState(() {});
-        }
-      },
-      showEmbeddedToolbar: false,
-    ),
-    const SettingsPage(),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -346,6 +324,27 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom;
+    final pages = [
+      LandMapPage(bottomInset: bottomInset),
+      MyLocationPage(
+        isTabActive: _currentIndex == 1,
+        onRefresh: _refreshMyLocation,
+        onMenuAction: _handleMyLocationMenu,
+      ),
+      SavedLocationsPage(
+        toolbarController: _savedLocationsToolbarController,
+        onOpenMapRequested: () => _navigateToPage(0),
+        onToolbarStateChanged: () {
+          if (mounted && _currentIndex == 2) {
+            setState(() {});
+          }
+        },
+        showEmbeddedToolbar: false,
+      ),
+      const SettingsPage(),
+    ];
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: _currentIndex == 0 || _currentIndex == 1
@@ -363,7 +362,7 @@ class _MainNavigationState extends State<MainNavigation> {
               backgroundColor: Colors.white,
               elevation: 0,
             ),
-      body: IndexedStack(index: _currentIndex, children: _pages),
+      body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: Container(
         height: _bottomNavHeight + MediaQuery.of(context).padding.bottom,
         padding: EdgeInsets.only(

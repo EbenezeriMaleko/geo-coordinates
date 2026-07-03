@@ -28,6 +28,180 @@ import '../services/map_tile_cache.dart';
 enum MapType { normal, satellite, terrain, hybrid }
 
 enum _MapTool { none, marker, distance }
+enum _MapLocationBlockReason { serviceOff, permissionDenied, permissionForever }
+
+class _MapLocationRequiredDialog extends StatefulWidget {
+  final _MapLocationBlockReason reason;
+  final VoidCallback onRetry;
+  final VoidCallback onOpenSettings;
+
+  const _MapLocationRequiredDialog({
+    required this.reason,
+    required this.onRetry,
+    required this.onOpenSettings,
+  });
+
+  @override
+  State<_MapLocationRequiredDialog> createState() =>
+      _MapLocationRequiredDialogState();
+}
+
+class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim;
+  late final Animation<double> _scale;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _scale = CurvedAnimation(parent: _anim, curve: Curves.easeOutBack);
+    _fade = CurvedAnimation(parent: _anim, curve: Curves.easeIn);
+    _anim.forward();
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final isForever = widget.reason == _MapLocationBlockReason.permissionForever;
+    final isService = widget.reason == _MapLocationBlockReason.serviceOff;
+
+    final headline = isService
+        ? 'Location is turned off'
+        : isForever
+        ? 'Location access blocked'
+        : 'Location permission needed';
+
+    final body = isService
+        ? 'TaREF GPS Coordinates needs your device location to show coordinates, track position and tag media. Please turn on location services to continue.'
+        : isForever
+        ? 'Location permission has been permanently denied. Open app settings and allow location access so TaREF GPS can function.'
+        : 'Location permission is required to read your current position. Please grant permission to continue using the map.';
+
+    final primaryLabel = isService || isForever
+        ? 'Open Settings'
+        : 'Grant Permission';
+
+    return FadeTransition(
+      opacity: _fade,
+      child: ScaleTransition(
+        scale: _scale,
+        child: Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isService
+                        ? Icons.location_off_rounded
+                        : Icons.location_disabled_rounded,
+                    size: 36,
+                    color: primary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  headline,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  body,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.black54,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed:
+                        isService || isForever ? widget.onOpenSettings : widget.onRetry,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      primaryLabel,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+                if (!isForever) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        foregroundColor: Colors.black54,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Dismiss',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class LandMapPage extends ConsumerStatefulWidget {
   final double bottomInset;
@@ -39,7 +213,10 @@ class LandMapPage extends ConsumerStatefulWidget {
 }
 
 class _LandMapPageState extends ConsumerState<LandMapPage>
-    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with
+        TickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin,
+        WidgetsBindingObserver {
   static const double _minZoom = 3;
   static const double _maxZoom = 20;
   static const double _defaultMapZoom = 16;
@@ -92,6 +269,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   bool _orientationLocked = false;
   double _orientationHeading = 0.0;
   double _lastAppliedOrientation = 0.0;
+  bool _locationDialogVisible = false;
 
   double _bearingDegrees(LatLng from, LatLng to) {
     final fromLat = from.latitude * pi / 180.0;
@@ -177,6 +355,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restorePreferences();
     _landMapSubscription = ref.listenManual(landMapProvider, (previous, next) {
       final targetChanged = previous?.navigationTarget != next.navigationTarget;
@@ -212,6 +391,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       }
 
       if (currentChanged) {
+        if (_isLocating && next.current != null && mounted) {
+          setState(() => _isLocating = false);
+        }
         _followCurrentLocationIfNeeded(next.current);
       }
 
@@ -260,6 +442,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _interactionCooldownTimer?.cancel();
     _navigationCameraTimer?.cancel();
     _landMapSubscription?.close();
@@ -280,6 +463,82 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      Future.microtask(_syncLocationAvailability);
+    }
+  }
+
+  Future<void> _syncLocationAvailability() async {
+    if (!mounted || _isLocating) return;
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted) return;
+    final permission = await Geolocator.checkPermission();
+    if (!mounted) return;
+
+    final canLocate =
+        enabled &&
+        permission != LocationPermission.denied &&
+        permission != LocationPermission.deniedForever;
+
+    if (!canLocate) return;
+
+    final current = ref.read(landMapProvider).current;
+    if (current == null || _isLocationAccessError(_locationError)) {
+      await _initLocationAndCenter();
+    }
+  }
+
+  bool _isLocationAccessError(String? err) {
+    if (err == null) return false;
+    return err.contains('Permission denied') ||
+        err.contains('permanently denied') ||
+        err.contains('enable location services');
+  }
+
+  _MapLocationBlockReason _locationBlockReasonFromError(String err) {
+    if (err.contains('enable location services')) {
+      return _MapLocationBlockReason.serviceOff;
+    }
+    if (err.contains('permanently denied')) {
+      return _MapLocationBlockReason.permissionForever;
+    }
+    return _MapLocationBlockReason.permissionDenied;
+  }
+
+  Future<void> _showLocationAccessDialog(String err) async {
+    if (!mounted || _locationDialogVisible) return;
+    _locationDialogVisible = true;
+    final reason = _locationBlockReasonFromError(err);
+    final isService = reason == _MapLocationBlockReason.serviceOff;
+    final isForever = reason == _MapLocationBlockReason.permissionForever;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !isForever,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (dialogContext) => _MapLocationRequiredDialog(
+        reason: reason,
+        onRetry: () {
+          Navigator.of(dialogContext).pop();
+          Future.microtask(_initLocationAndCenter);
+        },
+        onOpenSettings: () async {
+          Navigator.of(dialogContext).pop();
+          if (isService) {
+            await Geolocator.openLocationSettings();
+          } else {
+            await Geolocator.openAppSettings();
+          }
+        },
+      ),
+    );
+
+    _locationDialogVisible = false;
+  }
+
   void _toggleBottomActionBar() {
   setState(() {
     _showBottomActionBar = !_showBottomActionBar;
@@ -296,20 +555,33 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _locationError = null;
     });
 
+    String? err;
     try {
-      final err = await ref.read(landMapProvider.notifier).initLocation();
-      if (!mounted) return;
+      err = await ref
+          .read(landMapProvider.notifier)
+          .initLocation()
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      err = ref.read(landMapProvider).current != null
+          ? null
+          : 'Location request timed out.';
+    }
 
-      final st = ref.read(landMapProvider);
-      if (st.current != null) {
-        _followCurrentLocation = true;
-        _mapController.move(st.current!, 17);
-      }
+    if (!mounted) return;
 
-      setState(() => _locationError = err);
-    } finally {
-      // Guaranteed to run — _isLocating can NEVER get stuck true.
-      if (mounted) setState(() => _isLocating = false);
+    final st = ref.read(landMapProvider);
+    if (st.current != null) {
+      _followCurrentLocation = true;
+      _mapController.move(st.current!, 17);
+      err = null;
+    }
+
+    setState(() {
+      _isLocating = false;
+      _locationError = err;
+    });
+    if (_isLocationAccessError(err)) {
+      unawaited(_showLocationAccessDialog(err!));
     }
   }
 
@@ -333,6 +605,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _isLocating = true;
       _locationError = null;
     });
+
+    final accessErr = await ref.read(landMapProvider.notifier).ensureLocationAccess();
+    if (!mounted) return;
+    if (accessErr != null) {
+      setState(() {
+        _isLocating = false;
+        _locationError = accessErr;
+      });
+      unawaited(_showLocationAccessDialog(accessErr));
+      return;
+    }
 
     await ref.read(landMapProvider.notifier).refreshLocation();
     if (!mounted) return;
