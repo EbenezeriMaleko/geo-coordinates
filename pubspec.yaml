@@ -125,5 +125,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
+  remove_alpha_ios: true
   image_path: "lib/assets/databenki_latest_logo.png"
   min_sdk_android: 21
