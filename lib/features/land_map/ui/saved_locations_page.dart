@@ -1880,7 +1880,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final computed = UtmConverter.fromLatLng(lat, lng, ellipsoid);
       final easting = _toDouble(point['easting']) ?? computed?.easting;
       final northing = _toDouble(point['northing']) ?? computed?.northing;
-      final zone = point['zone']?.toString().trim();
+      final band = point['band']?.toString().trim() ?? '';
+      final rawZone = point['zone']?.toString().trim() ?? '';
+      final zone = rawZone.isNotEmpty ? (band.isNotEmpty ? '$rawZone$band': rawZone) : null;
       buffer.writeln(
         _formatPointShareBlock(
           title: 'Point ${i + 1}',
@@ -1937,7 +1939,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           longitude: lng,
           easting: easting,
           northing: northing,
-          zone: point.zone,
+          zone: (point.zone != null && (point.raw['band']?.toString().trim() ?? '').isNotEmpty)
+              ? '${point.zone}${point.raw['band'].toString().trim()}'
+              : point.zone,
           ellipsoid: ellipsoid,
         ),
       );

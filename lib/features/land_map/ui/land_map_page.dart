@@ -2412,9 +2412,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             ),
           ),
 
-        // Map Controls (Left side)
+        // Map Controls (right side)
         Positioned(
-  left: 16,
+  right: 16,
   top: _isFullscreen
       ? 90
       : (isCompactHeight ? 130 : 160) + MediaQuery.of(context).padding.top,

@@ -752,6 +752,17 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
   Future<void> _saveMediaToGallery(_GeoTaggedPhoto capture) async {
     try {
+      final file = File(capture.imagePath);
+      if(!await file.exists()){
+        _debugLog('Gallery save skipped — file not found: ${capture.imagePath}');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save to gallery — file not found.'),
+          ),
+        );
+        return;
+      }
       final saved = capture.mediaType == 'video'
           ? await GallerySaver.saveVideo(
               capture.imagePath,

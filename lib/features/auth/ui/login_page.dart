@@ -120,7 +120,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
       ),
       SizedBox(height: isCompact ? 12 : 20),
       Text(
-        'TaREF GPS Coordinates',
+        'TaREF GPS-Coordinates',
         textAlign: TextAlign.center,
         style: GoogleFonts.inter(
           fontSize: isCompact ? 22 : 30,
@@ -220,7 +220,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
           ),
           SizedBox(height: isCompact ? 22 : 32),
           SizedBox(
-            height: isCompact ? 48 : 54,
+            height: isCompact ? 50 : 54,
             child: ElevatedButton(
               onPressed: isLoading ? null : _submit,
               style: ElevatedButton.styleFrom(
