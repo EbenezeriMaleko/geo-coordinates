@@ -28,6 +28,7 @@ import '../services/map_tile_cache.dart';
 enum MapType { normal, satellite, terrain, hybrid }
 
 enum _MapTool { none, marker, distance }
+
 enum _MapLocationBlockReason { serviceOff, permissionDenied, permissionForever }
 
 class _MapLocationRequiredDialog extends StatefulWidget {
@@ -74,7 +75,8 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    final isForever = widget.reason == _MapLocationBlockReason.permissionForever;
+    final isForever =
+        widget.reason == _MapLocationBlockReason.permissionForever;
     final isService = widget.reason == _MapLocationBlockReason.serviceOff;
 
     final headline = isService
@@ -98,7 +100,9 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
       child: ScaleTransition(
         scale: _scale,
         child: Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           elevation: 0,
           backgroundColor: Colors.transparent,
           child: Container(
@@ -154,8 +158,9 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed:
-                        isService || isForever ? widget.onOpenSettings : widget.onRetry,
+                    onPressed: isService || isForever
+                        ? widget.onOpenSettings
+                        : widget.onRetry,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primary,
                       foregroundColor: Colors.white,
@@ -427,6 +432,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     Future.microtask(() async {
       await _loadSavedMarkers();
       await _initLocationAndCenter();
+      // After the first fix is resolved (permission granted, position known
+      // or timed out), start a lightweight continuous stream to keep the
+      // current position and accuracy updating without a foreground service.
+      _startContinuousPositionStream();
     });
   }
 
@@ -540,13 +549,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   void _toggleBottomActionBar() {
-  setState(() {
-    _showBottomActionBar = !_showBottomActionBar;
-    if (!_showBottomActionBar) {
-      _bottomBarExpanded = false;
-    }
-  });
-}
+    setState(() {
+      _showBottomActionBar = !_showBottomActionBar;
+      if (!_showBottomActionBar) {
+        _bottomBarExpanded = false;
+      }
+    });
+  }
 
   Future<void> _initLocationAndCenter() async {
     if (!mounted) return;
@@ -606,7 +615,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _locationError = null;
     });
 
-    final accessErr = await ref.read(landMapProvider.notifier).ensureLocationAccess();
+    final accessErr = await ref
+        .read(landMapProvider.notifier)
+        .ensureLocationAccess();
     if (!mounted) return;
     if (accessErr != null) {
       setState(() {
@@ -1363,18 +1374,63 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _fieldTrackingSubscription = null;
   }
 
+  /// Starts a lightweight, foreground-only position stream that continuously
+  /// updates the current device location and accuracy. No foreground service
+  /// (ForegroundNotificationConfig) is used — the app is always visible when
+  /// this stream is active, so Android will not kill the location request.
+  ///
+  /// This stream is paused while navigation tracking is active (navigation has
+  /// its own stream) and resumes automatically when navigation ends.
+  void _startContinuousPositionStream() {
+    // Do not double-start.
+    if (_fieldTrackingSubscription != null) return;
+
+    _fieldTrackingSubscription = Geolocator.getPositionStream(
+      locationSettings: AndroidSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 2, // emit only when moved >= 2 m to save battery
+        intervalDuration: const Duration(seconds: 3),
+      ),
+    ).listen(
+      (position) {
+        if (!mounted) return;
+        ref
+            .read(landMapProvider.notifier)
+            .updateCurrentFromPosition(position);
+        // Clear a stale error banner once GPS is working again.
+        if (_locationError != null) {
+          setState(() => _locationError = null);
+        }
+      },
+      onError: (_) {
+        // Silent — the one-shot fallback in _initLocationAndCenter already
+        // displayed an error if permissions were missing.
+      },
+      cancelOnError: false, // keep the subscription alive despite transient errors
+    );
+  }
+
   Future<void> _startNavigationTracking() async {
     if (_navigationTrackingSubscription != null) return;
+
+    // Pause the continuous background stream while navigation has its own
+    // high-frequency stream — avoids two competing streams on the same channel.
+    await _fieldTrackingSubscription?.cancel();
+    _fieldTrackingSubscription = null;
 
     // Disable orientation compass during navigation (navigation has its own rotation)
     if (_orientationLocked) {
       _orientationCompassSubscription?.cancel();
     }
 
-    final err = await ref.read(landMapProvider.notifier).initLocation();
+    // Only verify permissions — don't re-run the full initLocation() which
+    // would redundantly fetch position and potentially re-show the spinner.
+    final err = await ref.read(landMapProvider.notifier).ensureLocationAccess();
     if (!mounted) return;
     if (err != null) {
       setState(() => _locationError = err);
+      // Resume the continuous stream even when navigation fails.
+      _startContinuousPositionStream();
       return;
     }
 
@@ -1392,35 +1448,32 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _updateNavigationCamera();
     });
 
-    _navigationTrackingSubscription =
-        Geolocator.getPositionStream(
-          locationSettings: AndroidSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 1,
-            intervalDuration: const Duration(seconds: 2),
-            foregroundNotificationConfig: const ForegroundNotificationConfig(
-              notificationTitle: 'TaREF GPS - Coordinates',
-              notificationText: 'Location tracking is active',
-              enableWakeLock: true,
-              notificationIcon: AndroidResource(
-                name: 'ic_launcher',
-                defType: 'mipmap',
-              ),
-            ),
-          ),
-        ).listen(
-          (position) {
-            ref
-                .read(landMapProvider.notifier)
-                .updateCurrentFromPosition(position);
-            if (!mounted || _locationError == null) return;
-            setState(() => _locationError = null);
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(() => _locationError = 'Live navigation updates failed.');
-          },
-        );
+    // Use a plain foreground stream — no ForegroundNotificationConfig.
+    // The app is always visible during navigation so Android will not kill
+    // the GPS request. ForegroundNotificationConfig requires Android to bind
+    // a foreground service which can hang if the notification channel is not
+    // pre-registered, reproducing the same frozen-stream bug we fixed in
+    // initLocation().
+    _navigationTrackingSubscription = Geolocator.getPositionStream(
+      locationSettings: AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 1,
+        intervalDuration: const Duration(seconds: 2),
+      ),
+    ).listen(
+      (position) {
+        ref
+            .read(landMapProvider.notifier)
+            .updateCurrentFromPosition(position);
+        if (!mounted || _locationError == null) return;
+        setState(() => _locationError = null);
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _locationError = 'Live navigation updates failed.');
+      },
+      cancelOnError: false,
+    );
   }
 
   Future<void> _stopNavigationTracking() async {
@@ -1442,6 +1495,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _startOrientationCompass();
       }
     }
+    // Resume the continuous position stream that was paused when navigation started.
+    _startContinuousPositionStream();
   }
 
   void _updateNavigationCamera() {
@@ -1749,9 +1804,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             referenceEllipsoid,
           );
     final screenSize = MediaQuery.sizeOf(context);
-    final isCompactHeight = screenSize.height <  700;
+    final isCompactHeight = screenSize.height < 700;
     final fabBottomOffset =
-        widget.bottomInset + (_showBottomActionBar ? (isCompactHeight ? 200 : 240) : 16);
+        widget.bottomInset +
+        (_showBottomActionBar ? (isCompactHeight ? 200 : 240) : 16);
     final bottomBarInset = max(0.0, widget.bottomInset - 13);
 
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
@@ -2026,9 +2082,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
             MarkerLayer(markers: markers),
 
-            // Compass — right side, aligned with first tool button
+            // Compass — left side, aligned with first tool button
             Positioned(
-              right: 16,
+              left: 16,
               top: _isFullscreen
                   ? 90
                   : 160 + MediaQuery.of(context).padding.top,
@@ -2404,97 +2460,107 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 setState(() => _bottomBarExpanded = expanded);
               },
               onClose: () {
-    setState(() {
-      _showBottomActionBar = false;
-      _bottomBarExpanded = false;
-    });
-  },
+                setState(() {
+                  _showBottomActionBar = false;
+                  _bottomBarExpanded = false;
+                });
+              },
             ),
           ),
 
         // Map Controls (right side)
         Positioned(
-  right: 16,
-  top: _isFullscreen
-      ? 90
-      : (isCompactHeight ? 130 : 160) + MediaQuery.of(context).padding.top,
-  child: AnimatedOpacity(
-    duration: const Duration(milliseconds: 200),
-    opacity: (isCompactHeight && _bottomBarExpanded) ? 0.0 : 1.0,
-    child: IgnorePointer(
-      ignoring: isCompactHeight && _bottomBarExpanded,
-      child: Column(
-        children: [
-          _MapControlButton(
-            icon: _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-            isActive: _isFullscreen,
-            onPressed: _toggleFullscreen,
-          ),
-          const SizedBox(height: 8),
-          _MapControlButton(
-            icon: Icons.my_location_rounded,
-            isLoading: _isLocating,
-            enabled: !_isLocating,
-            isActive: _followCurrentLocation,
-            onPressed: _recenterToCurrentLocation,
-          ),
-          const SizedBox(height: 8),
-          _MapControlButton(
-            icon: _orientationLocked
-                ? Icons.explore_rounded
-                : Icons.explore_off_rounded,
-            isActive: _orientationLocked,
-            onPressed: _toggleOrientation,
-          ),
-          const SizedBox(height: 8),
-          _MapControlButton(
-            icon: Icons.layers,
-            onPressed: () => _showMapTypeSelector(),
-          ),
-        ],
-      ),
-    ),
-  ),
-),
-
-        if (!_showBottomActionBar)
-  Positioned(
-    right: 16,
-    bottom: widget.bottomInset + 16,
-    child: GestureDetector(
-      onTap: () => setState(() => _showBottomActionBar = true),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.tune_rounded, size: 16, color: Colors.grey.shade700),
-            const SizedBox(width: 6),
-            Text(
-              'Tools',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade700,
+          right: 16,
+          top: _isFullscreen
+              ? 90
+              : (isCompactHeight ? 130 : 160) +
+                    MediaQuery.of(context).padding.top,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: (isCompactHeight && _bottomBarExpanded) ? 0.0 : 1.0,
+            child: IgnorePointer(
+              ignoring: isCompactHeight && _bottomBarExpanded,
+              child: Column(
+                children: [
+                  _MapControlButton(
+                    icon: _isFullscreen
+                        ? Icons.fullscreen_exit
+                        : Icons.fullscreen,
+                    isActive: _isFullscreen,
+                    onPressed: _toggleFullscreen,
+                  ),
+                  const SizedBox(height: 8),
+                  _MapControlButton(
+                    icon: Icons.my_location_rounded,
+                    isLoading: _isLocating,
+                    enabled: !_isLocating,
+                    isActive: _followCurrentLocation,
+                    onPressed: _recenterToCurrentLocation,
+                  ),
+                  const SizedBox(height: 8),
+                  _MapControlButton(
+                    icon: _orientationLocked
+                        ? Icons.explore_rounded
+                        : Icons.explore_off_rounded,
+                    isActive: _orientationLocked,
+                    onPressed: _toggleOrientation,
+                  ),
+                  const SizedBox(height: 8),
+                  _MapControlButton(
+                    icon: Icons.layers,
+                    onPressed: () => _showMapTypeSelector(),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
-    ),
-  ),
+
+        if (!_showBottomActionBar)
+          Positioned(
+            right: 16,
+            bottom: widget.bottomInset + 16,
+            child: GestureDetector(
+              onTap: () => setState(() => _showBottomActionBar = true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 16,
+                      color: Colors.grey.shade700,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Tools',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -4427,51 +4493,51 @@ class _BottomActionBarState extends State<_BottomActionBar>
             children: [
               // Drag handle — tap to expand/collapse
               Padding(
-  padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
-  child: Stack(
-    alignment: Alignment.center,
-    children: [
-      GestureDetector(
-        onTap: _toggle,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: double.infinity,
-          height: 20,
-          child: Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(999),
+                padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: _toggle,
+                      behavior: HitTestBehavior.opaque,
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 20,
+                        child: Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      top: -4,
+                      child: GestureDetector(
+                        onTap: widget.onClose,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        right: 8,
-        top: -4,
-        child: GestureDetector(
-          onTap: widget.onClose,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.close_rounded,
-              size: 14,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ),
-      ),
-    ],
-  ),
-),
 
               // Mode tabs
               Padding(
@@ -4548,12 +4614,13 @@ class _BottomActionBarState extends State<_BottomActionBar>
                 },
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.45
+                    maxHeight: MediaQuery.of(context).size.height * 0.45,
                   ),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                    child: _buildExpandedContent(theme)
-                  )),
+                    child: _buildExpandedContent(theme),
+                  ),
+                ),
               ),
             ],
           ),
