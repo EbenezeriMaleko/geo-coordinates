@@ -1387,7 +1387,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     _fieldTrackingSubscription = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
-        accuracy: LocationAccuracy.best,
+        accuracy: LocationAccuracy.bestForNavigation,
         distanceFilter: 2, // emit only when moved >= 2 m to save battery
         intervalDuration: const Duration(seconds: 3),
       ),
@@ -1413,8 +1413,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   Future<void> _startNavigationTracking() async {
     if (_navigationTrackingSubscription != null) return;
 
-    // Pause the continuous background stream while navigation has its own
-    // high-frequency stream — avoids two competing streams on the same channel.
+    // Cancel the continuous stream FIRST — synchronously, before any await —
+    // so that no position emission from _fieldTrackingSubscription can race
+    // with _updateNavigationCamera while _navigationCameraActive is still false.
     await _fieldTrackingSubscription?.cancel();
     _fieldTrackingSubscription = null;
 
@@ -1422,6 +1423,24 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (_orientationLocked) {
       _orientationCompassSubscription?.cancel();
     }
+
+    // Seed _navigationHeading with the current compass reading BEFORE activating
+    // the camera, so the first moveAndRotate uses the real heading (not 0°).
+    // Ignore timeout \u2014 it just means the compass isn't ready yet, which is fine.
+    try {
+      final seedEvent = await FlutterCompass.events!.first.timeout(
+        const Duration(milliseconds: 400),
+      );
+      if (mounted && seedEvent.heading != null) {
+        _navigationHeading = seedEvent.heading!;
+      }
+    } on TimeoutException {
+      // Compass didn't respond in time \u2014 use the current _navigationHeading (0\u00b0)
+      // and let the first real compass event correct it once the stream starts.
+    } catch (_) {
+      // Compass not available on this device; skip seed.
+    }
+    if (!mounted) return;
 
     // Only verify permissions — don't re-run the full initLocation() which
     // would redundantly fetch position and potentially re-show the spinner.
@@ -1501,36 +1520,26 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   void _updateNavigationCamera() {
     if (!_navigationCameraActive || _userIsInteracting) return;
-    final current = ref.read(landMapProvider).current;
-    if (current == null) return;
 
-    // Debounce: only apply once every 500ms, but don't cancel pending moves
-    final now = DateTime.now();
-    if (_lastNavigationCameraMove != null &&
-        now.difference(_lastNavigationCameraMove!) <
-            const Duration(milliseconds: 500)) {
-      // Schedule a delayed update if one isn't already pending
-      _navigationCameraTimer?.cancel();
-      _navigationCameraTimer = Timer(const Duration(milliseconds: 500), () {
-        if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
-        final pos = ref.read(landMapProvider).current;
-        if (pos == null) return;
-        _lastNavigationCameraMove = DateTime.now();
-        _mapController.moveAndRotate(
-          pos,
-          _clampZoom(max(_currentZoom, 17)),
-          -_navigationHeading,
-        );
-      });
-      return;
-    }
-
-    _lastNavigationCameraMove = now;
-    _mapController.moveAndRotate(
-      current,
-      _clampZoom(max(_currentZoom, 17)),
-      -_navigationHeading,
-    );
+    // Coalesce all rapid GPS + compass updates into a single camera move
+    // fired at the END of each burst. This prevents stale-value jumps caused
+    // by GPS and compass events arriving separately and each calling
+    // moveAndRotate with a mix of old position + new heading (or vice versa).
+    //
+    // By always reading both position AND heading inside the timer callback
+    // (not at schedule time) the values are guaranteed to be in sync.
+    _navigationCameraTimer?.cancel();
+    _navigationCameraTimer = Timer(const Duration(milliseconds: 150), () {
+      if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
+      final pos = ref.read(landMapProvider).current;
+      if (pos == null) return;
+      _lastNavigationCameraMove = DateTime.now();
+      _mapController.moveAndRotate(
+        pos,
+        _clampZoom(max(_currentZoom, 17)),
+        -_navigationHeading, // always latest heading at fire time
+      );
+    });
   }
 
   Future<void> _fetchRoute(LatLng destination) async {

@@ -109,7 +109,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: AndroidSettings(
-          accuracy: LocationAccuracy.best,
+          accuracy: LocationAccuracy.bestForNavigation,
           timeLimit: const Duration(seconds: 30),
         ),
       );
