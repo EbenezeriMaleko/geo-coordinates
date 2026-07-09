@@ -600,8 +600,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final current = ref.read(landMapProvider).current;
 
     if (current != null) {
-      // Already have a position — center immediately, no spinner needed.
-      // Silently refresh in background so accuracy improves without blocking UI.
       _followCurrentLocation = true;
       _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
       unawaited(ref.read(landMapProvider.notifier).refreshLocation());
