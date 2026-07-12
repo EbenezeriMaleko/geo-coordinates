@@ -551,9 +551,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   void _toggleBottomActionBar() {
     setState(() {
       _showBottomActionBar = !_showBottomActionBar;
-      if (!_showBottomActionBar) {
-        _bottomBarExpanded = false;
-      }
     });
   }
 
@@ -2472,7 +2469,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   onClose: () {
                     setState(() {
                       _showBottomActionBar = false;
-                      _bottomBarExpanded = false;
                     });
                   },
                 ),
@@ -2490,9 +2486,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     MediaQuery.of(context).padding.top,
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 200),
-            opacity: _bottomBarExpanded ? 0.0 : 1.0,
+            opacity: _showBottomActionBar && _bottomBarExpanded ? 0.0 : 1.0,
             child: IgnorePointer(
-              ignoring: _bottomBarExpanded,
+              ignoring: _showBottomActionBar && _bottomBarExpanded,
               child: Column(
                 children: [
                   _MapControlButton(
