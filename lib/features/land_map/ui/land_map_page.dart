@@ -4502,7 +4502,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             children: [
               // Drag handle — tap to expand/collapse
               Padding(
-                padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
+                padding: const EdgeInsets.fromLTRB(0, 8, 0, 6),
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
@@ -4511,7 +4511,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                       behavior: HitTestBehavior.opaque,
                       child: SizedBox(
                         width: double.infinity,
-                        height: 20,
+                        height: 32,
                         child: Center(
                           child: Container(
                             width: 36,
@@ -4525,21 +4525,28 @@ class _BottomActionBarState extends State<_BottomActionBar>
                       ),
                     ),
                     Positioned(
-                      right: 8,
-                      top: -4,
+                      right: 10,
+                      top: 0,
                       child: GestureDetector(
                         onTap: widget.onClose,
                         behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: Colors.grey.shade600,
+                        child: SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: Center(
+                            child: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -4704,7 +4711,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             child: ElevatedButton(
               onPressed: widget.onSaveDistance,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade700,
+                backgroundColor: const Color(0xFF001F3F),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
