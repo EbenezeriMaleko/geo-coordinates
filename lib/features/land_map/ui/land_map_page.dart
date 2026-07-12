@@ -1812,11 +1812,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           );
     final screenSize = MediaQuery.sizeOf(context);
     final isCompactHeight = screenSize.height < 700;
-    final fabBottomOffset =
-        widget.bottomInset +
-        (_showBottomActionBar ? (isCompactHeight ? 200 : 240) : 16);
-    final bottomBarInset = max(0.0, widget.bottomInset - 13);
-
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
     final navigationTarget = st.navigationTarget;
     final navigationTargetPoints = navigationTarget == null
@@ -2409,71 +2404,82 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             ),
           ),
 
-        if (_showBottomActionBar)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: bottomBarInset,
-            child: _BottomActionBar(
-              activeTool: _activeTool,
-              distancePoints: _distancePoints,
-              totalDistanceMeters: _totalDistanceMeters(),
-              fieldPoints: st.points,
-              perimeterMeters: _calculatePerimeterMeters(st.points),
-              areaSqm: _calculateAreaSqm(st.points),
-              isLocating: _isLocating,
-              isMarkerSaving: _isMarkerSaving,
-              navigationTarget: navigationTarget,
-              navigationDistanceText: _isFetchingRoute
-                  ? 'Calculating...'
-                  : _routePoints.length >= 2
-                  ? _formatDistance(
-                      _remainingRouteDistanceMeters(),
-                      distanceUnit,
-                    )
-                  : st.current != null && navigationGuidancePoint != null
-                  ? _formatDistance(
-                      _distanceCalculator.as(
-                        LengthUnit.Meter,
-                        st.current!,
-                        navigationGuidancePoint,
-                      ),
-                      distanceUnit,
-                    )
-                  : null,
-              navigationDurationText: _currentRoute?.formattedDuration,
-              distanceUnit: distanceUnit,
-              onClearNavigation: _clearNavigationTarget,
-              onToolChanged: (tool) => setState(() => _activeTool = tool),
-              onAddGpsPoint: _addCurrentPointToDistance,
-              onUndoDistance: _undoDistancePoint,
-              onClearDistance: _clearDistancePoints,
-              onSaveDistance: _showDistanceDialog,
-              onAddFieldPoint: () async {
-                if (!_showFieldLayer) {
-                  _snack('Turn on the Field layer to add area points.');
-                  return;
-                }
-                final err = await ref
-                    .read(landMapProvider.notifier)
-                    .addPointFromCurrent();
-                if (err != null && mounted) _snack(err);
-              },
-              onUndoField: ref.read(landMapProvider.notifier).undoLastPoint,
-              onClearField: ref.read(landMapProvider.notifier).clearPoints,
-              onSaveField: _showFieldDialog,
-              onAddMarkerAtGps: _addMarkerAtCurrentLocation,
-              onExpandedChanged: (expanded) {
-                setState(() => _bottomBarExpanded = expanded);
-              },
-              onClose: () {
-                setState(() {
-                  _showBottomActionBar = false;
-                  _bottomBarExpanded = false;
-                });
-              },
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            offset: _showBottomActionBar ? Offset.zero : const Offset(0, 1),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _showBottomActionBar ? 1 : 0,
+              child: IgnorePointer(
+                ignoring: !_showBottomActionBar,
+                child: _BottomActionBar(
+                  activeTool: _activeTool,
+                  distancePoints: _distancePoints,
+                  totalDistanceMeters: _totalDistanceMeters(),
+                  fieldPoints: st.points,
+                  perimeterMeters: _calculatePerimeterMeters(st.points),
+                  areaSqm: _calculateAreaSqm(st.points),
+                  isLocating: _isLocating,
+                  isMarkerSaving: _isMarkerSaving,
+                  navigationTarget: navigationTarget,
+                  navigationDistanceText: _isFetchingRoute
+                      ? 'Calculating...'
+                      : _routePoints.length >= 2
+                      ? _formatDistance(
+                          _remainingRouteDistanceMeters(),
+                          distanceUnit,
+                        )
+                      : st.current != null && navigationGuidancePoint != null
+                      ? _formatDistance(
+                          _distanceCalculator.as(
+                            LengthUnit.Meter,
+                            st.current!,
+                            navigationGuidancePoint,
+                          ),
+                          distanceUnit,
+                        )
+                      : null,
+                  navigationDurationText: _currentRoute?.formattedDuration,
+                  distanceUnit: distanceUnit,
+                  onClearNavigation: _clearNavigationTarget,
+                  onToolChanged: (tool) => setState(() => _activeTool = tool),
+                  onAddGpsPoint: _addCurrentPointToDistance,
+                  onUndoDistance: _undoDistancePoint,
+                  onClearDistance: _clearDistancePoints,
+                  onSaveDistance: _showDistanceDialog,
+                  onAddFieldPoint: () async {
+                    if (!_showFieldLayer) {
+                      _snack('Turn on the Field layer to add area points.');
+                      return;
+                    }
+                    final err = await ref
+                        .read(landMapProvider.notifier)
+                        .addPointFromCurrent();
+                    if (err != null && mounted) _snack(err);
+                  },
+                  onUndoField: ref.read(landMapProvider.notifier).undoLastPoint,
+                  onClearField: ref.read(landMapProvider.notifier).clearPoints,
+                  onSaveField: _showFieldDialog,
+                  onAddMarkerAtGps: _addMarkerAtCurrentLocation,
+                  onExpandedChanged: (expanded) {
+                    setState(() => _bottomBarExpanded = expanded);
+                  },
+                  onClose: () {
+                    setState(() {
+                      _showBottomActionBar = false;
+                      _bottomBarExpanded = false;
+                    });
+                  },
+                ),
+              ),
             ),
           ),
+        ),
 
         // Map Controls (right side)
         Positioned(
@@ -2484,9 +2490,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     MediaQuery.of(context).padding.top,
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 200),
-            opacity: (isCompactHeight && _bottomBarExpanded) ? 0.0 : 1.0,
+            opacity: _bottomBarExpanded ? 0.0 : 1.0,
             child: IgnorePointer(
-              ignoring: isCompactHeight && _bottomBarExpanded,
+              ignoring: _bottomBarExpanded,
               child: Column(
                 children: [
                   _MapControlButton(
@@ -2528,7 +2534,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             right: 16,
             bottom: widget.bottomInset + 16,
             child: GestureDetector(
-              onTap: () => setState(() => _showBottomActionBar = true),
+              onTap: _toggleBottomActionBar,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
