@@ -2791,9 +2791,10 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
 
   Future<void> _shareMedia(_GeoTaggedPhoto capture) async {
     final file = XFile(capture.imagePath);
+    final shareText = capture.name.trim();
 
     await SharePlus.instance.share(
-      ShareParams(files: [file], text: capture.name),
+      ShareParams(files: [file], text: shareText.isEmpty ? null : shareText),
     );
   }
 
