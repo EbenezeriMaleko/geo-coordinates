@@ -1325,17 +1325,19 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   onTap: () {
                     Navigator.pop(sheetContext);
                     if (isRemote) {
-                      // Try local Hive copy first (has coordinates).
-                      // Most synced records have one. Cloud-only records fall
-                      // back to the detail sheet where navigation also works.
+                      // Prefer the local Hive copy (already has coordinates).
+                      // For cloud-only records, fetch full detail from the API.
                       final cloudId = item['id']?.toString() ?? '';
                       final local = _localItemForCloudId(cloudId);
                       if (local != null) {
                         _goToSavedItem(context, local);
                       } else {
-                        final remoteLand = _remoteLandFromItem(item);
-                        if (remoteLand != null)
-                          _showRemoteLandDetails(remoteLand);
+                        _fetchDetailAndAction(
+                          context,
+                          cloudId: cloudId,
+                          item: item,
+                          action: _ActionKind_goTo,
+                        );
                       }
                     } else {
                       _goToSavedItem(context, item);
@@ -1353,9 +1355,12 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       if (local != null) {
                         _viewOnMap(context, local);
                       } else {
-                        final remoteLand = _remoteLandFromItem(item);
-                        if (remoteLand != null)
-                          _showRemoteLandDetails(remoteLand);
+                        _fetchDetailAndAction(
+                          context,
+                          cloudId: cloudId,
+                          item: item,
+                          action: _ActionKind_viewOnMap,
+                        );
                       }
                     } else {
                       _viewOnMap(context, item);
@@ -1471,6 +1476,122 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .loadSavedFieldPoints(points, fieldId: id, fieldName: name);
     widget.onOpenMapRequested?.call();
   }
+
+  // ── Cloud-only action fetch ──────────────────────────────────────────────
+
+  /// Which action to execute once cloud coordinates are fetched.
+  // ignore: constant_identifier_names
+  static const _ActionKind_goTo = 0;
+  // ignore: constant_identifier_names
+  static const _ActionKind_viewOnMap = 1;
+
+  /// Fetches the full [LandDetail] from the cloud API for a record that has
+  /// no local Hive copy, then executes the intended [action] (go-to or
+  /// view-on-map) using the fetched coordinates.
+  ///
+  /// Shows a loading indicator while fetching and a clear error snackbar if
+  /// the fetch fails — instead of silently opening a detail sheet.
+  Future<void> _fetchDetailAndAction(
+    BuildContext context, {
+    required String cloudId,
+    required Map<String, dynamic> item,
+    required int action,
+  }) async {
+    // Capture context-dependent objects before any async gap.
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (cloudId.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No cloud ID found for this record.')),
+      );
+      return;
+    }
+
+    final session = ref.read(authSessionProvider);
+    if (!session.isLoggedIn || !session.isVerified) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Sign in required to load cloud coordinates.'),
+        ),
+      );
+      return;
+    }
+
+    // Show a brief loading indicator so the user knows something is happening.
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(width: 12),
+            Text('Loading coordinates…'),
+          ],
+        ),
+        duration: Duration(seconds: 10),
+      ),
+    );
+
+    try {
+      final detail = await ref
+          .read(landCloudServiceProvider)
+          .getLand(session.token, cloudId);
+
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+
+      if (detail.points.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('This record has no coordinates available.'),
+          ),
+        );
+        return;
+      }
+
+      // Convert LandPoint list → the {lat, lng} map format that
+      // _goToSavedItem / _viewOnMap read via _extractLatLngPoints.
+      final pointsList = detail.points
+          .map(
+            (p) => <String, dynamic>{
+              'lat': p.x, // LandPoint.x = latitude
+              'lng': p.y, // LandPoint.y = longitude
+              if (p.label != null) 'label': p.label,
+            },
+          )
+          .toList();
+
+      final enriched = <String, dynamic>{
+        ...item,
+        'points': pointsList,
+      };
+
+      if (action == _ActionKind_goTo) {
+        _goToSavedItem(context, enriched);
+      } else {
+        _viewOnMap(context, enriched);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Failed to load coordinates. Check your connection and try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ignore: non_constant_identifier_names
+  // (intentionally removed — using plain int constants above)
 
   /// Finds the local Hive copy for a cloud record using its cloud ID.
   /// Synced records keep a local copy with `cloudId` pointing back to the cloud.

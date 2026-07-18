@@ -318,6 +318,14 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
   Future<void> _initializeTracking() async {
     if (!mounted || !widget.isTabActive) return;
+
+    // Skip redundant re-initialization: if the stream is already healthy there
+    // is nothing to do. This prevents the location from being restarted every
+    // time the user switches back to this tab.
+    if (_isStreaming && _locationSubscription != null && _blockReason == null && !_isInitializing) {
+      return;
+    }
+
     setState(() {
       _isInitializing = true;
       _isStreaming = false;
@@ -499,20 +507,18 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           } else {
             await Geolocator.openAppSettings();
           }
-          // After returning from settings, retry init
+          // After returning from settings, retry init.
+          // didChangeAppLifecycleState will also fire on resume — both paths
+          // are guarded by _isInitializing / _isStreaming so only one runs.
           if (mounted) Future.microtask(_initializeTracking);
         },
       ),
     ).then((_) {
       _blockDialogVisible = false;
-      // If user dismissed without fixing → re-show after short delay
-      if (mounted && _blockReason != null) {
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted && _blockReason != null) {
-            _showBlockDialog();
-          }
-        });
-      }
+      // NOTE: Do NOT auto-re-show here. The service-status listener and
+      // didChangeAppLifecycleState already re-trigger _initializeTracking
+      // when the user returns from settings. An auto-re-show loop causes
+      // phantom dialogs to appear even after the user has granted permission.
     });
   }
 

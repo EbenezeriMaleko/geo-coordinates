@@ -251,6 +251,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   String? _locationError;
   List<_PlacedMarker> _savedMarkers = const [];
   StreamSubscription<Position>? _fieldTrackingSubscription;
+  StreamSubscription<ServiceStatus>? _serviceStatusSubscription;
   StreamSubscription<Position>? _navigationTrackingSubscription;
   bool _showFieldLayer = true;
   bool _showDistanceLayer = true;
@@ -275,6 +276,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   double _orientationHeading = 0.0;
   double _lastAppliedOrientation = 0.0;
   bool _locationDialogVisible = false;
+  bool _isSyncingLocation = false;
+
+  /// Remembers whether the compass orientation lock was active before
+  /// navigation started, so it can be restored when navigation ends.
+  bool _wasOrientationLockedBeforeNav = false;
 
   double _bearingDegrees(LatLng from, LatLng to) {
     final fromLat = from.latitude * pi / 180.0;
@@ -430,12 +436,15 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     });
 
     Future.microtask(() async {
+      await _startServiceStatusListener();
       await _loadSavedMarkers();
       await _initLocationAndCenter();
       // After the first fix is resolved (permission granted, position known
       // or timed out), start a lightweight continuous stream to keep the
       // current position and accuracy updating without a foreground service.
-      _startContinuousPositionStream();
+      if (!_isLocationAccessError(_locationError)) {
+        _startContinuousPositionStream();
+      }
     });
   }
 
@@ -456,6 +465,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _navigationCameraTimer?.cancel();
     _landMapSubscription?.close();
     _fieldTrackingSubscription?.cancel();
+    _serviceStatusSubscription?.cancel();
     _navigationTrackingSubscription?.cancel();
     _navigationCompassSubscription?.cancel();
     _orientationCompassSubscription?.cancel();
@@ -481,22 +491,45 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   Future<void> _syncLocationAvailability() async {
-    if (!mounted || _isLocating) return;
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (!mounted) return;
-    final permission = await Geolocator.checkPermission();
-    if (!mounted) return;
+    // Serialize concurrent calls (e.g. initState + lifecycle resume arriving
+    // together) so only one can reach _initLocationAndCenter at a time.
+    if (!mounted || _isLocating || _isSyncingLocation) return;
+    _isSyncingLocation = true;
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!mounted) return;
+      if (!enabled) {
+        await _handleLocationServiceDisabled();
+        return;
+      }
 
-    final canLocate =
-        enabled &&
-        permission != LocationPermission.denied &&
-        permission != LocationPermission.deniedForever;
+      final permission = await Geolocator.checkPermission();
+      if (!mounted) return;
 
-    if (!canLocate) return;
+      if (permission == LocationPermission.deniedForever) {
+        const err =
+            'Location permission permanently denied. Enable it in settings.';
+        setState(() => _locationError = err);
+        unawaited(_showLocationAccessDialog(err));
+        return;
+      }
 
-    final current = ref.read(landMapProvider).current;
-    if (current == null || _isLocationAccessError(_locationError)) {
-      await _initLocationAndCenter();
+      if (permission == LocationPermission.denied) {
+        const err = 'Location Permission denied';
+        setState(() => _locationError = err);
+        unawaited(_showLocationAccessDialog(err));
+        return;
+      }
+
+      final current = ref.read(landMapProvider).current;
+      if (current == null || _isLocationAccessError(_locationError)) {
+        await _initLocationAndCenter();
+        if (mounted && !_isLocationAccessError(_locationError)) {
+          _startContinuousPositionStream();
+        }
+      }
+    } finally {
+      _isSyncingLocation = false;
     }
   }
 
@@ -505,6 +538,45 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return err.contains('Permission denied') ||
         err.contains('permanently denied') ||
         err.contains('enable location services');
+  }
+
+  Future<void> _startServiceStatusListener() async {
+    await _serviceStatusSubscription?.cancel();
+    _serviceStatusSubscription = Geolocator.getServiceStatusStream().listen(
+      (status) async {
+        if (!mounted) return;
+
+        if (status == ServiceStatus.disabled) {
+          await _handleLocationServiceDisabled();
+          return;
+        }
+
+        if (!_isLocating) {
+          await _syncLocationAvailability();
+        }
+      },
+      onError: (_) {
+        if (!mounted) return;
+        Future.microtask(_syncLocationAvailability);
+      },
+    );
+  }
+
+  Future<void> _handleLocationServiceDisabled() async {
+    await _fieldTrackingSubscription?.cancel();
+    _fieldTrackingSubscription = null;
+    await _navigationTrackingSubscription?.cancel();
+    _navigationTrackingSubscription = null;
+    if (!mounted) return;
+
+    const err = 'Please enable location services.';
+    setState(() {
+      _isLocating = false;
+      _locationError = err;
+      _navigationCameraActive = false;
+      _followCurrentLocation = true;
+    });
+    unawaited(_showLocationAccessDialog(err));
   }
 
   _MapLocationBlockReason _locationBlockReasonFromError(String err) {
@@ -531,20 +603,30 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       builder: (dialogContext) => _MapLocationRequiredDialog(
         reason: reason,
         onRetry: () {
+          _locationDialogVisible = false;
           Navigator.of(dialogContext).pop();
           Future.microtask(_initLocationAndCenter);
         },
         onOpenSettings: () async {
+          _locationDialogVisible = false;
           Navigator.of(dialogContext).pop();
           if (isService) {
             await Geolocator.openLocationSettings();
           } else {
             await Geolocator.openAppSettings();
           }
+          if (mounted) Future.microtask(_syncLocationAvailability);
         },
       ),
     );
 
+    _locationDialogVisible = false;
+  }
+
+  void _dismissLocationAccessDialog() {
+    if (!_locationDialogVisible || !mounted) return;
+    final nav = Navigator.of(context, rootNavigator: true);
+    if (nav.canPop()) nav.pop();
     _locationDialogVisible = false;
   }
 
@@ -587,7 +669,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _locationError = err;
     });
     if (_isLocationAccessError(err)) {
+      await _fieldTrackingSubscription?.cancel();
+      _fieldTrackingSubscription = null;
       unawaited(_showLocationAccessDialog(err!));
+    } else {
+      _dismissLocationAccessDialog();
     }
   }
 
@@ -1380,29 +1466,31 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     // Do not double-start.
     if (_fieldTrackingSubscription != null) return;
 
-    _fieldTrackingSubscription = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 2, // emit only when moved >= 2 m to save battery
-        intervalDuration: const Duration(seconds: 3),
-      ),
-    ).listen(
-      (position) {
-        if (!mounted) return;
-        ref
-            .read(landMapProvider.notifier)
-            .updateCurrentFromPosition(position);
-        // Clear a stale error banner once GPS is working again.
-        if (_locationError != null) {
-          setState(() => _locationError = null);
-        }
-      },
-      onError: (_) {
-        // Silent — the one-shot fallback in _initLocationAndCenter already
-        // displayed an error if permissions were missing.
-      },
-      cancelOnError: false, // keep the subscription alive despite transient errors
-    );
+    _fieldTrackingSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: AndroidSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 2, // emit only when moved >= 2 m to save battery
+            intervalDuration: const Duration(seconds: 3),
+          ),
+        ).listen(
+          (position) {
+            if (!mounted) return;
+            ref
+                .read(landMapProvider.notifier)
+                .updateCurrentFromPosition(position);
+            // Clear a stale error banner once GPS is working again.
+            if (_locationError != null) {
+              setState(() => _locationError = null);
+            }
+          },
+          onError: (_) {
+            // Silent — the one-shot fallback in _initLocationAndCenter already
+            // displayed an error if permissions were missing.
+          },
+          cancelOnError:
+              false, // keep the subscription alive despite transient errors
+        );
   }
 
   Future<void> _startNavigationTracking() async {
@@ -1414,9 +1502,20 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     await _fieldTrackingSubscription?.cancel();
     _fieldTrackingSubscription = null;
 
-    // Disable orientation compass during navigation (navigation has its own rotation)
+    // Suspend orientation compass during navigation — navigation controls map
+    // rotation via its own compass stream.
+    // Record whether the user had orientation lock ON so we can restore it
+    // when navigation ends. Then fully disable orientation mode so the button
+    // UI and the _orientationLocked flag are both in sync (not a zombie state
+    // where the subscription is dead but the flag still reads true).
+    _wasOrientationLockedBeforeNav = _orientationLocked;
     if (_orientationLocked) {
+      // Tear down orientation cleanly without resetting map to north (navigation
+      // will immediately take over rotation anyway).
       _orientationCompassSubscription?.cancel();
+      _orientationCompassSubscription = null;
+      // Update the flag so the UI reflects the suspension.
+      if (mounted) setState(() => _orientationLocked = false);
     }
 
     // Seed _navigationHeading with the current compass reading BEFORE activating
@@ -1468,26 +1567,27 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     // a foreground service which can hang if the notification channel is not
     // pre-registered, reproducing the same frozen-stream bug we fixed in
     // initLocation().
-    _navigationTrackingSubscription = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 1,
-        intervalDuration: const Duration(seconds: 2),
-      ),
-    ).listen(
-      (position) {
-        ref
-            .read(landMapProvider.notifier)
-            .updateCurrentFromPosition(position);
-        if (!mounted || _locationError == null) return;
-        setState(() => _locationError = null);
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(() => _locationError = 'Live navigation updates failed.');
-      },
-      cancelOnError: false,
-    );
+    _navigationTrackingSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: AndroidSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 1,
+            intervalDuration: const Duration(seconds: 2),
+          ),
+        ).listen(
+          (position) {
+            ref
+                .read(landMapProvider.notifier)
+                .updateCurrentFromPosition(position);
+            if (!mounted || _locationError == null) return;
+            setState(() => _locationError = null);
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _locationError = 'Live navigation updates failed.');
+          },
+          cancelOnError: false,
+        );
   }
 
   Future<void> _stopNavigationTracking() async {
@@ -1504,8 +1604,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _navigationHeading = 0.0;
         _followCurrentLocation = true;
       });
-      // Re-enable orientation compass if it was locked
-      if (_orientationLocked) {
+      // Restore the orientation compass lock if the user had it active before
+      // navigation started.
+      if (_wasOrientationLockedBeforeNav) {
+        _wasOrientationLockedBeforeNav = false;
+        setState(() => _orientationLocked = true);
         _startOrientationCompass();
       }
     }
