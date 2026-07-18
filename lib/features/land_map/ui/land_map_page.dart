@@ -521,10 +521,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         return;
       }
 
+      if (!_navigationCameraActive) {
+        _startContinuousPositionStream();
+      }
+
       final current = ref.read(landMapProvider).current;
       if (current == null || _isLocationAccessError(_locationError)) {
         await _initLocationAndCenter();
-        if (mounted && !_isLocationAccessError(_locationError)) {
+        if (mounted &&
+            !_navigationCameraActive &&
+            !_isLocationAccessError(_locationError)) {
           _startContinuousPositionStream();
         }
       }
@@ -674,6 +680,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       unawaited(_showLocationAccessDialog(err!));
     } else {
       _dismissLocationAccessDialog();
+      if (!_navigationCameraActive) {
+        _startContinuousPositionStream();
+      }
     }
   }
 
@@ -685,6 +694,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (current != null) {
       _followCurrentLocation = true;
       _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
+      _startContinuousPositionStream();
       unawaited(ref.read(landMapProvider.notifier).refreshLocation());
       return;
     }
@@ -722,6 +732,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _isLocating = false;
       _locationError = null;
     });
+    _startContinuousPositionStream();
   }
 
   Future<void> _addCurrentPointToDistance() async {
@@ -1465,6 +1476,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   void _startContinuousPositionStream() {
     // Do not double-start.
     if (_fieldTrackingSubscription != null) return;
+    if (_navigationTrackingSubscription != null || _navigationCameraActive) {
+      return;
+    }
 
     _fieldTrackingSubscription =
         Geolocator.getPositionStream(
