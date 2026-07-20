@@ -190,7 +190,6 @@ class LandMapNotifier extends Notifier<LandMapState> {
     if (points.isEmpty) return;
     state = state.copyWith(
       points: [...points],
-      current: points.first,
       activeFieldId: fieldId,
       activeFieldName: fieldName,
     );

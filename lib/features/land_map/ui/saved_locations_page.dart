@@ -1560,17 +1560,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final pointsList = detail.points
           .map(
             (p) => <String, dynamic>{
-              'lat': p.x, // LandPoint.x = latitude
-              'lng': p.y, // LandPoint.y = longitude
+              'lat': p.y,
+              'lng': p.x,
               if (p.label != null) 'label': p.label,
             },
           )
           .toList();
 
-      final enriched = <String, dynamic>{
-        ...item,
-        'points': pointsList,
-      };
+      final enriched = <String, dynamic>{...item, 'points': pointsList};
 
       if (action == _ActionKind_goTo) {
         _goToSavedItem(context, enriched);
@@ -2003,7 +2000,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final northing = _toDouble(point['northing']) ?? computed?.northing;
       final band = point['band']?.toString().trim() ?? '';
       final rawZone = point['zone']?.toString().trim() ?? '';
-      final zone = rawZone.isNotEmpty ? (band.isNotEmpty ? '$rawZone$band': rawZone) : null;
+      final zone = rawZone.isNotEmpty
+          ? (band.isNotEmpty ? '$rawZone$band' : rawZone)
+          : null;
       buffer.writeln(
         _formatPointShareBlock(
           title: 'Point ${i + 1}',
@@ -2060,7 +2059,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           longitude: lng,
           easting: easting,
           northing: northing,
-          zone: (point.zone != null && (point.raw['band']?.toString().trim() ?? '').isNotEmpty)
+          zone:
+              (point.zone != null &&
+                  (point.raw['band']?.toString().trim() ?? '').isNotEmpty)
               ? '${point.zone}${point.raw['band'].toString().trim()}'
               : point.zone,
           ellipsoid: ellipsoid,

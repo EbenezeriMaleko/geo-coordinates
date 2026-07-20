@@ -418,6 +418,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       final pointsChanged = previous == null || previous.points != next.points;
       if (!pointsChanged) return;
 
+      final viewingSavedRecord =
+          next.activeFieldId != null || next.activeFieldName != null;
+      if (viewingSavedRecord) {
+        _followCurrentLocation = false;
+        _focusOnPoints(next.points);
+        return;
+      }
+
       if (_skipNextFieldPointsFocus) {
         _skipNextFieldPointsFocus = false;
         return;
