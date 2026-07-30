@@ -594,7 +594,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return _MapLocationBlockReason.permissionDenied;
   }
 
-  Future<void> _showLocationAccessDialog(String err) async {
+  Future<void> _showLocationAccessDialog(
+    String err, {
+    Future<void> Function()? onAccessRestored,
+  }) async {
     if (!mounted || _locationDialogVisible) return;
     _locationDialogVisible = true;
     final reason = _locationBlockReasonFromError(err);
@@ -619,12 +622,32 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           } else {
             await Geolocator.openAppSettings();
           }
-          if (mounted) Future.microtask(_syncLocationAvailability);
+          if (!mounted) return;
+          final restored = await _waitForLocationAccess();
+          if (!mounted) return;
+          if (restored && onAccessRestored != null) {
+            await onAccessRestored();
+          } else {
+            await _syncLocationAvailability();
+          }
         },
       ),
     );
 
     _locationDialogVisible = false;
+  }
+
+  Future<bool> _waitForLocationAccess() async {
+    for (var attempt = 0; attempt < 8; attempt++) {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (enabled) {
+        final permission = await Geolocator.checkPermission();
+        return permission == LocationPermission.whileInUse ||
+            permission == LocationPermission.always;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+    return false;
   }
 
   void _dismissLocationAccessDialog() {
@@ -714,7 +737,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       });
       if (accessErr.contains('permanently denied') ||
           accessErr.contains('enable location services')) {
-        unawaited(_showLocationAccessDialog(accessErr));
+        unawaited(
+          _showLocationAccessDialog(
+            accessErr,
+            onAccessRestored: _recenterToCurrentLocation,
+          ),
+        );
       } else {
         _snack(
           'Location access is off. You can continue using the map without GPS.',
@@ -757,7 +785,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       });
       if (accessErr.contains('permanently denied') ||
           accessErr.contains('enable location services')) {
-        unawaited(_showLocationAccessDialog(accessErr));
+        unawaited(
+          _showLocationAccessDialog(
+            accessErr,
+            onAccessRestored: _addCurrentPointToDistance,
+          ),
+        );
       } else {
         _snack('Location access is off. Add a point directly on the map.');
       }
