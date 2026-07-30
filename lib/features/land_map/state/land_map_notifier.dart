@@ -62,7 +62,21 @@ class LandMapNotifier extends Notifier<LandMapState> {
     state = state.copyWith(clearNavigationTarget: true);
   }
 
+  /// Checks location availability without displaying the system prompt.
   Future<String?> ensureLocationAccess() async {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) return 'Please enable location services.';
+
+    final perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) return 'Location Permission denied';
+    if (perm == LocationPermission.deniedForever) {
+      return 'Location permission permanently denied. Enable it in settings.';
+    }
+    return null;
+  }
+
+  /// Requests location after an explicit user choice.
+  Future<String?> requestLocationAccess() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) return 'Please enable location services.';
 
@@ -75,7 +89,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
   }
 
   Future<String?> initLocation() async {
-    final err = await ensureLocationAccess();
+    final err = await requestLocationAccess();
     if (err != null) return err;
     return refreshLocation();
   }

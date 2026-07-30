@@ -82,14 +82,14 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
     final headline = isService
         ? 'Location is turned off'
         : isForever
-        ? 'Location access blocked'
-        : 'Location permission needed';
+        ? 'Location access is off'
+        : 'Use your current location?';
 
     final body = isService
-        ? 'TaREF GPS Coordinates needs your device location to show coordinates, track position and tag media. Please turn on location services to continue.'
+        ? 'This GPS feature needs Location Services. You can open Settings or continue using the map without live location.'
         : isForever
-        ? 'Location permission has been permanently denied. Open app settings and allow location access so TaREF GPS can function.'
-        : 'Location permission is required to read your current position. Please grant permission to continue using the map.';
+        ? 'This GPS feature cannot access your current position. You can enable location in Settings or continue using the map without GPS.'
+        : 'Your location is used only for this GPS feature. You can continue using the map without sharing it.';
 
     final primaryLabel = isService || isForever
         ? 'Open Settings'
@@ -179,7 +179,7 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                     ),
                   ),
                 ),
-                if (!isForever) ...[
+                ...[
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
@@ -446,13 +446,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     Future.microtask(() async {
       await _startServiceStatusListener();
       await _loadSavedMarkers();
-      await _initLocationAndCenter();
-      // After the first fix is resolved (permission granted, position known
-      // or timed out), start a lightweight continuous stream to keep the
-      // current position and accuracy updating without a foreground service.
-      if (!_isLocationAccessError(_locationError)) {
-        _startContinuousPositionStream();
-      }
+      await _syncLocationAvailability();
     });
   }
 
@@ -518,14 +512,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         const err =
             'Location permission permanently denied. Enable it in settings.';
         setState(() => _locationError = err);
-        unawaited(_showLocationAccessDialog(err));
         return;
       }
 
       if (permission == LocationPermission.denied) {
         const err = 'Location Permission denied';
         setState(() => _locationError = err);
-        unawaited(_showLocationAccessDialog(err));
         return;
       }
 
@@ -590,7 +582,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _navigationCameraActive = false;
       _followCurrentLocation = true;
     });
-    unawaited(_showLocationAccessDialog(err));
   }
 
   _MapLocationBlockReason _locationBlockReasonFromError(String err) {
@@ -608,11 +599,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _locationDialogVisible = true;
     final reason = _locationBlockReasonFromError(err);
     final isService = reason == _MapLocationBlockReason.serviceOff;
-    final isForever = reason == _MapLocationBlockReason.permissionForever;
 
     await showDialog<void>(
       context: context,
-      barrierDismissible: !isForever,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (dialogContext) => _MapLocationRequiredDialog(
         reason: reason,
@@ -685,7 +675,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (_isLocationAccessError(err)) {
       await _fieldTrackingSubscription?.cancel();
       _fieldTrackingSubscription = null;
-      unawaited(_showLocationAccessDialog(err!));
     } else {
       _dismissLocationAccessDialog();
       if (!_navigationCameraActive) {
@@ -716,14 +705,21 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     final accessErr = await ref
         .read(landMapProvider.notifier)
-        .ensureLocationAccess();
+        .requestLocationAccess();
     if (!mounted) return;
     if (accessErr != null) {
       setState(() {
         _isLocating = false;
         _locationError = accessErr;
       });
-      unawaited(_showLocationAccessDialog(accessErr));
+      if (accessErr.contains('permanently denied') ||
+          accessErr.contains('enable location services')) {
+        unawaited(_showLocationAccessDialog(accessErr));
+      } else {
+        _snack(
+          'Location access is off. You can continue using the map without GPS.',
+        );
+      }
       return;
     }
 
@@ -749,6 +745,24 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _isLocating = true;
       _locationError = null;
     });
+
+    final accessErr = await ref
+        .read(landMapProvider.notifier)
+        .requestLocationAccess();
+    if (!mounted) return;
+    if (accessErr != null) {
+      setState(() {
+        _isLocating = false;
+        _locationError = accessErr;
+      });
+      if (accessErr.contains('permanently denied') ||
+          accessErr.contains('enable location services')) {
+        unawaited(_showLocationAccessDialog(accessErr));
+      } else {
+        _snack('Location access is off. Add a point directly on the map.');
+      }
+      return;
+    }
 
     final err = await ref.read(landMapProvider.notifier).refreshLocation();
     if (!mounted) return;
@@ -1507,8 +1521,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             }
           },
           onError: (_) {
-            // Silent — the one-shot fallback in _initLocationAndCenter already
-            // displayed an error if permissions were missing.
+            if (!mounted) return;
+            Future.microtask(_syncLocationAvailability);
           },
           cancelOnError:
               false, // keep the subscription alive despite transient errors
@@ -1922,6 +1936,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   Widget build(BuildContext context) {
     super.build(context);
     final st = ref.watch(landMapProvider);
+    final hasLiveLocationAccess = !_isLocationAccessError(_locationError);
     final coordinateFormat = ref.watch(coordinateFormatProvider);
     final distanceUnit = ref.watch(distanceUnitProvider);
     final referenceEllipsoid = ref.watch(referenceEllipsoidProvider);
@@ -1976,7 +1991,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           ),
       ...fieldSegmentLabels,
 
-      if (st.current != null)
+      if (st.current != null && hasLiveLocationAccess)
         Marker(
           width: 36,
           height: 36,
@@ -2327,9 +2342,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                           color: const Color(0xFF001F3F).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Icon(
-                          Icons.gps_fixed,
-                          color: Color(0xFF001F3F),
+                        child: Icon(
+                          hasLiveLocationAccess
+                              ? Icons.gps_fixed
+                              : Icons.location_off_outlined,
+                          color: const Color(0xFF001F3F),
                           size: 16,
                         ),
                       ),
@@ -2338,7 +2355,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (st.current != null)
+                            if (st.current != null && hasLiveLocationAccess)
                               Text(
                                 utmText ?? 'UTM unavailable',
                                 style: const TextStyle(
@@ -2347,7 +2364,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   color: Colors.black87,
                                 ),
                               ),
-                            if (st.current != null)
+                            if (st.current != null && hasLiveLocationAccess)
                               Text(
                                 '${referenceEllipsoid.displayName} • Accuracy: ${st.accuracyMeters == null ? '—' : _formatDistance(st.accuracyMeters!, distanceUnit)}',
                                 style: TextStyle(
@@ -2356,12 +2373,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 ),
                               ),
                             Text(
-                              st.current == null
+                              !hasLiveLocationAccess
+                                  ? _locationStatusMessage(_locationError)
+                                  : st.current == null
                                   ? (_isLocating
                                         ? 'Locating...'
-                                        : (_locationError != null
-                                              ? 'Location unavailable'
-                                              : 'Waiting for GPS...'))
+                                        : 'Waiting for GPS...')
                                   : CoordinateFormatter.format(
                                       st.current!.latitude,
                                       st.current!.longitude,
@@ -2697,6 +2714,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           ),
       ],
     );
+  }
+
+  String _locationStatusMessage(String? error) {
+    if (error?.contains('enable location services') == true) {
+      return 'Location Services are off';
+    }
+    if (error?.contains('permanently denied') == true ||
+        error?.contains('Permission denied') == true) {
+      return 'Location access is off';
+    }
+    return 'Location unavailable';
   }
 
   List<Widget> _buildMapTileLayers() {

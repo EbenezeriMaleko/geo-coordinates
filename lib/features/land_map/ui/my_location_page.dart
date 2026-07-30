@@ -91,14 +91,14 @@ class _LocationRequiredDialogState extends State<_LocationRequiredDialog>
     final String headline = isService
         ? 'Location is turned off'
         : isForever
-        ? 'Location access blocked'
-        : 'Location permission needed';
+        ? 'Location access is off'
+        : 'Enable live location?';
 
     final String body = isService
-        ? 'TaREF GPS Coordinates needs your device location to show coordinates, track position and tag media. Please turn on location services to continue.'
+        ? 'Live coordinates need Location Services. You can open Settings or continue using the app without live location.'
         : isForever
-        ? 'Location permission has been permanently denied. Open app settings and allow location access so TaREF GPS can function.'
-        : 'Location permission is required to track your GPS position. Please grant permission to continue using this page.';
+        ? 'Live coordinates cannot access your position. You can enable location in Settings or continue without this feature.'
+        : 'Location provides live coordinates, tracking, navigation, and automatic geotagging. Other app features remain available without it.';
 
     final String primaryLabel = isService || isForever
         ? 'Open Settings'
@@ -190,7 +190,7 @@ class _LocationRequiredDialogState extends State<_LocationRequiredDialog>
                     ),
                   ),
                 ),
-                if (!isForever) ...[
+                ...[
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
@@ -322,7 +322,10 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     // Skip redundant re-initialization: if the stream is already healthy there
     // is nothing to do. This prevents the location from being restarted every
     // time the user switches back to this tab.
-    if (_isStreaming && _locationSubscription != null && _blockReason == null && !_isInitializing) {
+    if (_isStreaming &&
+        _locationSubscription != null &&
+        _blockReason == null &&
+        !_isInitializing) {
       return;
     }
 
@@ -348,7 +351,6 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           _isInitializing = false;
           _blockReason = _LocationBlockReason.permissionForever;
         });
-        _showBlockDialog();
         return;
       }
       if (accessErr.contains('Permission denied')) {
@@ -356,14 +358,12 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           _isInitializing = false;
           _blockReason = _LocationBlockReason.permissionDenied;
         });
-        _showBlockDialog();
         return;
       }
       setState(() {
         _isInitializing = false;
         _blockReason = _LocationBlockReason.serviceOff;
       });
-      _showBlockDialog();
       return;
     }
 
@@ -480,7 +480,46 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       _errorMessage = null;
       _blockReason = _LocationBlockReason.serviceOff;
     });
-    _showBlockDialog();
+  }
+
+  Future<void> _enableLiveLocation() async {
+    if (_isInitializing) return;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted) return;
+    if (!serviceEnabled) {
+      setState(() => _blockReason = _LocationBlockReason.serviceOff);
+      _showBlockDialog();
+      return;
+    }
+
+    final existing = await Geolocator.checkPermission();
+    if (!mounted) return;
+    if (existing == LocationPermission.deniedForever) {
+      setState(() => _blockReason = _LocationBlockReason.permissionForever);
+      _showBlockDialog();
+      return;
+    }
+
+    setState(() => _isInitializing = true);
+    final err = await _landMapNotifier.requestLocationAccess();
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _isInitializing = false;
+        _blockReason = err.contains('permanently denied')
+            ? _LocationBlockReason.permissionForever
+            : _LocationBlockReason.permissionDenied;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Location access is off. Other app features remain available.',
+          ),
+        ),
+      );
+      return;
+    }
+    await _initializeTracking();
   }
 
   // ── Block dialog management ─────────────────────────────
@@ -491,8 +530,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
     showDialog<void>(
       context: context,
-      barrierDismissible:
-          _blockReason != _LocationBlockReason.permissionForever,
+      barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (ctx) => _LocationRequiredDialog(
         reason: _blockReason!,
@@ -759,8 +797,10 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
   Future<void> _saveMediaToGallery(_GeoTaggedPhoto capture) async {
     try {
       final file = File(capture.imagePath);
-      if(!await file.exists()){
-        _debugLog('Gallery save skipped — file not found: ${capture.imagePath}');
+      if (!await file.exists()) {
+        _debugLog(
+          'Gallery save skipped — file not found: ${capture.imagePath}',
+        );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1390,6 +1430,57 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
             ),
 
             const SizedBox(height: 40),
+
+            if (_blockReason != null) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  elevation: 0,
+                  color: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.location_off_outlined,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Live location is unavailable',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Live coordinates and GPS tracking are off. Other app features remain available.',
+                                style: TextStyle(
+                                  color: Colors.black54,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: _enableLiveLocation,
+                          child: const Text('Enable'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // ── Stats grid ───────────────────────────────
             Padding(
@@ -3184,14 +3275,13 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
     }
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied) {
-      _locationError = 'Location permission denied.';
+      _locationError =
+          'Location is off. Media will be saved without a GPS tag.';
       return;
     }
     if (permission == LocationPermission.deniedForever) {
-      _locationError = 'Location permission blocked in settings.';
+      _locationError =
+          'Location is off. Media will be saved without a GPS tag.';
       return;
     }
     try {

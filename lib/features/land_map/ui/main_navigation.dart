@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
@@ -26,6 +27,7 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
+  static const String _locationIntroShownKey = 'prefs_location_intro_shown_v1';
   int _currentIndex = 0;
   Timer? _syncTimer;
   bool _syncInProgress = false;
@@ -43,9 +45,57 @@ class _MainNavigationState extends State<MainNavigation> {
     super.initState();
     _savedLocationsToolbarController.addListener(_onSavedToolbarChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_showInitialLocationChoice());
       _runBackgroundSync();
       _syncTimer = Timer.periodic(_syncInterval, (_) => _runBackgroundSync());
     });
+  }
+
+  Future<void> _showInitialLocationChoice() async {
+    final box = Hive.box('landbox');
+    if (box.get(_locationIntroShownKey, defaultValue: false) == true) return;
+
+    final permission = await Geolocator.checkPermission();
+    if (!mounted) return;
+    if (permission != LocationPermission.denied) {
+      await box.put(_locationIntroShownKey, true);
+      return;
+    }
+
+    final shouldRequest = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.location_on_outlined, size: 42),
+        title: const Text('Enable location?'),
+        content: const Text(
+          'TaREF GPS uses your location for live coordinates, land-point '
+          'tracking, navigation, and automatic photo geotagging. You can '
+          'continue without location, but these GPS features will remain '
+          'unavailable until access is enabled.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Not Now'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    await box.put(_locationIntroShownKey, true);
+    if (shouldRequest != true || !mounted) return;
+
+    final container = ProviderScope.containerOf(context, listen: false);
+    final err = await container
+        .read(landMapProvider.notifier)
+        .requestLocationAccess();
+    if (!mounted || err != null) return;
+    await container.read(landMapProvider.notifier).refreshLocation();
   }
 
   @override
@@ -227,7 +277,9 @@ class _MainNavigationState extends State<MainNavigation> {
       ..writeln(
         'E/N: ${utm?.easting.toStringAsFixed(2) ?? '—'}, ${utm?.northing.toStringAsFixed(2) ?? '—'}',
       )
-      ..writeln('UTM Zone: ${utm?.zone ?? '—'} ${referenceEllipsoid.displayName}')
+      ..writeln(
+        'UTM Zone: ${utm?.zone ?? '—'} ${referenceEllipsoid.displayName}',
+      )
       ..writeln(
         'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
       );
@@ -324,7 +376,8 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom;
+    final bottomInset =
+        _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom;
     final pages = [
       LandMapPage(bottomInset: bottomInset),
       MyLocationPage(
