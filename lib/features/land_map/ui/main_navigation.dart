@@ -27,7 +27,6 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
-  static const String _locationIntroShownKey = 'prefs_location_intro_shown_v1';
   int _currentIndex = 0;
   Timer? _syncTimer;
   bool _syncInProgress = false;
@@ -52,19 +51,17 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   Future<void> _showInitialLocationChoice() async {
-    final box = Hive.box('landbox');
-    if (box.get(_locationIntroShownKey, defaultValue: false) == true) return;
-
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     final permission = await Geolocator.checkPermission();
     if (!mounted) return;
-    if (permission != LocationPermission.denied) {
-      await box.put(_locationIntroShownKey, true);
-      return;
-    }
+    final hasPermission =
+        permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+    if (serviceEnabled && hasPermission) return;
 
-    final shouldRequest = await showDialog<bool>(
+    final shouldEnable = await showDialog<bool>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.location_on_outlined, size: 42),
         title: const Text('Enable location?'),
@@ -81,20 +78,27 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Continue'),
+            child: const Text('Enable Location'),
           ),
         ],
       ),
     );
 
-    await box.put(_locationIntroShownKey, true);
-    if (shouldRequest != true || !mounted) return;
+    if (shouldEnable != true || !mounted) return;
+
+    var currentPermission = await Geolocator.checkPermission();
+    if (currentPermission == LocationPermission.denied) {
+      currentPermission = await Geolocator.requestPermission();
+    }
+    if (!mounted) return;
+
+    final granted =
+        currentPermission == LocationPermission.whileInUse ||
+        currentPermission == LocationPermission.always;
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted || !granted || !enabled) return;
 
     final container = ProviderScope.containerOf(context, listen: false);
-    final err = await container
-        .read(landMapProvider.notifier)
-        .requestLocationAccess();
-    if (!mounted || err != null) return;
     await container.read(landMapProvider.notifier).refreshLocation();
   }
 
