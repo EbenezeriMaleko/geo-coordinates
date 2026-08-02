@@ -35,11 +35,13 @@ class _MapLocationRequiredDialog extends StatefulWidget {
   final _MapLocationBlockReason reason;
   final VoidCallback onRetry;
   final VoidCallback onOpenSettings;
+  final VoidCallback onTurnOnService;
 
   const _MapLocationRequiredDialog({
     required this.reason,
     required this.onRetry,
     required this.onOpenSettings,
+    required this.onTurnOnService,
   });
 
   @override
@@ -91,7 +93,9 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
         ? 'This GPS feature cannot access your current position. You can enable location in Settings or continue using the map without GPS.'
         : 'Your location is used only for this GPS feature. You can continue using the map without sharing it.';
 
-    final primaryLabel = isService || isForever
+    final primaryLabel = isService
+        ? 'Turn On Location'
+        : isForever
         ? 'Open Settings'
         : 'Grant Permission';
 
@@ -158,7 +162,9 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: isService || isForever
+                    onPressed: isService
+                        ? widget.onTurnOnService
+                        : isForever
                         ? widget.onOpenSettings
                         : widget.onRetry,
                     style: ElevatedButton.styleFrom(
@@ -601,7 +607,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (!mounted || _locationDialogVisible) return;
     _locationDialogVisible = true;
     final reason = _locationBlockReasonFromError(err);
-    final isService = reason == _MapLocationBlockReason.serviceOff;
 
     await showDialog<void>(
       context: context,
@@ -614,22 +619,22 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           Navigator.of(dialogContext).pop();
           Future.microtask(_initLocationAndCenter);
         },
+        onTurnOnService: () async {
+          // Pop first so the dialog is gone while the user is in settings.
+          _locationDialogVisible = false;
+          Navigator.of(dialogContext).pop();
+          // Open device location settings. The _startServiceStatusListener
+          // stream already listens for ServiceStatus.enabled and calls
+          // _syncLocationAvailability automatically — no polling needed.
+          await Geolocator.openLocationSettings();
+        },
         onOpenSettings: () async {
           _locationDialogVisible = false;
           Navigator.of(dialogContext).pop();
-          if (isService) {
-            await Geolocator.openLocationSettings();
-          } else {
-            await Geolocator.openAppSettings();
-          }
+          // Only reached for permissionForever — open app-permission settings.
+          await Geolocator.openAppSettings();
           if (!mounted) return;
-          final restored = await _waitForLocationAccess();
-          if (!mounted) return;
-          if (restored && onAccessRestored != null) {
-            await onAccessRestored();
-          } else {
-            await _syncLocationAvailability();
-          }
+          await _syncLocationAvailability();
         },
       ),
     );
@@ -637,18 +642,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _locationDialogVisible = false;
   }
 
-  Future<bool> _waitForLocationAccess() async {
-    for (var attempt = 0; attempt < 8; attempt++) {
-      final enabled = await Geolocator.isLocationServiceEnabled();
-      if (enabled) {
-        final permission = await Geolocator.checkPermission();
-        return permission == LocationPermission.whileInUse ||
-            permission == LocationPermission.always;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 350));
-    }
-    return false;
-  }
 
   void _dismissLocationAccessDialog() {
     if (!_locationDialogVisible || !mounted) return;
@@ -708,14 +701,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   Future<void> _recenterToCurrentLocation() async {
     if (_isLocating) return;
-
     final current = ref.read(landMapProvider).current;
-
     if (current != null) {
       _followCurrentLocation = true;
       _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
       _startContinuousPositionStream();
-      unawaited(ref.read(landMapProvider.notifier).refreshLocation());
+      // unawaited(ref.read(landMapProvider.notifier).refreshLocation());
       return;
     }
 
