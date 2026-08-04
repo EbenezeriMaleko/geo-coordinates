@@ -88,10 +88,10 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
         : 'Use your current location?';
 
     final body = isService
-        ? 'This GPS feature needs Location Services. You can open Settings or continue using the map without live location.'
+        ? 'TaREF GPS needs Location Services to show your live position on the map, capture GPS points, guide navigation, measure routes, and attach coordinates to saved work. You can continue using the map and saved records without live GPS.'
         : isForever
-        ? 'This GPS feature cannot access your current position. You can enable location in Settings or continue using the map without GPS.'
-        : 'Your location is used only for this GPS feature. You can continue using the map without sharing it.';
+        ? 'Location access is blocked for TaREF GPS. Enable it in Settings to use live map position, GPS point capture, navigation guidance, route measurement, and coordinate tagging. You can continue using the app without GPS.'
+        : 'TaREF GPS uses your current location only for GPS features such as live map position, point capture, navigation, distance tracking, and coordinate tagging. You can continue using the map without granting location access.';
 
     final primaryLabel = isService
         ? 'Turn On Location'
@@ -617,7 +617,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         onRetry: () {
           _locationDialogVisible = false;
           Navigator.of(dialogContext).pop();
-          Future.microtask(_initLocationAndCenter);
+          Future.microtask(onAccessRestored ?? _initLocationAndCenter);
         },
         onTurnOnService: () async {
           // Pop first so the dialog is gone while the user is in settings.
@@ -641,7 +641,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     _locationDialogVisible = false;
   }
-
 
   void _dismissLocationAccessDialog() {
     if (!_locationDialogVisible || !mounted) return;
@@ -726,19 +725,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _isLocating = false;
         _locationError = accessErr;
       });
-      if (accessErr.contains('permanently denied') ||
-          accessErr.contains('enable location services')) {
-        unawaited(
-          _showLocationAccessDialog(
-            accessErr,
-            onAccessRestored: _recenterToCurrentLocation,
-          ),
-        );
-      } else {
-        _snack(
-          'Location access is off. You can continue using the map without GPS.',
-        );
-      }
+      unawaited(
+        _showLocationAccessDialog(
+          accessErr,
+          onAccessRestored: _recenterToCurrentLocation,
+        ),
+      );
       return;
     }
 
@@ -774,17 +766,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _isLocating = false;
         _locationError = accessErr;
       });
-      if (accessErr.contains('permanently denied') ||
-          accessErr.contains('enable location services')) {
-        unawaited(
-          _showLocationAccessDialog(
-            accessErr,
-            onAccessRestored: _addCurrentPointToDistance,
-          ),
-        );
-      } else {
-        _snack('Location access is off. Add a point directly on the map.');
-      }
+      unawaited(
+        _showLocationAccessDialog(
+          accessErr,
+          onAccessRestored: _addCurrentPointToDistance,
+        ),
+      );
       return;
     }
 

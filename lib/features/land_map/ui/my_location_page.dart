@@ -95,10 +95,10 @@ class _LocationRequiredDialogState extends State<_LocationRequiredDialog>
         : 'Enable live location?';
 
     final String body = isService
-        ? 'Live coordinates need Location Services. You can open Settings or continue using the app without live location.'
+        ? 'TaREF GPS needs Location Services to display live coordinates, track your position, save GPS points, support navigation, and geotag captured photos or videos. You can continue using other app features without live location.'
         : isForever
-        ? 'Live coordinates cannot access your position. You can enable location in Settings or continue without this feature.'
-        : 'Location provides live coordinates, tracking, navigation, and automatic geotagging. Other app features remain available without it.';
+        ? 'Location access is blocked for TaREF GPS. Enable it in Settings to display live coordinates, save your current position, support navigation, and geotag media. You can continue using the app without live GPS.'
+        : 'TaREF GPS uses your current location only for GPS features such as live coordinates, position tracking, saved points, navigation, and automatic photo or video geotagging. Other app features remain available without it.';
 
     final String primaryLabel = isService || isForever
         ? 'Open Settings'
@@ -510,13 +510,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
             ? _LocationBlockReason.permissionForever
             : _LocationBlockReason.permissionDenied;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Location access is off. Other app features remain available.',
-          ),
-        ),
-      );
+      _showBlockDialog();
       return;
     }
     await _initializeTracking();
@@ -536,7 +530,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         reason: _blockReason!,
         onRetry: () {
           Navigator.of(ctx).pop();
-          Future.microtask(_initializeTracking);
+          Future.microtask(_enableLiveLocation);
         },
         onOpenSettings: () async {
           Navigator.of(ctx).pop();
