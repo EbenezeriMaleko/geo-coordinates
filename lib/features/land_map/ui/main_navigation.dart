@@ -19,6 +19,8 @@ import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+enum _StartupLocationIssue { serviceOff, permissionDenied, permissionForever }
+
 // ─── Main navigation ──────────────────────────────────────────────────────────
 
 class MainNavigation extends StatefulWidget {
@@ -57,12 +59,203 @@ class _MainNavigationState extends State<MainNavigation> {
     if (_startupPermissionRequestInProgress) return;
     _startupPermissionRequestInProgress = true;
     try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!mounted) return;
+      if (!serviceEnabled) {
+        await _showStartupLocationFallbackDialog(
+          _StartupLocationIssue.serviceOff,
+        );
+        return;
+      }
+
       final permission = await Geolocator.checkPermission();
-      if (!mounted || permission != LocationPermission.denied) return;
-      await Geolocator.requestPermission();
+      if (!mounted) return;
+
+      if (permission == LocationPermission.deniedForever) {
+        await _showStartupLocationFallbackDialog(
+          _StartupLocationIssue.permissionForever,
+        );
+        return;
+      }
+
+      if (permission != LocationPermission.denied) return;
+
+      final result = await Geolocator.requestPermission();
+      if (!mounted) return;
+
+      if (result == LocationPermission.denied) {
+        await _showStartupLocationFallbackDialog(
+          _StartupLocationIssue.permissionDenied,
+        );
+        return;
+      }
+
+      if (result == LocationPermission.deniedForever) {
+        await _showStartupLocationFallbackDialog(
+          _StartupLocationIssue.permissionForever,
+        );
+        return;
+      }
+
+      if (result == LocationPermission.whileInUse ||
+          result == LocationPermission.always) {
+        final container = ProviderScope.containerOf(context, listen: false);
+        await container.read(landMapProvider.notifier).refreshLocation();
+      }
     } finally {
       _startupPermissionRequestInProgress = false;
     }
+  }
+
+  Future<void> _showStartupLocationFallbackDialog(
+    _StartupLocationIssue issue,
+  ) async {
+    if (!mounted) return;
+
+    final isService = issue == _StartupLocationIssue.serviceOff;
+    final isForever = issue == _StartupLocationIssue.permissionForever;
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final headline = isService
+        ? 'Location is turned off'
+        : isForever
+        ? 'Location access is blocked'
+        : 'Location access is off';
+    final body = isService
+        ? 'TaREF GPS needs Location Services for live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.'
+        : isForever
+        ? 'Location access is blocked for TaREF GPS. Enable it in Settings to use live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.'
+        : 'TaREF GPS uses location for live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.';
+    final primaryLabel = isService
+        ? 'Turn On Location'
+        : isForever
+        ? 'Open Settings'
+        : 'Grant Permission';
+    final icon = isService
+        ? Icons.location_off_rounded
+        : isForever
+        ? Icons.lock_outline_rounded
+        : Icons.location_disabled_rounded;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 40,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 36, color: primary),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                headline,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.black54,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.of(dialogContext).pop();
+                    if (isService) {
+                      await Geolocator.openLocationSettings();
+                      return;
+                    }
+                    if (isForever) {
+                      await Geolocator.openAppSettings();
+                      return;
+                    }
+                    final result = await Geolocator.requestPermission();
+                    if (!mounted) return;
+                    if (result == LocationPermission.whileInUse ||
+                        result == LocationPermission.always) {
+                      final container = ProviderScope.containerOf(
+                        context,
+                        listen: false,
+                      );
+                      await container
+                          .read(landMapProvider.notifier)
+                          .refreshLocation();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    primaryLabel,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    foregroundColor: Colors.black54,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Maybe Later',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
