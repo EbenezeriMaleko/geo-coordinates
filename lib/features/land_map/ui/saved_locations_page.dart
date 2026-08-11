@@ -111,17 +111,20 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   _SavedFilter _filter = _SavedFilter.all;
   _SavedContentSection _contentSection = _SavedContentSection.all;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _savedListScrollController = ScrollController();
   String _searchQuery = '';
   bool _selectionMode = false;
   final Set<String> _selectedIds = <String>{};
   String _groupFilter = 'All groups';
   bool _compactMode = false;
+  bool _isLoadingMoreRemote = false;
   ProviderSubscription<AuthSession>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
     widget.toolbarController?.attach(this);
+    _savedListScrollController.addListener(_onSavedListScroll);
     _restoreDisplayPreferences();
     _authSubscription = ref.listenManual(authSessionProvider, (previous, next) {
       if (next.isLoggedIn && next.isVerified) {
@@ -136,6 +139,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   @override
   void dispose() {
     widget.toolbarController?.detach(this);
+    _savedListScrollController.removeListener(_onSavedListScroll);
+    _savedListScrollController.dispose();
     _authSubscription?.close();
     _searchController.dispose();
     super.dispose();
@@ -148,6 +153,49 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .read(remoteLandsProvider.notifier)
         .fetch(search: _searchQuery.isEmpty ? null : _searchQuery);
     await ref.read(remoteLandSummaryProvider.notifier).fetch();
+  }
+
+  Future<void> _loadMoreRemoteData() async {
+    final session = ref.read(authSessionProvider);
+    if (!session.isLoggedIn || !session.isVerified || _isLoadingMoreRemote) {
+      return;
+    }
+    setState(() => _isLoadingMoreRemote = true);
+    try {
+      await ref
+          .read(remoteLandsProvider.notifier)
+          .fetchNextPage(search: _searchQuery.isEmpty ? null : _searchQuery);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load more cloud records.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingMoreRemote = false);
+      }
+    }
+  }
+
+  void _onSavedListScroll() {
+    if (!_savedListScrollController.hasClients || _isLoadingMoreRemote) return;
+    final position = _savedListScrollController.position;
+    if (position.extentAfter > 420) return;
+
+    final session = ref.read(authSessionProvider);
+    final remotePage = ref.read(remoteLandsProvider).asData?.value;
+    if (!_canLoadMoreRemote(remotePage, session)) return;
+
+    _loadMoreRemoteData();
+  }
+
+  bool _canLoadMoreRemote(PaginatedLands? remotePage, AuthSession session) {
+    final remoteLoadedCount = remotePage?.items.length ?? 0;
+    return session.isLoggedIn &&
+        session.isVerified &&
+        remotePage != null &&
+        remoteLoadedCount < latestRemoteLandsLimit &&
+        remotePage.currentPage < remotePage.lastPage;
   }
 
   void _restoreDisplayPreferences() {
@@ -359,11 +407,23 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     final remoteItems =
                         remoteLandsState.asData?.value?.items ??
                         const <LandListItem>[];
-                    final items = _buildDisplayItems(
+                    final remotePage = remoteLandsState.asData?.value;
+                    final allDisplayItems = _buildDisplayItems(
                       localItems: localItems,
                       remoteItems: remoteItems,
                       canUseCloud: canUseCloud,
                     ).where((item) => _pointsCount(item) > 0).toList();
+                    final items = _latestSavedItems(
+                      allDisplayItems,
+                      limit: latestRemoteLandsLimit,
+                    );
+                    final remoteTotal =
+                        remoteLandsState.asData?.value?.total ?? 0;
+                    final remoteLoadedCount = remotePage?.items.length ?? 0;
+                    final hasReachedMobileLimit =
+                        remoteLoadedCount >= latestRemoteLandsLimit &&
+                        remoteTotal > latestRemoteLandsLimit;
+                    final showLoadingMoreFooter = _isLoadingMoreRemote;
 
                     final counts = _contentCounts(items);
                     final sectioned = _applyContentSection(items);
@@ -454,43 +514,86 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
+                        if (canUseCloud && remoteLandsState.isLoading) ...[
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            child: _CloudRecordsLoadingBanner(),
+                          ),
+                        ],
                         if (searched.isEmpty)
                           Expanded(
-                            child:
-                                _searchQuery.isNotEmpty ||
-                                    _filter != _SavedFilter.all ||
-                                    _sort != _SavedSort.newest ||
-                                    _groupFilter != 'All groups' ||
-                                    _contentSection != _SavedContentSection.all
-                                ? const _EmptyState(
-                                    title: 'No matching saved locations',
-                                    subtitle:
-                                        'Try changing search text, filter, sort, or group.',
-                                  )
-                                : const _EmptyState(),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child:
+                                      _searchQuery.isNotEmpty ||
+                                          _filter != _SavedFilter.all ||
+                                          _sort != _SavedSort.newest ||
+                                          _groupFilter != 'All groups' ||
+                                          _contentSection !=
+                                              _SavedContentSection.all
+                                      ? const _EmptyState(
+                                          title: 'No matching saved locations',
+                                          subtitle:
+                                              'Try changing search text, filter, sort, or group.',
+                                        )
+                                      : const _EmptyState(),
+                                ),
+                                if (showLoadingMoreFooter)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      0,
+                                      16,
+                                      16,
+                                    ),
+                                    child: _CloudRecordsLoadMoreFooter(
+                                      isLoading: _isLoadingMoreRemote,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           )
                         else ...[
                           Padding(
                             padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '${searched.length} result${searched.length == 1 ? '' : 's'}',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Colors.black54,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${searched.length} result${searched.length == 1 ? '' : 's'}',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: Colors.black54,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                                if (hasReachedMobileLimit) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'Showing latest $latestRemoteLandsLimit records. Use the web app to view older records.',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: Colors.black45),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                           Expanded(
                             child: ListView.separated(
+                              controller: _savedListScrollController,
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                              itemCount: searched.length,
+                              itemCount:
+                                  searched.length +
+                                  (showLoadingMoreFooter ? 1 : 0),
                               separatorBuilder: (_, _) =>
                                   SizedBox(height: _compactMode ? 8 : 12),
                               itemBuilder: (context, index) {
+                                if (index >= searched.length) {
+                                  return _CloudRecordsLoadMoreFooter(
+                                    isLoading: _isLoadingMoreRemote,
+                                  );
+                                }
                                 final item = searched[index];
                                 final id = _selectionKey(item);
                                 final isSelected = _selectedIds.contains(id);
@@ -604,6 +707,23 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         },
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _latestSavedItems(
+    List<Map<String, dynamic>> src, {
+    required int limit,
+  }) {
+    if (src.length <= limit) return src;
+    final sorted = List<Map<String, dynamic>>.of(src);
+    sorted.sort((a, b) => _recordTimestamp(b).compareTo(_recordTimestamp(a)));
+    return sorted.take(limit).toList();
+  }
+
+  int _recordTimestamp(Map<String, dynamic> item) {
+    final updated = DateTime.tryParse(item['updatedAt']?.toString() ?? '');
+    if (updated != null) return updated.millisecondsSinceEpoch;
+    final created = DateTime.tryParse(item['createdAt']?.toString() ?? '');
+    return created?.millisecondsSinceEpoch ?? 0;
   }
 
   List<Map<String, dynamic>> _applyFilterAndSort(
@@ -2182,6 +2302,91 @@ class _SectionChip extends StatelessWidget {
                   color: selected ? theme.colorScheme.primary : Colors.black54,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CloudRecordsLoadingBanner extends StatelessWidget {
+  const _CloudRecordsLoadingBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: primary.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Updating cloud records...',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CloudRecordsLoadMoreFooter extends StatelessWidget {
+  final bool isLoading;
+
+  const _CloudRecordsLoadMoreFooter({required this.isLoading});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: primary.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLoading) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            const Text(
+              'Loading more records...',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
           ],
         ),
