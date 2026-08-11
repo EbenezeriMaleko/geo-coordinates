@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+7
+version: 1.0.0+19
 
 environment:
   sdk: ^3.10.8
@@ -43,30 +43,30 @@ dependencies:
   uuid: ^4.5.2
   flutter_riverpod: ^3.2.1
   flutter_launcher_icons: ^0.14.4
-  device_info_plus: ^11.3.3
+  device_info_plus: ^13.2.0
   google_fonts: ^8.1.0
   flutter_svg: ^2.2.3
   flutter_compass: ^0.8.1
   http: ^1.3.0
   geocoding: ^4.0.0
-  camera: ^0.12.0+1
-  gallery_saver_plus: ^3.2.6
+  camera: ^0.12.0+2
   path_provider: ^2.1.5
-  video_player: ^2.9.5
+  video_player: ^2.13.0
   hugeicons: ^1.1.6
   http_parser: ^4.1.2
-  share_plus: ^12.0.2
-  package_info_plus: ^9.0.1
+  share_plus: ^13.3.0
+  package_info_plus: ^10.2.1
   proj4dart: ^3.0.0
   flutter_map_cache: ^2.1.0
   http_cache_hive_store: ^5.1.0
   http_cache_file_store: ^2.0.1
   dio_cache_interceptor: ^4.0.6
-  in_app_update: ^4.2.5
+  in_app_update: ^5.0.0
   flutter_map_compass: ^1.1.1
-  ffmpeg_kit_flutter_new_full: ^2.0.0
+  ffmpeg_kit_flutter_new_full: ^2.5.2
   url_launcher: ^6.3.2
   permission_handler: ^12.0.2
+  saver_gallery: ^5.1.0
 
 dev_dependencies:
   flutter_test:

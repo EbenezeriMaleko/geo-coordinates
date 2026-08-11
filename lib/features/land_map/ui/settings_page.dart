@@ -576,11 +576,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       final isSelected = ellipsoid == current;
                       return ListTile(
                         title: Text(ellipsoid.displayName),
-                        subtitle: Text(
-                          ellipsoid.isDefault
-                              ? 'Default GPS reference for this app.'
-                              : 'Use for display or export workflows that follow this model.',
-                        ),
+                        subtitle: Text(ellipsoid.description),
                         trailing: isSelected
                             ? const Icon(
                                 Icons.check_circle,
@@ -755,8 +751,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         return 'System camera';
     }
   }
-
-
 }
 
 class _ContactDialog extends StatefulWidget {

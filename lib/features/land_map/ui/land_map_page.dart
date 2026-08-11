@@ -270,7 +270,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   ProviderSubscription<LandMapState>? _landMapSubscription;
   StreamSubscription<CompassEvent>? _navigationCompassSubscription;
   StreamSubscription<CompassEvent>? _orientationCompassSubscription;
-  DateTime? _lastNavigationCameraMove;
   bool _userIsInteracting = false;
   bool _followCurrentLocation = true;
   bool _skipNextFieldPointsFocus = false;
@@ -382,7 +381,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
       if (next.navigationTarget != null) {
         if (targetChanged) {
-          _lastNavigationCameraMove = null;
           _navigationCameraTimer?.cancel();
           unawaited(_startNavigationTracking());
           final targetPoint = next.navigationTarget!.point;
@@ -1644,7 +1642,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _navigationCompassSubscription = null;
     _navigationCameraTimer?.cancel();
     _navigationCameraTimer = null;
-    _lastNavigationCameraMove = null;
     if (mounted) {
       setState(() {
         _navigationCameraActive = false;
@@ -1678,7 +1675,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
       final pos = ref.read(landMapProvider).current;
       if (pos == null) return;
-      _lastNavigationCameraMove = DateTime.now();
       _mapController.moveAndRotate(
         pos,
         _clampZoom(max(_currentZoom, 17)),

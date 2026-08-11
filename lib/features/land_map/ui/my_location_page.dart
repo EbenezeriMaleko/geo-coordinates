@@ -11,11 +11,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:gallery_saver_plus/gallery_saver.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:saver_gallery/saver_gallery.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/services/auth_service.dart';
@@ -803,17 +803,14 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         );
         return;
       }
-      final saved = capture.mediaType == 'video'
-          ? await GallerySaver.saveVideo(
-              capture.imagePath,
-              albumName: _galleryAlbumName,
-            )
-          : await GallerySaver.saveImage(
-              capture.imagePath,
-              albumName: _galleryAlbumName,
-            );
+      final result = await SaverGallery.saveFile(
+        filePath: capture.imagePath,
+        fileName: file.uri.pathSegments.last,
+        albumPath: _galleryAlbumName,
+        skipIfExists: false,
+      );
       if (!mounted) return;
-      if (saved == true) {
+      if (result.isSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -824,6 +821,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
           ),
         );
       } else {
+        _debugLog('Gallery save failed: ${result.errorMessage}');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
