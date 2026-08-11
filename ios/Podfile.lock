@@ -1,9 +1,4 @@
 PODS:
-  - ffmpeg_kit_flutter_new_full (7.1.1):
-    - ffmpeg_kit_flutter_new_full/full (= 7.1.1)
-    - Flutter
-  - ffmpeg_kit_flutter_new_full/full (7.1.1):
-    - Flutter
   - Flutter (1.0.0)
   - flutter_compass (0.0.1):
     - Flutter
@@ -11,14 +6,11 @@ PODS:
     - Flutter
 
 DEPENDENCIES:
-  - ffmpeg_kit_flutter_new_full (from `.symlinks/plugins/ffmpeg_kit_flutter_new_full/ios`)
   - Flutter (from `Flutter`)
   - flutter_compass (from `.symlinks/plugins/flutter_compass/ios`)
   - gallery_saver_plus (from `.symlinks/plugins/gallery_saver_plus/ios`)
 
 EXTERNAL SOURCES:
-  ffmpeg_kit_flutter_new_full:
-    :path: ".symlinks/plugins/ffmpeg_kit_flutter_new_full/ios"
   Flutter:
     :path: Flutter
   flutter_compass:
@@ -27,7 +19,6 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/gallery_saver_plus/ios"
 
 SPEC CHECKSUMS:
-  ffmpeg_kit_flutter_new_full: 409b012eb2c900b377f6c904bea43f6572daa9e6
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_compass: b236ab69b61545cce89fd58527f401a7587d5cc1
   gallery_saver_plus: 61c8a831d5975e2bf57f87bcd64379dcc7d29ff2

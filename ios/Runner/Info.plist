@@ -35,6 +35,8 @@
 <string>TaREF GPS-Coordinates uses your camera to photograph land plots. The photo is attached to the GPS coordinate entry you save, so you can visually reference the plot later.</string>
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>TaREF GPS-Coordinates uses your location to show your current position on the map and to record accurate GPS coordinates when you save a land plot.</string>
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>TaREF GPS-Coordinates uses your location to show your current position on the map and to record accurate GPS coordinates when you save a land plot.</string>
 <key>NSPhotoLibraryAddUsageDescription</key>
 <string>TAREF GPS-Coordinates needs permission to save captured land plot photos and videos to your library.</string>
 <key>NSPhotoLibraryUsageDescription</key>
