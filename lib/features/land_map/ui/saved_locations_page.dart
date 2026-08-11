@@ -371,6 +371,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                           onClear: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
+                            if (canUseCloud) {
+                              _fetchRemoteData();
+                            }
                           },
                         ),
                       if (_filter != _SavedFilter.all)
@@ -2360,15 +2363,8 @@ class _CloudRecordsLoadMoreFooter extends StatelessWidget {
     final primary = theme.colorScheme.primary;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: primary.withValues(alpha: 0.12)),
-        ),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 10),
+      child: Center(
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
@@ -2386,7 +2382,11 @@ class _CloudRecordsLoadMoreFooter extends StatelessWidget {
             ],
             const Text(
               'Loading more records...',
-              style: TextStyle(fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
             ),
           ],
         ),
