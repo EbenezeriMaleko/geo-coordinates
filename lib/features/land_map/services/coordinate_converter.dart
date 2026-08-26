@@ -1,120 +1,94 @@
-import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:proj4dart/proj4dart.dart';
+
+import '../models/display_coordinate.dart';
+import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
+import 'utm_converter.dart';
 
 class CoordinateConverter {
-  /// Proj4 strings for each ellipsoid with WGS84 base for consistency
-  static final Map<ReferenceEllipsoid, String> _projectionStrings = {
-    // North America — NAD27 is correct here
-    ReferenceEllipsoid.clarke1866:
-        '+proj=longlat +ellps=clrk66 +datum=NAD27 +no_defs',
-
-    // East Africa (Arc 1960) — Kenya + Tanzania mean solution ✅ EPSG verified
-    ReferenceEllipsoid.clarke1880:
-        '+proj=longlat +a=6378249.145 +rf=293.465 +towgs84=-160,-6,-302,0,0,0,0 +no_defs',
-
-    // GRS 1967
-    ReferenceEllipsoid.grs1967:
-        '+proj=longlat +ellps=GRS67 +towgs84=-57,1,-41,0,0,0,0 +no_defs',
-
-    // GRS 1980 — nearly identical to WGS84
-    ReferenceEllipsoid.grs1980:
-        '+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs',
-
-    // WGS 60
-    ReferenceEllipsoid.wgs60:
-        '+proj=longlat +ellps=WGS60 +towgs84=0,18,-181,0,0,0,0 +no_defs',
-
-    // WGS 66
-    ReferenceEllipsoid.wgs66:
-        '+proj=longlat +ellps=WGS66 +towgs84=0,0,-4.5,0,0,0,0 +no_defs',
-
-    // WGS 72 — 7-parameter, EPSG/PROJ verified ✅
-    ReferenceEllipsoid.wgs72:
-        '+proj=longlat +ellps=WGS72 +towgs84=0,0,4.5,0,0,0.554,0.219 +no_defs',
-
-    // WGS 84 — modern GPS standard
-    ReferenceEllipsoid.wgs84: '+proj=longlat +datum=WGS84 +no_defs',
-  };
-
   static final Map<String, Projection> _projectionCache = {};
 
-  /// Get the proj4 projection string for a given ellipsoid
-  static String getProjectionString(ReferenceEllipsoid ellipsoid) {
-    return _projectionStrings[ellipsoid] ??
-        '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs';
-  }
-
-  /// Get or create a cached projection object
-  static Projection _getProjection(ReferenceEllipsoid ellipsoid) {
-    final key = ellipsoid.name;
-    if (_projectionCache.containsKey(key)) {
-      return _projectionCache[key]!;
-    }
-
-    final projection = Projection.parse(getProjectionString(ellipsoid));
-    _projectionCache[key] = projection;
-    return projection;
-  }
-
-  /// Convert coordinates from one ellipsoid to another
-  /// Returns the converted LatLng
-  static LatLng convertCoordinates(
-    LatLng coordinates,
-    ReferenceEllipsoid fromEllipsoid,
-    ReferenceEllipsoid toEllipsoid,
+  /// Derives secondary coordinates from immutable canonical WGS84 Lat/Lon.
+  /// EPSG translation parameters describe selected datum -> WGS84, and
+  /// proj4dart applies their inverse when WGS84 is the source.
+  static DisplayCoordinate deriveDisplayCoordinate(
+    LatLng canonicalWgs84,
+    ReferenceEllipsoid ellipsoid,
+    GeodeticDatum? datum,
   ) {
-    // If converting to the same ellipsoid, return as-is
-    if (fromEllipsoid == toEllipsoid) {
-      return coordinates;
+    if (datum != null && datum.parentEllipsoid != ellipsoid) {
+      throw ArgumentError(
+        '${datum.displayName} does not use ${ellipsoid.displayName}.',
+      );
+    }
+    if (!canonicalWgs84.latitude.isFinite ||
+        !canonicalWgs84.longitude.isFinite ||
+        canonicalWgs84.latitude < -90 ||
+        canonicalWgs84.latitude > 90 ||
+        canonicalWgs84.longitude < -180 ||
+        canonicalWgs84.longitude > 180) {
+      throw ArgumentError.value(canonicalWgs84, 'canonicalWgs84');
     }
 
-    try {
-      // Get projections for both ellipsoids
-      final fromProj = _getProjection(fromEllipsoid);
-      final toProj = _getProjection(toEllipsoid);
-
-      // Create a point from the coordinates (in degrees, x=longitude, y=latitude)
-      final point = Point(x: coordinates.longitude, y: coordinates.latitude);
-
-      // Transform from source ellipsoid to target ellipsoid
-      // using the transform method on the source projection
-      final transformedPoint = fromProj.transform(toProj, point);
-
-      // Debug print: show old -> new values
-      try {
-        final oldLat = coordinates.latitude.toStringAsFixed(6);
-        final oldLon = coordinates.longitude.toStringAsFixed(6);
-        final newLat = transformedPoint.y.toStringAsFixed(6);
-        final newLon = transformedPoint.x.toStringAsFixed(6);
-        debugPrint(
-          'CoordinateConverter: ${fromEllipsoid.name} -> ${toEllipsoid.name}: '
-          '$oldLat,$oldLon -> $newLat,$newLon',
-        );
-      } catch (_) {}
-
-      return LatLng(transformedPoint.y, transformedPoint.x);
-    } catch (e) {
-      // If transformation fails, return original coordinates
-      debugPrint('Error converting coordinates: $e');
-      return coordinates;
-    }
+    final selectedGeodetic =
+        ellipsoid == ReferenceEllipsoid.wgs84 && datum == null
+        ? canonicalWgs84
+        : _toSelectedGeodetic(canonicalWgs84, ellipsoid, datum);
+    return DisplayCoordinate(
+      canonicalWgs84: canonicalWgs84,
+      geodeticOnSelectedDatum: selectedGeodetic,
+      utm: UtmConverter.fromLatLng(
+        selectedGeodetic.latitude,
+        selectedGeodetic.longitude,
+        ellipsoid,
+        semiMajorAxis: datum?.semiMajorAxis,
+        inverseFlattening: datum?.inverseFlattening,
+      ),
+    );
   }
 
-  /// Convert a list of coordinates from one ellipsoid to another
-  static List<LatLng> convertCoordinatesList(
-    List<LatLng> coordinates,
-    ReferenceEllipsoid fromEllipsoid,
-    ReferenceEllipsoid toEllipsoid,
+  static LatLng _toSelectedGeodetic(
+    LatLng canonical,
+    ReferenceEllipsoid ellipsoid,
+    GeodeticDatum? datum,
   ) {
-    return coordinates
-        .map((coord) => convertCoordinates(coord, fromEllipsoid, toEllipsoid))
-        .toList();
+    final source = _projectionCache.putIfAbsent(
+      'wgs84',
+      () => Projection.parse('+proj=longlat +datum=WGS84 +no_defs'),
+    );
+    final destination = _projectionCache.putIfAbsent(
+      '${ellipsoid.name}:${datum?.id ?? 'shape'}',
+      () => Projection.parse(_geographicDefinition(ellipsoid, datum)),
+    );
+    final result = source.transform(
+      destination,
+      Point(x: canonical.longitude, y: canonical.latitude),
+    );
+    return LatLng(result.y, result.x);
   }
 
-  /// Clear the projection cache (useful for testing or memory management)
-  static void clearCache() {
-    _projectionCache.clear();
+  static String _geographicDefinition(
+    ReferenceEllipsoid ellipsoid,
+    GeodeticDatum? datum,
+  ) {
+    final shape = datum == null
+        ? _shapeParameters[ellipsoid]
+        : '+a=${datum.semiMajorAxis} +rf=${datum.inverseFlattening}';
+    return '+proj=longlat $shape '
+        '+towgs84=${datum?.towgs84 ?? '0,0,0'} +no_defs';
   }
+
+  static const Map<ReferenceEllipsoid, String> _shapeParameters = {
+    ReferenceEllipsoid.clarke1880: '+a=6378249.145 +rf=293.465',
+    ReferenceEllipsoid.clarke1866: '+a=6378206.4 +b=6356583.8',
+    ReferenceEllipsoid.grs1980: '+a=6378137 +rf=298.257222101',
+    ReferenceEllipsoid.grs1967: '+a=6378160 +rf=298.247167427',
+    ReferenceEllipsoid.wgs84: '+a=6378137 +rf=298.257223563',
+    ReferenceEllipsoid.wgs72: '+a=6378135 +rf=298.26',
+    ReferenceEllipsoid.wgs66: '+a=6378145 +rf=298.25',
+    ReferenceEllipsoid.wgs60: '+a=6378165 +rf=298.3',
+  };
+
+  static void clearCache() => _projectionCache.clear();
 }

@@ -3412,7 +3412,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.geo_coordinates',
+                userAgentPackageName: 'com.databenki.taref_gps',
               ),
               if (type == 'polyline' && points.length >= 2)
                 PolylineLayer(

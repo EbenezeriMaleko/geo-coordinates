@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 import '../models/coordinate_format.dart';
+import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
 
 enum DistanceUnit { meters, feet }
@@ -45,6 +46,11 @@ final referenceEllipsoidProvider =
       ReferenceEllipsoidNotifier.new,
     );
 
+final selectedDatumProvider =
+    NotifierProvider<SelectedDatumNotifier, GeodeticDatum?>(
+      SelectedDatumNotifier.new,
+    );
+
 final compassNorthTypeProvider =
     NotifierProvider<CompassNorthTypeNotifier, CompassNorthType>(
       CompassNorthTypeNotifier.new,
@@ -55,6 +61,7 @@ const _saveToGalleryKey = 'prefs_photo_save_to_gallery';
 const _photoQualityKey = 'prefs_photo_quality';
 const _photoCaptureModeKey = 'prefs_photo_capture_mode';
 const _referenceEllipsoidKey = 'prefs_reference_ellipsoid';
+const _selectedDatumKey = 'prefs_selected_geodetic_datum';
 const _coordinateFormatKey = 'prefs_coordinate_format';
 const _distanceUnitKey = 'prefs_distance_unit';
 const _compassNorthTypeKey = 'prefs_compass_north_type';
@@ -197,6 +204,29 @@ class ReferenceEllipsoidNotifier extends Notifier<ReferenceEllipsoid> {
     state = ellipsoid;
     final box = Hive.box('landbox');
     await box.put(_referenceEllipsoidKey, ellipsoid.name);
+  }
+}
+
+class SelectedDatumNotifier extends Notifier<GeodeticDatum?> {
+  @override
+  GeodeticDatum? build() {
+    final box = Hive.box('landbox');
+    final raw = box.get(_selectedDatumKey)?.toString();
+    final datum = GeodeticDatumRegistry.byId(raw);
+    final ellipsoid = ReferenceEllipsoid.fromRaw(
+      box.get(_referenceEllipsoidKey)?.toString(),
+    );
+    return datum?.parentEllipsoid == ellipsoid ? datum : null;
+  }
+
+  Future<void> setDatum(GeodeticDatum? datum) async {
+    state = datum;
+    final box = Hive.box('landbox');
+    if (datum == null) {
+      await box.delete(_selectedDatumKey);
+    } else {
+      await box.put(_selectedDatumKey, datum.id);
+    }
   }
 }
 

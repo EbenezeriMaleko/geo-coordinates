@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import '../models/display_coordinate.dart';
+
 class LandNavigationTarget {
   final LatLng point;
   final List<LatLng> points;
@@ -23,6 +25,8 @@ class LandMapState {
   final double? speedMps;
   final DateTime? locationTimestamp;
   final List<LatLng> points;
+  final DisplayCoordinate? displayCurrent;
+  final List<DisplayCoordinate> displayPoints;
   final bool isSaving;
   final String? activeFieldId;
   final String? activeFieldName;
@@ -35,6 +39,8 @@ class LandMapState {
     required this.speedMps,
     required this.locationTimestamp,
     required this.points,
+    required this.displayCurrent,
+    required this.displayPoints,
     required this.isSaving,
     required this.activeFieldId,
     required this.activeFieldName,
@@ -48,6 +54,8 @@ class LandMapState {
     speedMps: null,
     locationTimestamp: null,
     points: [],
+    displayCurrent: null,
+    displayPoints: [],
     isSaving: false,
     activeFieldId: null,
     activeFieldName: null,
@@ -61,12 +69,15 @@ class LandMapState {
     double? speedMps,
     DateTime? locationTimestamp,
     List<LatLng>? points,
+    DisplayCoordinate? displayCurrent,
+    List<DisplayCoordinate>? displayPoints,
     bool? isSaving,
     String? activeFieldId,
     String? activeFieldName,
     LandNavigationTarget? navigationTarget,
     bool clearActiveField = false,
     bool clearNavigationTarget = false,
+    bool clearDisplayCurrent = false,
   }) {
     return LandMapState(
       current: current ?? this.current,
@@ -75,6 +86,10 @@ class LandMapState {
       speedMps: speedMps ?? this.speedMps,
       locationTimestamp: locationTimestamp ?? this.locationTimestamp,
       points: points ?? this.points,
+      displayCurrent: clearDisplayCurrent
+          ? null
+          : (displayCurrent ?? this.displayCurrent),
+      displayPoints: displayPoints ?? this.displayPoints,
       isSaving: isSaving ?? this.isSaving,
       activeFieldId: clearActiveField
           ? null

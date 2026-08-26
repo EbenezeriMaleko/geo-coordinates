@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'main_navigation.dart';
@@ -15,7 +16,13 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
-    _checkForUpdate();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      _checkForUpdate();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _navigateToHome();
+      });
+    }
   }
 
   Future<void> _checkForUpdate() async {

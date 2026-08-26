@@ -16,8 +16,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/coordinate_format.dart';
-import '../models/reference_ellipsoid.dart';
-import '../services/utm_converter.dart';
+import '../services/coordinate_converter.dart';
 import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
@@ -1947,13 +1946,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final coordinateFormat = ref.watch(coordinateFormatProvider);
     final distanceUnit = ref.watch(distanceUnitProvider);
     final referenceEllipsoid = ref.watch(referenceEllipsoidProvider);
+    final selectedDatum = ref.watch(selectedDatumProvider);
+    final derivedCurrent = st.current == null
+        ? null
+        : CoordinateConverter.deriveDisplayCoordinate(
+            st.current!,
+            referenceEllipsoid,
+            selectedDatum,
+          );
     final utmText = st.current == null
         ? null
-        : _formatMapUtm(
-            st.current!.latitude,
-            st.current!.longitude,
-            referenceEllipsoid,
-          );
+        : derivedCurrent?.utm?.toDisplayString() ?? 'UTM unavailable';
     final screenSize = MediaQuery.sizeOf(context);
     final isCompactHeight = screenSize.height < 700;
     final center = st.current ?? const LatLng(-6.7924, 39.2083);
@@ -2744,7 +2747,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }) {
       return TileLayer(
         urlTemplate: urlTemplate,
-        userAgentPackageName: 'com.example.landmapper',
+        userAgentPackageName: 'com.databenki.taref_gps',
         subdomains: subdomains,
         maxZoom: maxZoom,
         tileProvider: CachedTileProvider(
@@ -2756,12 +2759,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     switch (_currentMapType) {
       case MapType.normal:
-        return [
-          cachedTile(
-            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            subdomains: ['a', 'b', 'c'],
-          ),
-        ];
+        return [cachedTile('https://tile.openstreetmap.org/{z}/{x}/{y}.png')];
       case MapType.satellite:
         return [
           cachedTile(
@@ -3773,16 +3771,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       },
     );
   }
-}
-
-String _formatMapUtm(
-  double latitude,
-  double longitude,
-  ReferenceEllipsoid ellipsoid,
-) {
-  final utm = UtmConverter.fromLatLng(latitude, longitude, ellipsoid);
-  if (utm == null) return 'UTM unavailable';
-  return utm.toDisplayString();
 }
 
 // Helper Widgets

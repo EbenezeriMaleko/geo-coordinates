@@ -28,11 +28,18 @@ class UtmConverter {
   static UtmCoordinate? fromLatLng(
     double latitude,
     double longitude,
-    ReferenceEllipsoid ellipsoid,
-  ) {
+    ReferenceEllipsoid ellipsoid, {
+    double? semiMajorAxis,
+    double? inverseFlattening,
+  }) {
     if (latitude < -80 || latitude > 84) return null;
 
-    final config = _ellipsoidConfig(ellipsoid);
+    final config = semiMajorAxis != null && inverseFlattening != null
+        ? _EllipsoidConfig(
+            semiMajorAxis,
+            2 / inverseFlattening - 1 / (inverseFlattening * inverseFlattening),
+          )
+        : _ellipsoidConfig(ellipsoid);
     final latRad = _degToRad(latitude);
     final lonRad = _degToRad(longitude);
     final zoneNumber = _zoneNumber(latitude, longitude);
@@ -164,7 +171,8 @@ class UtmConverter {
   }) {
     final config = _ellipsoidConfig(ellipsoid);
     final isNorthernHemisphere =
-        hemisphere.toUpperCase() == 'N' || zoneLetter.toUpperCase().compareTo('N') >= 0;
+        hemisphere.toUpperCase() == 'N' ||
+        zoneLetter.toUpperCase().compareTo('N') >= 0;
 
     final x = easting - 500000.0;
     final y = isNorthernHemisphere ? northing : northing - 10000000.0;
@@ -172,17 +180,19 @@ class UtmConverter {
     final longOrigin = (zoneNumber - 1) * 6 - 180 + 3;
     final eccPrimeSquared = config.eccSquared / (1 - config.eccSquared);
     final m = y / _k0;
-    final mu = m /
+    final mu =
+        m /
         (config.equatorialRadius *
             (1 -
                 config.eccSquared / 4 -
                 3 * _pow2(config.eccSquared) / 64 -
                 5 * _pow3(config.eccSquared) / 256));
 
-    final e1 = (1 - _sqrt(1 - config.eccSquared)) /
-        (1 + _sqrt(1 - config.eccSquared));
+    final e1 =
+        (1 - _sqrt(1 - config.eccSquared)) / (1 + _sqrt(1 - config.eccSquared));
 
-    final phi1Rad = mu +
+    final phi1Rad =
+        mu +
         (3 * e1 / 2 - 27 * _pow3(e1) / 32) * _sin(2 * mu) +
         (21 * _pow2(e1) / 16 - 55 * _pow4(e1) / 32) * _sin(4 * mu) +
         (151 * _pow3(e1) / 96) * _sin(6 * mu) +
@@ -192,16 +202,19 @@ class UtmConverter {
     final cosPhi1 = _cos(phi1Rad);
     final tanPhi1 = _tan(phi1Rad);
 
-    final n1 = config.equatorialRadius /
+    final n1 =
+        config.equatorialRadius /
         _sqrt(1 - config.eccSquared * sinPhi1 * sinPhi1);
     final t1 = tanPhi1 * tanPhi1;
     final c1 = eccPrimeSquared * cosPhi1 * cosPhi1;
-    final r1 = config.equatorialRadius *
+    final r1 =
+        config.equatorialRadius *
         (1 - config.eccSquared) /
         math.pow(1 - config.eccSquared * sinPhi1 * sinPhi1, 1.5);
     final d = x / (n1 * _k0);
 
-    final lat = phi1Rad -
+    final lat =
+        phi1Rad -
         (n1 * tanPhi1 / r1) *
             (_pow2(d) / 2 -
                 (5 + 3 * t1 + 10 * c1 - 4 * _pow2(c1) - 9 * eccPrimeSquared) *
@@ -216,7 +229,8 @@ class UtmConverter {
                     _pow6(d) /
                     720);
 
-    final lng = (d -
+    final lng =
+        (d -
                 (1 + 2 * t1 + c1) * _pow3(d) / 6 +
                 (5 -
                         2 * c1 +
@@ -229,10 +243,7 @@ class UtmConverter {
             cosPhi1 +
         _degToRad(longOrigin.toDouble());
 
-    return (
-      latitude: lat * 180.0 / math.pi,
-      longitude: lng * 180.0 / math.pi,
-    );
+    return (latitude: lat * 180.0 / math.pi, longitude: lng * 180.0 / math.pi);
   }
 
   static double _degToRad(double degrees) => degrees * 0.017453292519943295;

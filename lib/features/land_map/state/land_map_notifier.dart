@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
@@ -8,6 +9,9 @@ import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/land_repo.dart';
+import '../models/geodetic_datum.dart';
+import '../models/reference_ellipsoid.dart';
+import '../services/coordinate_converter.dart';
 import 'land_map_state.dart';
 
 final landRepoProvider = Provider<LandRepo>((ref) {
@@ -353,44 +357,96 @@ class LandMapNotifier extends Notifier<LandMapState> {
     });
   }
 
-  /// Transform all coordinates in the land map state
-  /// Used when changing the reference ellipsoid
-  void transformAllCoordinates(LatLng Function(LatLng) coordinateTransformer) {
-    // Transform all points with debug logging
-    final transformedPoints = <LatLng>[];
-    for (var i = 0; i < state.points.length; i++) {
-      final old = state.points[i];
-      final updated = coordinateTransformer(old);
-      try {
-        debugPrint(
-          'LandMapNotifier: point #$i: '
-          '${old.latitude.toStringAsFixed(6)},${old.longitude.toStringAsFixed(6)} '
-          '-> ${updated.latitude.toStringAsFixed(6)},${updated.longitude.toStringAsFixed(6)}',
+  /// Recomputes secondary coordinates from canonical WGS84 without mutation.
+  void deriveDisplayCoordinates(
+    ReferenceEllipsoid ellipsoid,
+    GeodeticDatum? datum, {
+    required ReferenceEllipsoid previousEllipsoid,
+    required GeodeticDatum? previousDatum,
+  }) {
+    final canonicalCurrent = state.current;
+    final derivedCurrent = canonicalCurrent == null
+        ? null
+        : CoordinateConverter.deriveDisplayCoordinate(
+            canonicalCurrent,
+            ellipsoid,
+            datum,
+          );
+    final derivedPoints = state.points
+        .map(
+          (point) => CoordinateConverter.deriveDisplayCoordinate(
+            point,
+            ellipsoid,
+            datum,
+          ),
+        )
+        .toList(growable: false);
+
+    assert(() {
+      final fromName =
+          previousDatum?.displayName ?? previousEllipsoid.displayName;
+      final toName = datum?.displayName ?? ellipsoid.displayName;
+
+      void logChange(String label, LatLng canonical, int? pointIndex) {
+        final previous = CoordinateConverter.deriveDisplayCoordinate(
+          canonical,
+          previousEllipsoid,
+          previousDatum,
         );
-      } catch (_) {}
-      transformedPoints.add(updated);
-    }
+        final next = pointIndex == null
+            ? derivedCurrent!
+            : derivedPoints[pointIndex];
+        final oldUtm = previous.utm;
+        final newUtm = next.utm;
+        final canonicalText =
+            '${canonical.latitude.toStringAsFixed(6)},'
+            '${canonical.longitude.toStringAsFixed(6)}';
 
-    // Transform current location if available with debug logging
-    final transformedCurrent = state.current != null
-        ? (() {
-            final old = state.current!;
-            final updated = coordinateTransformer(old);
-            try {
-              debugPrint(
-                'LandMapNotifier: current: '
-                '${old.latitude.toStringAsFixed(6)},${old.longitude.toStringAsFixed(6)} '
-                '-> ${updated.latitude.toStringAsFixed(6)},${updated.longitude.toStringAsFixed(6)}',
-              );
-            } catch (_) {}
-            return updated;
-          })()
-        : null;
+        if (oldUtm == null || newUtm == null) {
+          debugPrint(
+            'CoordinateConverter [$label]: $fromName -> $toName; '
+            'canonical WGS84 $canonicalText unchanged; UTM unavailable',
+          );
+          return;
+        }
 
-    // Update state with transformed coordinates
+        final sameZone = oldUtm.zone == newUtm.zone;
+        final deltaEasting = newUtm.easting - oldUtm.easting;
+        final deltaNorthing = newUtm.northing - oldUtm.northing;
+        final planarShift = math.sqrt(
+          deltaEasting * deltaEasting + deltaNorthing * deltaNorthing,
+        );
+        final differenceText = sameZone
+            ? 'difference ΔE ${deltaEasting.toStringAsFixed(3)} m, '
+                  'ΔN ${deltaNorthing.toStringAsFixed(3)} m, '
+                  'planar shift ${planarShift.toStringAsFixed(3)} m'
+            : 'difference unavailable across UTM zones '
+                  '${oldUtm.zone} and ${newUtm.zone}';
+
+        debugPrint(
+          'CoordinateConverter [$label]: $fromName -> $toName; '
+          'canonical WGS84 $canonicalText unchanged; '
+          'E/N ${oldUtm.easting.toStringAsFixed(3)},'
+          '${oldUtm.northing.toStringAsFixed(3)} (${oldUtm.zone}) -> '
+          '${newUtm.easting.toStringAsFixed(3)},'
+          '${newUtm.northing.toStringAsFixed(3)} (${newUtm.zone}); '
+          '$differenceText',
+        );
+      }
+
+      if (canonicalCurrent != null) {
+        logChange('current', canonicalCurrent, null);
+      }
+      for (var index = 0; index < state.points.length; index++) {
+        logChange('point #${index + 1}', state.points[index], index);
+      }
+      return true;
+    }());
+
     state = state.copyWith(
-      points: transformedPoints,
-      current: transformedCurrent,
+      displayCurrent: derivedCurrent,
+      clearDisplayCurrent: derivedCurrent == null,
+      displayPoints: derivedPoints,
     );
   }
 }

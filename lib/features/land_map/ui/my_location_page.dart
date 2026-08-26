@@ -22,6 +22,7 @@ import '../../auth/services/auth_service.dart';
 import '../models/coordinate_format.dart';
 import '../models/location_media_models.dart';
 import '../models/reference_ellipsoid.dart';
+import '../services/coordinate_converter.dart';
 import '../services/location_media_service.dart';
 import '../services/utm_converter.dart';
 import '../state/land_map_notifier.dart';
@@ -1228,6 +1229,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     final theme = Theme.of(context);
     final st = ref.watch(landMapProvider);
     final ellipsoid = ref.watch(referenceEllipsoidProvider);
+    final selectedDatum = ref.watch(selectedDatumProvider);
     final unit = ref.watch(distanceUnitProvider);
     final coordinateFormat = ref.watch(coordinateFormatProvider);
 
@@ -1237,9 +1239,13 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         ? CoordinateFormatter.format(lat, lon, coordinateFormat)
         : '--';
 
-    final utmData = (lat != null && lon != null)
-        ? UtmConverter.fromLatLng(lat, lon, ellipsoid)
-        : null;
+    final utmData = st.current == null
+        ? null
+        : CoordinateConverter.deriveDisplayCoordinate(
+            st.current!,
+            ellipsoid,
+            selectedDatum,
+          ).utm;
     final eastingText = utmData != null
         ? utmData.easting.toStringAsFixed(1)
         : '—';

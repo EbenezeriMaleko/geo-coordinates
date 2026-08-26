@@ -12,10 +12,10 @@ import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/ui/account_page.dart';
 import '../models/coordinate_format.dart';
+import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
 import '../state/settings_provider.dart';
 import '../state/land_map_notifier.dart';
-import '../services/coordinate_converter.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -42,6 +42,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final photoQuality = ref.watch(photoQualityProvider);
     final captureMode = ref.watch(photoCaptureModeProvider);
     final selectedEllipsoid = ref.watch(referenceEllipsoidProvider);
+    final selectedDatum = ref.watch(selectedDatumProvider);
     final session = ref.watch(authSessionProvider);
     final theme = Theme.of(context);
     final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
@@ -69,7 +70,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           _item(
             title: 'Reference ellipsoid',
-            subtitle: selectedEllipsoid.displayName,
+            subtitle:
+                selectedDatum?.displayName ?? selectedEllipsoid.displayName,
             onTap: _showReferenceEllipsoidSelector,
           ),
 
@@ -576,7 +578,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       final isSelected = ellipsoid == current;
                       return ListTile(
                         title: Text(ellipsoid.displayName),
-                        subtitle: Text(ellipsoid.description),
+                        subtitle: Text(
+                          GeodeticDatumRegistry.forEllipsoid(
+                                    ellipsoid,
+                                  ).isEmpty &&
+                                  ellipsoid != ReferenceEllipsoid.wgs84
+                              ? '${ellipsoid.description}\n'
+                                    'No datum offset available yet — '
+                                    'ellipsoid-shape-only conversion.'
+                              : ellipsoid.description,
+                        ),
                         trailing: isSelected
                             ? const Icon(
                                 Icons.check_circle,
@@ -584,12 +595,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               )
                             : const Icon(Icons.circle_outlined),
                         onTap: () async {
-                          final popContext = Navigator.of(context);
-                          // Handle ellipsoid change with coordinate transformation
-                          if (ellipsoid != current) {
-                            await _handleEllipsoidChange(ellipsoid);
+                          Navigator.of(sheetContext).pop();
+                          final currentLocation = ref
+                              .read(landMapProvider)
+                              .current;
+                          final datums =
+                              GeodeticDatumRegistry.orderedForLocation(
+                                ellipsoid,
+                                currentLocation,
+                              );
+                          GeodeticDatum? datum;
+                          if (datums.isNotEmpty) {
+                            datum = await _showDatumSelector(
+                              datums,
+                              currentLocation,
+                            );
+                            if (datum == null) return;
                           }
-                          popContext.pop();
+                          await _handleEllipsoidOrDatumChange(ellipsoid, datum);
                         },
                       );
                     }),
@@ -604,50 +627,103 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  /// Handle ellipsoid change and transform all coordinates
-  Future<void> _handleEllipsoidChange(ReferenceEllipsoid newEllipsoid) async {
+  Future<GeodeticDatum?> _showDatumSelector(
+    List<GeodeticDatum> datums,
+    LatLng? currentLocation,
+  ) {
+    return showModalBottomSheet<GeodeticDatum>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.72,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              const Text(
+                'Select datum',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'Choose the EPSG operation used by your survey. '
+                  'Operations valid at your current location appear first.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  children: datums.map((datum) {
+                    final recommended =
+                        currentLocation != null &&
+                        datum.isValidAt(currentLocation);
+                    return ListTile(
+                      title: Text(datum.displayName),
+                      subtitle: Text(
+                        '${datum.areaOfUse}\n'
+                        'EPSG:${datum.epsgOperationCode} • '
+                        '${datum.accuracyMeters.toStringAsFixed(0)} m accuracy'
+                        '${datum.isApproximate ? ' • Approximate' : ''}'
+                        '${recommended
+                            ? ' • Valid here'
+                            : currentLocation == null
+                            ? ''
+                            : ' • Outside current location'}',
+                      ),
+                      isThreeLine: true,
+                      trailing: recommended
+                          ? const Icon(Icons.near_me, color: Color(0xFF0C8A8C))
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop(datum),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Re-derives secondary coordinates from canonical WGS84 values.
+  Future<void> _handleEllipsoidOrDatumChange(
+    ReferenceEllipsoid newEllipsoid,
+    GeodeticDatum? newDatum,
+  ) async {
     try {
       final ellipsoidNotifier = ref.read(referenceEllipsoidProvider.notifier);
+      final datumNotifier = ref.read(selectedDatumProvider.notifier);
       final currentEllipsoid = ref.read(referenceEllipsoidProvider);
+      final currentDatum = ref.read(selectedDatumProvider);
 
-      // If no change, return early
-      if (newEllipsoid == currentEllipsoid) {
+      if (newEllipsoid == currentEllipsoid &&
+          newDatum?.id == currentDatum?.id) {
         return;
       }
 
-      // Get the land map notifier
       final landMapNotifier = ref.read(landMapProvider.notifier);
-
-      // Create a conversion function using the coordinate converter
-      LatLng conversionFunction(LatLng coord) {
-        return CoordinateConverter.convertCoordinates(
-          coord,
-          currentEllipsoid,
-          newEllipsoid,
-        );
-      }
-
-      // Debug: report ellipsoid change and point count
-      try {
-        final pointCount = ref.read(landMapProvider).points.length;
-        debugPrint(
-          'SettingsPage: changing ellipsoid from '
-          '${currentEllipsoid.name} to ${newEllipsoid.name}; points=$pointCount',
-        );
-      } catch (_) {}
-
-      // Transform all coordinates in the land map
-      landMapNotifier.transformAllCoordinates(conversionFunction);
-
-      // Update the ellipsoid setting
+      landMapNotifier.deriveDisplayCoordinates(
+        newEllipsoid,
+        newDatum,
+        previousEllipsoid: currentEllipsoid,
+        previousDatum: currentDatum,
+      );
       await ellipsoidNotifier.setEllipsoid(newEllipsoid);
+      await datumNotifier.setDatum(newDatum);
 
-      // Show confirmation
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Coordinates transformed to ${newEllipsoid.displayName}',
+            'Coordinates now shown in '
+            '${newDatum?.displayName ?? newEllipsoid.displayName}',
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -656,7 +732,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error transforming coordinates: $e'),
+          content: Text('Error changing coordinate display: $e'),
           backgroundColor: Colors.red,
         ),
       );
