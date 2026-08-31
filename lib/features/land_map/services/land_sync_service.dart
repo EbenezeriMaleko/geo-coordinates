@@ -29,6 +29,81 @@ class LandSyncService {
   LandSyncService(this.box, {LandCloudService? cloudService})
     : cloudService = cloudService ?? LandCloudService();
 
+  /// Stores a complete cloud record locally so it can be edited offline.
+  /// Pending local edits always win; a cloud refresh must not overwrite them.
+  Future<String> cacheCloudLand(LandDetail detail) async {
+    dynamic localKey;
+    Map<String, dynamic>? existing;
+    for (final entry in box.toMap().entries) {
+      if (entry.value is! Map) continue;
+      final candidate = Map<String, dynamic>.from(entry.value as Map);
+      final localId = candidate['id']?.toString().trim() ?? '';
+      final cloudId = candidate['cloudId']?.toString().trim() ?? '';
+      if (localId == detail.id || cloudId == detail.id) {
+        localKey = entry.key;
+        existing = candidate;
+        break;
+      }
+    }
+
+    final existingId = existing?['id']?.toString().trim() ?? '';
+    if (existing != null &&
+        (existing['syncStatus']?.toString().toLowerCase() ?? '') == 'pending') {
+      return existingId.isNotEmpty ? existingId : localKey.toString();
+    }
+
+    localKey ??= 'cloud_${detail.id}';
+    final localId = existingId.isNotEmpty ? existingId : localKey.toString();
+    final now = DateTime.now().toIso8601String();
+    final points = _pointsFromDetail(detail);
+    final cached = <String, dynamic>{
+      ...?existing,
+      'id': localId,
+      'cloudId': detail.id,
+      'entityType': detail.type,
+      'type': detail.type,
+      'name': detail.name,
+      'place': detail.place,
+      'phone': detail.phone,
+      'description': detail.description,
+      if ((detail.referenceEllipsoid ?? '').trim().isNotEmpty)
+        'referenceEllipsoid': detail.referenceEllipsoid,
+      'points': points,
+      'labels': points.map((point) => point['label'] ?? '').toList(),
+      'syncStatus': 'synced',
+      'syncError': null,
+      'createdAt': detail.createdAt ?? existing?['createdAt'] ?? now,
+      'updatedAt': detail.updatedAt ?? now,
+      'lastSyncedAt': now,
+    };
+    cached.removeWhere((key, value) => value == null);
+    await box.put(localKey, cached);
+    return localId;
+  }
+
+  List<Map<String, dynamic>> _pointsFromDetail(LandDetail detail) {
+    final points = <Map<String, dynamic>>[];
+    for (var index = 0; index < detail.points.length; index++) {
+      final point = detail.points[index];
+      if (point.x == null || point.y == null) continue;
+      points.add(
+        {
+          'order': point.pointOrder > 0 ? point.pointOrder - 1 : index,
+          'cloudPointId': point.id,
+          'lat': point.y,
+          'lng': point.x,
+          if (point.easting != null) 'easting': point.easting,
+          if (point.northing != null) 'northing': point.northing,
+          if (point.zone != null) 'zone': point.zone,
+          if (point.band != null) 'band': point.band,
+          if (point.hemisphere != null) 'hemisphere': point.hemisphere,
+          if (point.label != null) 'label': point.label,
+        }..removeWhere((key, value) => value == null),
+      );
+    }
+    return points;
+  }
+
   /// Saves a cloud land metadata edit locally before any network request.
   ///
   /// The normal background sync will upload this pending edit when a usable
@@ -210,8 +285,20 @@ class LandSyncService {
     final payload = _buildPayload(attemptStampedLand, pointEntries);
     final cloudId = (attemptStampedLand['cloudId']?.toString() ?? '').trim();
     if (cloudId.isNotEmpty) {
-      final updateRequest = _buildMetadataUpdateRequest(attemptStampedLand);
       try {
+        final remoteDetail = await cloudService.getLand(bearerToken, cloudId);
+        if (!_sameBoundary(pointEntries, remoteDetail.points)) {
+          const err =
+              'Boundary changes are saved locally, but the cloud API does not '
+              'support updating land coordinates yet.';
+          await _markSyncFailed(key, attemptStampedLand, err);
+          return err;
+        }
+        final updateRequest = _buildUpdateRequest(
+          attemptStampedLand,
+          pointEntries,
+          remoteDetail.points,
+        );
         await cloudService.updateLand(bearerToken, cloudId, updateRequest);
         await _markSynced(key, attemptStampedLand, cloudId);
         return null;
@@ -395,14 +482,58 @@ class LandSyncService {
     );
   }
 
-  UpdateLandRequest _buildMetadataUpdateRequest(Map<String, dynamic> land) {
+  UpdateLandRequest _buildUpdateRequest(
+    Map<String, dynamic> land,
+    List<Map<String, dynamic>> pointEntries,
+    List<LandPoint> remotePoints,
+  ) {
     final fallbackPhone = _trimOrNull(box.get('submit_phone')?.toString());
+    final orderedRemotePoints = [...remotePoints]
+      ..sort((left, right) => left.pointOrder.compareTo(right.pointOrder));
+    final pointUpdates = <LandPointUpdateRequest>[];
+    for (
+      var index = 0;
+      index < pointEntries.length && index < orderedRemotePoints.length;
+      index++
+    ) {
+      final remoteId = orderedRemotePoints[index].id;
+      if (remoteId == null) continue;
+      pointUpdates.add(
+        LandPointUpdateRequest(
+          id: remoteId,
+          label: pointEntries[index]['label'] as String?,
+        ),
+      );
+    }
     return UpdateLandRequest(
       name: _trimOrNull(land['name']?.toString()),
       place: _trimOrNull(land['place']?.toString()),
       phone: _trimOrNull(land['phone']?.toString()) ?? fallbackPhone,
       description: _trimOrNull(land['description']?.toString()),
+      points: pointUpdates,
     );
+  }
+
+  bool _sameBoundary(
+    List<Map<String, dynamic>> localPoints,
+    List<LandPoint> remotePoints,
+  ) {
+    if (localPoints.length != remotePoints.length) return false;
+    final orderedRemotePoints = [...remotePoints]
+      ..sort((left, right) => left.pointOrder.compareTo(right.pointOrder));
+    const toleranceDegrees = 1e-7;
+    for (var index = 0; index < localPoints.length; index++) {
+      final localLat = localPoints[index]['lat'] as double;
+      final localLng = localPoints[index]['lng'] as double;
+      final remoteLat = orderedRemotePoints[index].y;
+      final remoteLng = orderedRemotePoints[index].x;
+      if (remoteLat == null || remoteLng == null) return false;
+      if ((localLat - remoteLat).abs() > toleranceDegrees ||
+          (localLng - remoteLng).abs() > toleranceDegrees) {
+        return false;
+      }
+    }
+    return true;
   }
 
   String _normalizeLandType(Map<String, dynamic> land) {

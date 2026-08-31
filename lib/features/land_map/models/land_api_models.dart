@@ -72,12 +72,14 @@ class UpdateLandRequest {
   final String? place;
   final String? phone;
   final String? description;
+  final List<LandPointUpdateRequest>? points;
 
   const UpdateLandRequest({
     this.name,
     this.place,
     this.phone,
     this.description,
+    this.points,
   });
 
   Map<String, dynamic> toJson() =>
@@ -86,9 +88,20 @@ class UpdateLandRequest {
         'place': place?.trim(),
         'phone': phone?.trim(),
         'description': description?.trim(),
+        if (points != null)
+          'points': points!.map((point) => point.toJson()).toList(),
       }..removeWhere(
         (key, value) => value == null || (value is String && value.isEmpty),
       );
+}
+
+class LandPointUpdateRequest {
+  final int id;
+  final String? label;
+
+  const LandPointUpdateRequest({required this.id, this.label});
+
+  Map<String, dynamic> toJson() => {'id': id, 'label': label?.trim()};
 }
 
 class LandMarkerRequest {
@@ -167,6 +180,7 @@ class LandListItem {
   final double? area;
   final double? perimeter;
   final String? description;
+  final String? referenceEllipsoid;
   final int pointsCount;
   final int markersCount;
   final int mediaCount;
@@ -183,6 +197,7 @@ class LandListItem {
     required this.area,
     required this.perimeter,
     required this.description,
+    this.referenceEllipsoid,
     required this.pointsCount,
     required this.markersCount,
     required this.mediaCount,
@@ -201,6 +216,7 @@ class LandListItem {
       area: (json['area'] as num?)?.toDouble(),
       perimeter: (json['perimeter'] as num?)?.toDouble(),
       description: json['description']?.toString(),
+      referenceEllipsoid: json['reference_ellipsoid']?.toString(),
       pointsCount: (json['points_count'] as num?)?.toInt() ?? 0,
       markersCount: (json['markers_count'] as num?)?.toInt() ?? 0,
       mediaCount: (json['media_count'] as num?)?.toInt() ?? 0,
@@ -217,6 +233,7 @@ class LandPoint {
 
   factory LandPoint.fromJson(Map<String, dynamic> json) => LandPoint(json);
 
+  int? get id => (raw['id'] as num?)?.toInt();
   int get pointOrder => (raw['point_order'] as num?)?.toInt() ?? 0;
   String? get label => raw['label']?.toString();
   double? get x => _toDouble(raw['x']);
@@ -297,6 +314,7 @@ class LandDetail extends LandListItem {
     required super.area,
     required super.perimeter,
     required super.description,
+    super.referenceEllipsoid,
     required super.pointsCount,
     required super.markersCount,
     required super.mediaCount,
@@ -319,6 +337,7 @@ class LandDetail extends LandListItem {
       area: base.area,
       perimeter: base.perimeter,
       description: base.description,
+      referenceEllipsoid: base.referenceEllipsoid,
       pointsCount: base.pointsCount,
       markersCount: base.markersCount,
       mediaCount: base.mediaCount,

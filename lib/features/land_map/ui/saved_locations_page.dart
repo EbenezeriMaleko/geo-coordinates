@@ -1704,6 +1704,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         return;
       }
 
+      final localId = await LandSyncService(
+        Hive.box('landbox'),
+      ).cacheCloudLand(detail);
+
       // Convert LandPoint list → the {lat, lng} map format that
       // _goToSavedItem / _viewOnMap read via _extractLatLngPoints.
       final pointsList = detail.points
@@ -1716,8 +1720,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           )
           .toList();
 
-      final enriched = <String, dynamic>{...item, 'points': pointsList};
+      final enriched = <String, dynamic>{
+        ...item,
+        'id': localId,
+        'cloudId': detail.id,
+        'points': pointsList,
+      };
 
+      if (!context.mounted) return;
       if (action == _ActionKind_goTo) {
         _goToSavedItem(context, enriched);
       } else {
@@ -3930,16 +3940,24 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           _ActionRow(
             icon: Icons.remove_red_eye_outlined,
             label: 'View on map',
-            onTap: () {
-              Navigator.of(context).pop();
+            onTap: () async {
               final points = widget.isCloud ? _cloudPoints : _localPoints;
               if (points.isEmpty) return;
               final name = widget.isCloud
                   ? widget.cloudItem!.name
                   : widget.localItem!['name']?.toString() ?? 'Saved location';
-              final id = widget.isCloud
-                  ? widget.cloudItem!.id
-                  : widget.localItem!['id']?.toString();
+              String? id;
+              if (widget.isCloud) {
+                final detail = _cloudDetail;
+                if (detail == null) return;
+                id = await LandSyncService(
+                  Hive.box('landbox'),
+                ).cacheCloudLand(detail);
+              } else {
+                id = widget.localItem!['id']?.toString();
+              }
+              if (!context.mounted) return;
+              Navigator.of(context).pop();
               ref
                   .read(landMapProvider.notifier)
                   .loadSavedFieldPoints(points, fieldId: id, fieldName: name);

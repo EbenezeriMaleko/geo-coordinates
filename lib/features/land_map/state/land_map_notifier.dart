@@ -287,7 +287,9 @@ class LandMapNotifier extends Notifier<LandMapState> {
             : name;
         final updated = {
           ...existing,
-          'id': state.activeFieldId,
+          // activeFieldId may be the server ID when opened from the cloud
+          // list. Preserve the immutable local ID used by Hive.
+          'id': existing['id'] ?? state.activeFieldId,
           'entityType': 'polygon',
           'type': 'polygon',
           'name': displayName,
