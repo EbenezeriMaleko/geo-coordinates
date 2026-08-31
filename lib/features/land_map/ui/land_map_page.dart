@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map_compass/flutter_map_compass.dart';
@@ -263,9 +264,26 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   bool _showMarkerLayer = true;
   bool _bottomBarExpanded = false;
   List<LatLng> _routePoints = const [];
+  List<LatLng> _fullRoutePoints = const [];
   RouteResult? _currentRoute;
   bool _isFetchingRoute = false;
   LatLng? _routeDestination;
+  int _consecutiveOffRouteFixes = 0;
+  DateTime? _lastRerouteAttempt;
+  bool _hasJoinedCurrentRoute = false;
+  LatLng? _navigationDisplayPosition;
+  Position? _lastAcceptedNavigationFix;
+  LatLng? _liveDisplayPosition;
+  Position? _lastAcceptedLiveFix;
+  late final AnimationController _positionAnimationController;
+  late final AnimationController _headingAnimationController;
+  LatLng? _positionAnimationStart;
+  LatLng? _positionAnimationEnd;
+  bool _positionAnimationIsNavigation = false;
+  double _headingAnimationStart = 0;
+  double _headingAnimationDelta = 0;
+  bool _headingAnimationIsNavigation = false;
+  DateTime? _lastHeadingTargetAt;
   ProviderSubscription<LandMapState>? _landMapSubscription;
   StreamSubscription<CompassEvent>? _navigationCompassSubscription;
   StreamSubscription<CompassEvent>? _orientationCompassSubscription;
@@ -278,7 +296,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   Timer? _navigationCameraTimer;
   bool _orientationLocked = false;
   double _orientationHeading = 0.0;
-  double _lastAppliedOrientation = 0.0;
   bool _locationDialogVisible = false;
   bool _isSyncingLocation = false;
 
@@ -322,6 +339,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   void _startOrientationCompass() {
     _orientationCompassSubscription?.cancel();
+    _lastHeadingTargetAt = null;
     _orientationCompassSubscription = FlutterCompass.events?.listen((event) {
       if (!mounted || event.heading == null) return;
       if (_navigationCameraActive ||
@@ -330,12 +348,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         return;
       }
       final corrected = _correctedHeading(event.heading!);
-      // Only apply if heading changed enough (> 3 degrees) to avoid jitter
-      final diff = (corrected - _lastAppliedOrientation).abs();
-      if (diff < 3 && diff > 357) return; // ignore tiny changes
-      _orientationHeading = corrected;
-      _lastAppliedOrientation = corrected;
-      _applyOrientationRotation();
+      _animateHeadingTo(corrected, navigation: false);
     });
   }
 
@@ -348,7 +361,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }
     _orientationLocked = false;
     _orientationHeading = 0.0;
-    _lastAppliedOrientation = 0.0;
+    _lastHeadingTargetAt = null;
+    _headingAnimationController.stop();
   }
 
   void _applyOrientationRotation() {
@@ -370,6 +384,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   @override
   void initState() {
     super.initState();
+    _positionAnimationController = AnimationController(vsync: this)
+      ..addListener(_onPositionAnimationTick);
+    _headingAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    )..addListener(_onHeadingAnimationTick);
     WidgetsBinding.instance.addObserver(this);
     _restorePreferences();
     _landMapSubscription = ref.listenManual(landMapProvider, (previous, next) {
@@ -385,22 +405,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           final targetPoint = next.navigationTarget!.point;
           unawaited(_fetchRoute(targetPoint));
         }
-        if (currentChanged && next.current != null) {
-          // Trim route as user moves forward
-          if (_routePoints.length >= 2) {
-            final trimmed = _trimRouteToCurrentPosition(
-              _routePoints,
-              next.current!,
-            );
-            if (trimmed.length != _routePoints.length) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _routePoints = trimmed);
-              });
-            }
-          }
-          // Update navigation camera (smooth follow + rotate)
-          _updateNavigationCamera();
-        }
+        // Navigation visuals are updated only by accepted GPS fixes. Raw fixes
+        // still update LandMapState for diagnostics and survey source data.
         return;
       }
 
@@ -408,7 +414,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         if (_isLocating && next.current != null && mounted) {
           setState(() => _isLocating = false);
         }
-        _followCurrentLocationIfNeeded(next.current);
+        _followCurrentLocationIfNeeded(_liveDisplayPosition ?? next.current);
       }
 
       if (previous?.navigationTarget != null) {
@@ -474,6 +480,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _navigationTrackingSubscription?.cancel();
     _navigationCompassSubscription?.cancel();
     _orientationCompassSubscription?.cancel();
+    _positionAnimationController.dispose();
+    _headingAnimationController.dispose();
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
@@ -697,7 +705,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   Future<void> _recenterToCurrentLocation() async {
     if (_isLocating) return;
-    final current = ref.read(landMapProvider).current;
+    final current =
+        _navigationDisplayPosition ?? ref.read(landMapProvider).current;
     if (current != null) {
       _followCurrentLocation = true;
       _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
@@ -1512,14 +1521,21 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     _fieldTrackingSubscription =
         Geolocator.getPositionStream(
-          locationSettings: AndroidSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 2, // emit only when moved >= 2 m to save battery
-            intervalDuration: const Duration(seconds: 3),
-          ),
+          locationSettings: _continuousLocationSettings(),
         ).listen(
           (position) {
             if (!mounted) return;
+            if (_isAcceptablePositionFix(
+              position,
+              previous: _lastAcceptedLiveFix,
+              logLabel: 'Live map',
+            )) {
+              _lastAcceptedLiveFix = position;
+              _animateDisplayPosition(
+                LatLng(position.latitude, position.longitude),
+                navigation: false,
+              );
+            }
             ref
                 .read(landMapProvider.notifier)
                 .updateCurrentFromPosition(position);
@@ -1537,8 +1553,248 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         );
   }
 
+  LocationSettings _navigationLocationSettings() {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 1,
+        intervalDuration: const Duration(seconds: 2),
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 1,
+        activityType: ActivityType.automotiveNavigation,
+        pauseLocationUpdatesAutomatically: false,
+        allowBackgroundLocationUpdates: false,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 1,
+    );
+  }
+
+  LocationSettings _continuousLocationSettings() {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 2,
+        intervalDuration: const Duration(seconds: 3),
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 2,
+        activityType: ActivityType.otherNavigation,
+        pauseLocationUpdatesAutomatically: false,
+        allowBackgroundLocationUpdates: false,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 2,
+    );
+  }
+
+  bool _isAcceptableNavigationFix(Position position) {
+    return _isAcceptablePositionFix(
+      position,
+      previous: _lastAcceptedNavigationFix,
+      logLabel: 'Navigation',
+    );
+  }
+
+  bool _isAcceptablePositionFix(
+    Position position, {
+    required Position? previous,
+    required String logLabel,
+  }) {
+    if (!position.latitude.isFinite ||
+        !position.longitude.isFinite ||
+        !position.accuracy.isFinite ||
+        position.latitude < -90 ||
+        position.latitude > 90 ||
+        position.longitude < -180 ||
+        position.longitude > 180) {
+      debugPrint('$logLabel GPS fix rejected: invalid coordinate values.');
+      return false;
+    }
+    if (position.accuracy < 0 || position.accuracy > 35) {
+      debugPrint(
+        '$logLabel GPS fix rejected: '
+        '${position.accuracy.toStringAsFixed(1)} m accuracy.',
+      );
+      return false;
+    }
+
+    if (previous != null) {
+      final elapsedSeconds =
+          position.timestamp.difference(previous.timestamp).inMilliseconds /
+          1000;
+      if (elapsedSeconds > 0) {
+        final distanceMeters = Geolocator.distanceBetween(
+          previous.latitude,
+          previous.longitude,
+          position.latitude,
+          position.longitude,
+        );
+        final reportedSpeed = position.speed.isFinite
+            ? max(0.0, position.speed)
+            : 0.0;
+        final maximumPlausibleSpeed = max(70.0, reportedSpeed + 20.0);
+        final uncertaintyAllowance = previous.accuracy + position.accuracy;
+        final maximumPlausibleDistance =
+            maximumPlausibleSpeed * elapsedSeconds + uncertaintyAllowance;
+        if (distanceMeters > maximumPlausibleDistance) {
+          debugPrint(
+            '$logLabel GPS fix rejected: implausible jump of '
+            '${distanceMeters.toStringAsFixed(1)} m in '
+            '${elapsedSeconds.toStringAsFixed(1)} s.',
+          );
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  void _animateDisplayPosition(LatLng target, {required bool navigation}) {
+    final current = navigation
+        ? _navigationDisplayPosition
+        : _liveDisplayPosition;
+    if (current == null) {
+      setState(() {
+        if (navigation) {
+          _navigationDisplayPosition = target;
+        } else {
+          _liveDisplayPosition = target;
+        }
+      });
+      if (navigation) _moveNavigationCameraTo(target);
+      return;
+    }
+
+    _positionAnimationController.stop();
+    _positionAnimationStart = current;
+    _positionAnimationEnd = target;
+    _positionAnimationIsNavigation = navigation;
+    _positionAnimationController.duration = navigation
+        ? const Duration(milliseconds: 1600)
+        : const Duration(milliseconds: 2200);
+    _positionAnimationController.forward(from: 0);
+  }
+
+  void _onPositionAnimationTick() {
+    if (!mounted ||
+        _positionAnimationStart == null ||
+        _positionAnimationEnd == null) {
+      return;
+    }
+    final point = _interpolateLatLng(
+      _positionAnimationStart!,
+      _positionAnimationEnd!,
+      _positionAnimationController.value,
+    );
+    setState(() {
+      if (_positionAnimationIsNavigation) {
+        _navigationDisplayPosition = point;
+      } else {
+        _liveDisplayPosition = point;
+      }
+    });
+
+    if (_positionAnimationIsNavigation) {
+      _moveNavigationCameraTo(point);
+    } else if (_followCurrentLocation && !_userIsInteracting) {
+      _mapController.move(point, _clampZoom(max(_currentZoom, 17)));
+    }
+  }
+
+  LatLng _interpolateLatLng(LatLng start, LatLng end, double progress) {
+    var longitudeDelta = end.longitude - start.longitude;
+    if (longitudeDelta > 180) longitudeDelta -= 360;
+    if (longitudeDelta < -180) longitudeDelta += 360;
+    var longitude = start.longitude + longitudeDelta * progress;
+    if (longitude > 180) longitude -= 360;
+    if (longitude <= -180) longitude += 360;
+    return LatLng(
+      start.latitude + (end.latitude - start.latitude) * progress,
+      longitude,
+    );
+  }
+
+  double _shortestHeadingDelta(double from, double to) {
+    return ((to - from + 540) % 360) - 180;
+  }
+
+  void _animateHeadingTo(double target, {required bool navigation}) {
+    final now = DateTime.now();
+    if (_lastHeadingTargetAt != null &&
+        now.difference(_lastHeadingTargetAt!) <
+            const Duration(milliseconds: 50)) {
+      return;
+    }
+    final current = navigation ? _navigationHeading : _orientationHeading;
+    final delta = _shortestHeadingDelta(current, target);
+    if (delta.abs() < 0.8) return;
+
+    _lastHeadingTargetAt = now;
+    _headingAnimationController.stop();
+    _headingAnimationStart = current;
+    _headingAnimationDelta = delta;
+    _headingAnimationIsNavigation = navigation;
+    _headingAnimationController.forward(from: 0);
+  }
+
+  void _onHeadingAnimationTick() {
+    if (!mounted) return;
+    final progress = Curves.easeOut.transform(
+      _headingAnimationController.value,
+    );
+    final heading =
+        (_headingAnimationStart + _headingAnimationDelta * progress + 360) %
+        360;
+    if (_headingAnimationIsNavigation) {
+      _navigationHeading = heading;
+      final position = _navigationDisplayPosition;
+      if (position != null) _moveNavigationCameraTo(position);
+    } else {
+      _orientationHeading = heading;
+      _applyOrientationRotation();
+    }
+  }
+
+  void _moveNavigationCameraTo(LatLng point) {
+    if (!_navigationCameraActive || _userIsInteracting) return;
+    _mapController.moveAndRotate(
+      point,
+      _clampZoom(max(_currentZoom, 17)),
+      -_navigationHeading,
+    );
+  }
+
+  void _applyAcceptedNavigationFix(Position position) {
+    final point = LatLng(position.latitude, position.longitude);
+    _lastAcceptedNavigationFix = position;
+    final trimmed = _fullRoutePoints.length >= 2
+        ? _trimRouteToCurrentPosition(_fullRoutePoints, point)
+        : _routePoints;
+    if (mounted) setState(() => _routePoints = trimmed);
+    _animateDisplayPosition(point, navigation: true);
+    if (_fullRoutePoints.length >= 2) {
+      _evaluateOffRoute(point, accuracyMeters: position.accuracy);
+    }
+  }
+
   Future<void> _startNavigationTracking() async {
     if (_navigationTrackingSubscription != null) return;
+
+    _positionAnimationController.stop();
 
     // Cancel the continuous stream FIRST — synchronously, before any await —
     // so that no position emission from _fieldTrackingSubscription can race
@@ -1570,7 +1826,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         const Duration(milliseconds: 400),
       );
       if (mounted && seedEvent.heading != null) {
-        _navigationHeading = seedEvent.heading!;
+        _navigationHeading = _correctedHeading(seedEvent.heading!);
       }
     } on TimeoutException {
       // Compass didn't respond in time \u2014 use the current _navigationHeading (0\u00b0)
@@ -1595,14 +1851,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     setState(() {
       _navigationCameraActive = true;
       _followCurrentLocation = false;
+      _navigationDisplayPosition =
+          _liveDisplayPosition ?? ref.read(landMapProvider).current;
+      _lastAcceptedNavigationFix = null;
     });
+    _lastHeadingTargetAt = null;
 
     // Start compass for map rotation
     _navigationCompassSubscription?.cancel();
     _navigationCompassSubscription = FlutterCompass.events?.listen((event) {
       if (!mounted || event.heading == null) return;
-      setState(() => _navigationHeading = event.heading!);
-      _updateNavigationCamera();
+      _animateHeadingTo(_correctedHeading(event.heading!), navigation: true);
     });
 
     // Use a plain foreground stream — no ForegroundNotificationConfig.
@@ -1613,13 +1872,14 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     // initLocation().
     _navigationTrackingSubscription =
         Geolocator.getPositionStream(
-          locationSettings: AndroidSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 1,
-            intervalDuration: const Duration(seconds: 2),
-          ),
+          locationSettings: _navigationLocationSettings(),
         ).listen(
           (position) {
+            if (_isAcceptableNavigationFix(position)) {
+              _applyAcceptedNavigationFix(position);
+            }
+            // Preserve the latest raw device fix independently of whether it
+            // was accepted for navigation rendering.
             ref
                 .read(landMapProvider.notifier)
                 .updateCurrentFromPosition(position);
@@ -1641,10 +1901,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _navigationCompassSubscription = null;
     _navigationCameraTimer?.cancel();
     _navigationCameraTimer = null;
+    _positionAnimationController.stop();
+    _headingAnimationController.stop();
     if (mounted) {
       setState(() {
         _navigationCameraActive = false;
         _navigationHeading = 0.0;
+        _lastHeadingTargetAt = null;
+        _liveDisplayPosition = _navigationDisplayPosition;
+        _lastAcceptedLiveFix = null;
+        _navigationDisplayPosition = null;
+        _lastAcceptedNavigationFix = null;
         _followCurrentLocation = true;
       });
       // Restore the orientation compass lock if the user had it active before
@@ -1672,7 +1939,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _navigationCameraTimer?.cancel();
     _navigationCameraTimer = Timer(const Duration(milliseconds: 150), () {
       if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
-      final pos = ref.read(landMapProvider).current;
+      final pos = _navigationDisplayPosition;
       if (pos == null) return;
       _mapController.moveAndRotate(
         pos,
@@ -1683,14 +1950,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   Future<void> _fetchRoute(LatLng destination) async {
-    final current = ref.read(landMapProvider).current;
+    final current =
+        _navigationDisplayPosition ?? ref.read(landMapProvider).current;
     if (current == null) return;
 
     setState(() {
       _isFetchingRoute = true;
       _routePoints = const [];
+      _fullRoutePoints = const [];
       _currentRoute = null;
       _routeDestination = destination;
+      _consecutiveOffRouteFixes = 0;
+      _hasJoinedCurrentRoute = false;
     });
 
     final result = await RoutingService.getRoute(
@@ -1703,11 +1974,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     setState(() {
       _isFetchingRoute = false;
       if (result != null) {
-        _routePoints = result.points;
+        _fullRoutePoints = List.unmodifiable(result.points);
+        _routePoints = _trimRouteToCurrentPosition(
+          _fullRoutePoints,
+          ref.read(landMapProvider).current ?? current,
+        );
         _currentRoute = result;
       } else {
         // Fallback to straight line if routing fails
-        _routePoints = [current, destination];
+        _fullRoutePoints = [current, destination];
+        _routePoints = _fullRoutePoints;
         _snack('Road routing unavailable. Showing straight line.');
       }
     });
@@ -1728,13 +2004,111 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       }
     }
 
-    return [current, ...route.sublist(closestIndex + 1)];
+    final snappedStart = _nearestPointOnSegment(
+      current,
+      route[closestIndex],
+      route[closestIndex + 1],
+    );
+    return [snappedStart, ...route.sublist(closestIndex + 1)];
+  }
+
+  double _distanceToRouteMeters(LatLng current, List<LatLng> route) {
+    if (route.length < 2) return double.infinity;
+    var nearestDistance = double.infinity;
+    for (var index = 0; index < route.length - 1; index++) {
+      final nearest = _nearestPointOnSegment(
+        current,
+        route[index],
+        route[index + 1],
+      );
+      final distance = _distanceCalculator.as(
+        LengthUnit.Meter,
+        current,
+        nearest,
+      );
+      nearestDistance = min(nearestDistance, distance);
+    }
+    return nearestDistance;
+  }
+
+  void _evaluateOffRoute(LatLng current, {required double? accuracyMeters}) {
+    if (_routeDestination == null ||
+        _fullRoutePoints.length < 2 ||
+        _currentRoute == null ||
+        _isFetchingRoute) {
+      _consecutiveOffRouteFixes = 0;
+      return;
+    }
+
+    // Do not reroute from an unreliable fix. The threshold also expands with
+    // the reported GPS uncertainty to avoid treating normal jitter as travel.
+    if (accuracyMeters == null || accuracyMeters > 30) {
+      _consecutiveOffRouteFixes = 0;
+      return;
+    }
+    final thresholdMeters = max(35.0, accuracyMeters * 2);
+    final distanceMeters = _distanceToRouteMeters(current, _fullRoutePoints);
+
+    if (distanceMeters <= thresholdMeters) {
+      _hasJoinedCurrentRoute = true;
+      _consecutiveOffRouteFixes = 0;
+      return;
+    }
+
+    // A user may legitimately begin away from the road. Keep showing the
+    // approach connector until they first join the route; only departures
+    // after that point are considered off-route events.
+    if (!_hasJoinedCurrentRoute) return;
+
+    _consecutiveOffRouteFixes++;
+    if (_consecutiveOffRouteFixes < 3) return;
+
+    final now = DateTime.now();
+    if (_lastRerouteAttempt != null &&
+        now.difference(_lastRerouteAttempt!) < const Duration(seconds: 30)) {
+      return;
+    }
+    _lastRerouteAttempt = now;
+    _consecutiveOffRouteFixes = 0;
+    unawaited(_rerouteFrom(current, _routeDestination!));
+  }
+
+  Future<void> _rerouteFrom(LatLng current, LatLng destination) async {
+    if (_isFetchingRoute) return;
+    setState(() => _isFetchingRoute = true);
+
+    final result = await RoutingService.getRoute(
+      from: current,
+      to: destination,
+    );
+    if (!mounted || _routeDestination != destination) return;
+
+    setState(() {
+      _isFetchingRoute = false;
+      if (result == null || result.points.length < 2) return;
+      _fullRoutePoints = List.unmodifiable(result.points);
+      _routePoints = _trimRouteToCurrentPosition(_fullRoutePoints, current);
+      _currentRoute = result;
+      _hasJoinedCurrentRoute = false;
+    });
+    if (result != null && result.points.length >= 2) {
+      _snack('Route updated from your current position.');
+    }
   }
 
   /// Computes remaining route distance along the current (trimmed) route points.
   double _remainingRouteDistanceMeters() {
     if (_routePoints.length < 2) return 0;
     double total = 0;
+    final current =
+        _navigationDisplayPosition ?? ref.read(landMapProvider).current;
+    if (current != null) {
+      total += _distanceCalculator.as(
+        LengthUnit.Meter,
+        current,
+        _routePoints.first,
+      );
+    }
     for (int i = 0; i < _routePoints.length - 1; i++) {
       total += _distanceCalculator.as(
         LengthUnit.Meter,
@@ -1753,11 +2127,29 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return total;
   }
 
+  LatLng _nextRouteGuidancePoint(LatLng current, LatLng destination) {
+    if (_routePoints.isEmpty) return destination;
+    final approachDistance = _distanceCalculator.as(
+      LengthUnit.Meter,
+      current,
+      _routePoints.first,
+    );
+    if (approachDistance > 2 || _routePoints.length == 1) {
+      return _routePoints.first;
+    }
+    return _routePoints[1];
+  }
+
   void _clearRoute() {
     setState(() {
       _routePoints = const [];
+      _fullRoutePoints = const [];
       _currentRoute = null;
+      _isFetchingRoute = false;
       _routeDestination = null;
+      _consecutiveOffRouteFixes = 0;
+      _lastRerouteAttempt = null;
+      _hasJoinedCurrentRoute = false;
     });
   }
 
@@ -1959,8 +2351,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         : derivedCurrent?.utm?.toDisplayString() ?? 'UTM unavailable';
     final screenSize = MediaQuery.sizeOf(context);
     final isCompactHeight = screenSize.height < 700;
-    final center = st.current ?? const LatLng(-6.7924, 39.2083);
     final navigationTarget = st.navigationTarget;
+    final navigationCurrent = navigationTarget == null
+        ? (_liveDisplayPosition ?? st.current)
+        : (_navigationDisplayPosition ?? st.current);
+    final center = navigationCurrent ?? const LatLng(-6.7924, 39.2083);
     final navigationTargetPoints = navigationTarget == null
         ? const <LatLng>[]
         : _targetPoints(navigationTarget);
@@ -1968,9 +2363,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         navigationTarget?.kind.toLowerCase().trim() ?? '';
     final navigationGuidancePoint = navigationTarget == null
         ? null
-        : st.current == null
+        : navigationCurrent == null
         ? navigationTarget.point
-        : _navigationPointForCurrent(st.current!, navigationTarget);
+        : _navigationPointForCurrent(navigationCurrent, navigationTarget);
 
     final fieldSegmentLabels = _showFieldLayer
         ? _buildSegmentDistanceMarkers(
@@ -2001,11 +2396,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           ),
       ...fieldSegmentLabels,
 
-      if (st.current != null && hasLiveLocationAccess)
+      if (navigationTarget == null &&
+          st.current != null &&
+          hasLiveLocationAccess)
         Marker(
           width: 36,
           height: 36,
-          point: st.current!,
+          point: navigationCurrent!,
           child: const _CurrentMarker(),
         ),
       if (_showMarkerLayer)
@@ -2028,17 +2425,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           child: const _NavigationDestinationMarker(),
         ),
       // Direction arrow — sits on user, points toward destination
-      if (navigationTarget != null && st.current != null)
+      if (navigationTarget != null && navigationCurrent != null)
         Marker(
           width: 48,
           height: 48,
-          point: st.current!,
+          point: navigationCurrent,
           child: _NavigationArrowMarker(
             bearing: _bearingDegrees(
-              st.current!,
-              _routePoints.length >= 2
-                  ? _routePoints[min(1, _routePoints.length - 1)]
-                  : navigationTarget.point,
+              navigationCurrent,
+              _nextRouteGuidancePoint(
+                navigationCurrent,
+                navigationTarget.point,
+              ),
             ),
           ),
         ),
@@ -2116,10 +2514,20 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           strokeWidth: 5,
           color: Colors.teal.shade700,
         ),
-      // Show road route if available, otherwise straight line
-      // Main road route (trimmed as user moves)
+      // Approach connector from the real GPS position to the road-snapped
+      // route. This remains separate so the road route itself is not bent.
       if (navigationTarget != null &&
-          st.current != null &&
+          navigationCurrent != null &&
+          _routePoints.length >= 2)
+        Polyline(
+          points: [navigationCurrent, _routePoints.first],
+          strokeWidth: 3,
+          color: Colors.teal.shade700,
+          pattern: const StrokePattern.dotted(),
+        ),
+      // Main road route, beginning at the nearest point on the route.
+      if (navigationTarget != null &&
+          navigationCurrent != null &&
           _routePoints.length >= 2)
         Polyline(
           points: _routePoints,
@@ -2138,11 +2546,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         ),
       // Straight line fallback when no road route
       if (navigationTarget != null &&
-          st.current != null &&
+          navigationCurrent != null &&
           _routePoints.length < 2 &&
           navigationGuidancePoint != null)
         Polyline(
-          points: [st.current!, navigationGuidancePoint],
+          points: [navigationCurrent, navigationGuidancePoint],
           strokeWidth: 3,
           color: Colors.teal.shade700,
           pattern: const StrokePattern.dotted(),

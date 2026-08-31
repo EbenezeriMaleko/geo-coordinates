@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:latlong2/latlong.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -69,7 +68,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
 
           _item(
-            title: 'Reference ellipsoid',
+            title: 'Geodetic datum',
             subtitle:
                 selectedDatum?.displayName ?? selectedEllipsoid.displayName,
             onTap: _showReferenceEllipsoidSelector,
@@ -552,7 +551,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   void _showReferenceEllipsoidSelector() {
-    final current = ref.read(referenceEllipsoidProvider);
+    final currentEllipsoid = ref.read(referenceEllipsoidProvider);
+    final currentDatum = ref.read(selectedDatumProvider);
+    final currentLocation = ref.read(landMapProvider).current;
+    final datums = ReferenceEllipsoid.values
+        .expand(GeodeticDatumRegistry.forEllipsoid)
+        .toList();
+    if (currentLocation != null) {
+      datums.sort((left, right) {
+        final byArea = (right.isValidAt(currentLocation) ? 1 : 0).compareTo(
+          left.isValidAt(currentLocation) ? 1 : 0,
+        );
+        return byArea != 0
+            ? byArea
+            : left.accuracyMeters.compareTo(right.accuracyMeters);
+      });
+    }
+    final datumlessEllipsoids = ReferenceEllipsoid.values
+        .where(
+          (ellipsoid) => GeodeticDatumRegistry.forEllipsoid(ellipsoid).isEmpty,
+        )
+        .toList();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -567,122 +587,102 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             children: [
               const SizedBox(height: 10),
               const Text(
-                'Reference ellipsoid',
+                'Select datum',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Text(
+                  'Choose the datum used by your survey. Its reference '
+                  'ellipsoid is shown below the datum name.',
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 10),
               Expanded(
                 child: ListView(
                   children: [
-                    ...ReferenceEllipsoid.values.map((ellipsoid) {
-                      final isSelected = ellipsoid == current;
+                    ...datums.map((datum) {
+                      final isSelected = currentDatum?.id == datum.id;
+                      final validHere =
+                          currentLocation != null &&
+                          datum.isValidAt(currentLocation);
                       return ListTile(
-                        title: Text(ellipsoid.displayName),
+                        title: Text(datum.displayName),
                         subtitle: Text(
-                          GeodeticDatumRegistry.forEllipsoid(
-                                    ellipsoid,
-                                  ).isEmpty &&
-                                  ellipsoid != ReferenceEllipsoid.wgs84
-                              ? '${ellipsoid.description}\n'
-                                    'No datum offset available yet — '
-                                    'ellipsoid-shape-only conversion.'
-                              : ellipsoid.description,
+                          '${datum.parentEllipsoid.displayName} ellipsoid • '
+                          '${datum.areaOfUse}\n'
+                          'EPSG:${datum.epsgOperationCode} • '
+                          '${datum.accuracyMeters.toStringAsFixed(0)} m accuracy'
+                          '${datum.isApproximate ? ' • Approximate' : ''}'
+                          '${validHere ? ' • Valid here' : ''}',
                         ),
+                        isThreeLine: true,
                         trailing: isSelected
                             ? const Icon(
                                 Icons.check_circle,
                                 color: Color(0xFF0C8A8C),
                               )
+                            : validHere
+                            ? const Icon(
+                                Icons.near_me,
+                                color: Color(0xFF0C8A8C),
+                              )
                             : const Icon(Icons.circle_outlined),
                         onTap: () async {
                           Navigator.of(sheetContext).pop();
-                          final currentLocation = ref
-                              .read(landMapProvider)
-                              .current;
-                          final datums =
-                              GeodeticDatumRegistry.orderedForLocation(
-                                ellipsoid,
-                                currentLocation,
-                              );
-                          GeodeticDatum? datum;
-                          if (datums.isNotEmpty) {
-                            datum = await _showDatumSelector(
-                              datums,
-                              currentLocation,
-                            );
-                            if (datum == null) return;
-                          }
-                          await _handleEllipsoidOrDatumChange(ellipsoid, datum);
+                          await _handleEllipsoidOrDatumChange(
+                            datum.parentEllipsoid,
+                            datum,
+                          );
                         },
                       );
                     }),
+                    if (datumlessEllipsoids.isNotEmpty) ...[
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(20, 18, 20, 6),
+                        child: Text(
+                          'REFERENCE / ELLIPSOID-ONLY OPTIONS',
+                          style: TextStyle(
+                            color: Colors.black54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      ...datumlessEllipsoids.map((ellipsoid) {
+                        final isSelected =
+                            currentDatum == null &&
+                            currentEllipsoid == ellipsoid;
+                        final isWgs84 = ellipsoid == ReferenceEllipsoid.wgs84;
+                        return ListTile(
+                          title: Text(ellipsoid.displayName),
+                          subtitle: Text(
+                            isWgs84
+                                ? '${ellipsoid.displayName} ellipsoid • '
+                                      'Global reference system'
+                                : '${ellipsoid.displayName} ellipsoid • '
+                                      'No verified datum transformation; '
+                                      'ellipsoid-shape-only conversion',
+                          ),
+                          trailing: isSelected
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: Color(0xFF0C8A8C),
+                                )
+                              : const Icon(Icons.circle_outlined),
+                          onTap: () async {
+                            Navigator.of(sheetContext).pop();
+                            await _handleEllipsoidOrDatumChange(
+                              ellipsoid,
+                              null,
+                            );
+                          },
+                        );
+                      }),
+                    ],
                     const SizedBox(height: 8),
                   ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<GeodeticDatum?> _showDatumSelector(
-    List<GeodeticDatum> datums,
-    LatLng? currentLocation,
-  ) {
-    return showModalBottomSheet<GeodeticDatum>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.sizeOf(sheetContext).height * 0.72,
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              const Text(
-                'Select datum',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Choose the EPSG operation used by your survey. '
-                  'Operations valid at your current location appear first.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView(
-                  children: datums.map((datum) {
-                    final recommended =
-                        currentLocation != null &&
-                        datum.isValidAt(currentLocation);
-                    return ListTile(
-                      title: Text(datum.displayName),
-                      subtitle: Text(
-                        '${datum.areaOfUse}\n'
-                        'EPSG:${datum.epsgOperationCode} • '
-                        '${datum.accuracyMeters.toStringAsFixed(0)} m accuracy'
-                        '${datum.isApproximate ? ' • Approximate' : ''}'
-                        '${recommended
-                            ? ' • Valid here'
-                            : currentLocation == null
-                            ? ''
-                            : ' • Outside current location'}',
-                      ),
-                      isThreeLine: true,
-                      trailing: recommended
-                          ? const Icon(Icons.near_me, color: Color(0xFF0C8A8C))
-                          : null,
-                      onTap: () => Navigator.of(sheetContext).pop(datum),
-                    );
-                  }).toList(),
                 ),
               ),
             ],

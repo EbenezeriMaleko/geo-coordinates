@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
 import '../services/utm_converter.dart';
+import '../services/land_sync_service.dart';
 import 'package:uuid/uuid.dart';
 
 enum _ViewMode { combined, basic, text, photo }
@@ -904,14 +906,15 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   Map<String, dynamic> _remoteLandToDisplayItem(LandListItem remote) {
+    final local = _localItemForCloudId(remote.id);
     return {
       'id': remote.id,
       'entityType': remote.type,
       'type': remote.type,
-      'name': remote.name,
-      'place': remote.place,
-      'phone': remote.phone,
-      'description': remote.description,
+      'name': local?['name'] ?? remote.name,
+      'place': local?['place'] ?? remote.place,
+      'phone': local?['phone'] ?? remote.phone,
+      'description': local?['description'] ?? remote.description,
       'createdAt': remote.createdAt,
       'updatedAt': remote.updatedAt,
       'area': remote.area,
@@ -1501,6 +1504,29 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         _showRemoteLandDetails(remoteLand);
                     },
                   ),
+                if (isRemote &&
+                    _localItemForCloudId(item['id']?.toString() ?? '') != null)
+                  _ActionTile(
+                    icon: Icons.edit_outlined,
+                    label: 'Edit metadata',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      final detail = _cachedDetailForRemote(item);
+                      if (detail == null) return;
+                      showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => _EditRemoteLandSheet(
+                          land: detail,
+                          onSaved: () async {
+                            ref.invalidate(remoteLandDetailProvider(detail.id));
+                            await _fetchRemoteData();
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 if (!isRemote)
                   _ActionTile(
                     icon: Icons.edit,
@@ -1729,6 +1755,50 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     return null;
   }
 
+  LandDetail? _cachedDetailForRemote(Map<String, dynamic> remoteItem) {
+    final remote = _remoteLandFromItem(remoteItem);
+    if (remote == null) return null;
+    final local = _localItemForCloudId(remote.id);
+    if (local == null) return null;
+    final rawPoints = (local['points'] as List?) ?? const [];
+    final points = <LandPoint>[];
+    for (var index = 0; index < rawPoints.length; index++) {
+      final raw = rawPoints[index];
+      if (raw is! Map) continue;
+      final point = Map<String, dynamic>.from(raw);
+      final lat = _toDouble(point['lat']) ?? _toDouble(point['latitude']);
+      final lng = _toDouble(point['lng']) ?? _toDouble(point['longitude']);
+      if (lat == null || lng == null) continue;
+      points.add(
+        LandPoint({
+          ...point,
+          'point_order': (point['order'] as num?)?.toInt() ?? index,
+          'x': lng,
+          'y': lat,
+        }),
+      );
+    }
+    return LandDetail(
+      id: remote.id,
+      userId: remote.userId,
+      type: remote.type,
+      name: local['name']?.toString() ?? remote.name,
+      place: local['place']?.toString() ?? remote.place,
+      phone: local['phone']?.toString() ?? remote.phone,
+      area: remote.area,
+      perimeter: remote.perimeter,
+      description: local['description']?.toString() ?? remote.description,
+      pointsCount: points.length,
+      markersCount: remote.markersCount,
+      mediaCount: remote.mediaCount,
+      createdAt: local['createdAt']?.toString() ?? remote.createdAt,
+      updatedAt: local['updatedAt']?.toString() ?? remote.updatedAt,
+      points: points,
+      markers: const [],
+      media: const [],
+    );
+  }
+
   LandNavigationTarget? _buildNavigationTarget(Map<String, dynamic> item) {
     final points = _extractLatLngPoints(item);
     if (points.isEmpty) return null;
@@ -1886,6 +1956,11 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               if (raw == null) return;
               final item = Map<String, dynamic>.from(raw);
               item['name'] = name;
+              item['updatedAt'] = DateTime.now().toIso8601String();
+              if ((item['cloudId']?.toString().trim() ?? '').isNotEmpty) {
+                item['syncStatus'] = 'pending';
+                item['syncError'] = null;
+              }
               await box.put(id, item);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
@@ -2827,29 +2902,25 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final token = ref.read(authSessionProvider).token.trim();
-    if (token.isEmpty) return;
 
     setState(() => _isSaving = true);
     try {
-      await ref
-          .read(landCloudServiceProvider)
-          .updateLand(
-            token,
-            widget.land.id,
-            UpdateLandRequest(
-              name: _nameController.text.trim(),
-              place: _placeController.text.trim(),
-              phone: _phoneController.text.trim(),
-              description: _descriptionController.text.trim(),
-            ),
-          );
-      await widget.onSaved();
+      final syncService = LandSyncService(Hive.box('landbox'));
+      await syncService.queueMetadataEdit(
+        detail: widget.land,
+        name: _nameController.text,
+        place: _placeController.text,
+        phone: _phoneController.text,
+        description: _descriptionController.text,
+      );
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Land metadata updated')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Changes saved. They will sync when connected.'),
+        ),
+      );
+      unawaited(_syncAndRefresh(syncService));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -2859,6 +2930,18 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
       }
+    }
+  }
+
+  Future<void> _syncAndRefresh(LandSyncService syncService) async {
+    try {
+      final result = await syncService.syncPendingLands(limit: 10);
+      if (result.synced > 0) {
+        await widget.onSaved();
+      }
+    } catch (_) {
+      // The edit is already safe in Hive and remains pending for the periodic
+      // background sync. A failed opportunistic refresh must not undo it.
     }
   }
 

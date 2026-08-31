@@ -29,6 +29,80 @@ class LandSyncService {
   LandSyncService(this.box, {LandCloudService? cloudService})
     : cloudService = cloudService ?? LandCloudService();
 
+  /// Saves a cloud land metadata edit locally before any network request.
+  ///
+  /// The normal background sync will upload this pending edit when a usable
+  /// connection is available. If this device has never stored the cloud land,
+  /// [detail] supplies the coordinates needed to create its local shadow copy.
+  Future<void> queueMetadataEdit({
+    required LandDetail detail,
+    required String name,
+    String? place,
+    String? phone,
+    String? description,
+  }) async {
+    dynamic localKey;
+    Map<String, dynamic>? existing;
+
+    for (final entry in box.toMap().entries) {
+      if (entry.value is! Map) continue;
+      final candidate = Map<String, dynamic>.from(entry.value as Map);
+      final localId = candidate['id']?.toString().trim() ?? '';
+      final cloudId = candidate['cloudId']?.toString().trim() ?? '';
+      if (localId == detail.id || cloudId == detail.id) {
+        localKey = entry.key;
+        existing = candidate;
+        break;
+      }
+    }
+
+    localKey ??= 'cloud_${detail.id}';
+    final now = DateTime.now().toIso8601String();
+    final points = existing?['points'] is List
+        ? existing!['points'] as List
+        : detail.points
+              .map(
+                (point) => <String, dynamic>{
+                  'order': point.pointOrder,
+                  'lat': point.y,
+                  'lng': point.x,
+                  if (point.easting != null) 'easting': point.easting,
+                  if (point.northing != null) 'northing': point.northing,
+                  if (point.zone != null) 'zone': point.zone,
+                  if (point.band != null) 'band': point.band,
+                  if (point.hemisphere != null) 'hemisphere': point.hemisphere,
+                  if (point.label != null) 'label': point.label,
+                },
+              )
+              .toList();
+
+    final updated = <String, dynamic>{
+      ...?existing,
+      'id': existing?['id']?.toString() ?? localKey.toString(),
+      'cloudId': detail.id,
+      'entityType': detail.type,
+      'type': detail.type,
+      'name': name.trim(),
+      'place': place?.trim(),
+      'phone': phone?.trim(),
+      'description': description?.trim(),
+      'points': points,
+      'labels': detail.points.map((point) => point.label ?? '').toList(),
+      'syncStatus': 'pending',
+      'syncError': null,
+      'createdAt': existing?['createdAt'] ?? detail.createdAt ?? now,
+      'updatedAt': now,
+    };
+    updated.removeWhere(
+      (key, value) =>
+          value == null ||
+          (value is String &&
+              value.isEmpty &&
+              const {'place', 'phone', 'description'}.contains(key)),
+    );
+    await box.put(localKey, updated);
+  }
+
   Future<LandSyncResult> syncPendingLands({int limit = 10}) async {
     await _runLegacySyncMigrationIfNeeded();
 
