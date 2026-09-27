@@ -24,6 +24,7 @@ import '../state/settings_provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import '../services/map_tile_cache.dart';
+import '../services/measurement_formatter.dart';
 
 enum MapType { normal, satellite, terrain, hybrid }
 
@@ -1162,13 +1163,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   String _formatDistance(double meters, DistanceUnit unit) {
-    if (unit == DistanceUnit.feet) {
-      return '${(meters * 3.28084).toStringAsFixed(1)} ft';
-    }
-    if (meters >= 1000) {
-      return '${(meters / 1000).toStringAsFixed(2)} km';
-    }
-    return '${meters.toStringAsFixed(1)} m';
+    return MeasurementFormatter.distance(meters, unit);
   }
 
   List<Marker> _buildSegmentDistanceMarkers(
@@ -1493,11 +1488,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return sum.abs() / 2.0;
   }
 
-  String _formatArea(double sqm) {
-    if (sqm >= 10000) {
-      return '${(sqm / 10000).toStringAsFixed(2)} ha';
-    }
-    return '${sqm.toStringAsFixed(1)} sqm';
+  String _formatArea(double sqm, DistanceUnit unit) {
+    return MeasurementFormatter.area(sqm, unit);
   }
 
   Future<void> _stopAutoFieldCapture() async {
@@ -3706,7 +3698,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                       style: const TextStyle(fontSize: 12),
                                     ),
                                     Text(
-                                      'Area: ${_formatArea(area)}',
+                                      'Area: ${_formatArea(area, distanceUnit)}',
                                       style: const TextStyle(fontSize: 12),
                                     ),
                                   ],
@@ -5022,15 +5014,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
   }
 
   String _fmt(double meters) {
-    if (widget.distanceUnit == DistanceUnit.feet) {
-      final ft = meters * 3.28084;
-      return ft >= 5280
-          ? '${(ft / 5280).toStringAsFixed(2)} mi'
-          : '${ft.toStringAsFixed(1)} ft';
-    }
-    return meters >= 1000
-        ? '${(meters / 1000).toStringAsFixed(2)} km'
-        : '${meters.toStringAsFixed(1)} m';
+    return MeasurementFormatter.distance(meters, widget.distanceUnit);
   }
 
   @override
@@ -5301,9 +5285,10 @@ class _BottomActionBarState extends State<_BottomActionBar>
             const SizedBox(width: 8),
             _StatChip(
               label: 'Area',
-              value: widget.areaSqm >= 10000
-                  ? '${(widget.areaSqm / 10000).toStringAsFixed(2)} ha'
-                  : '${widget.areaSqm.toStringAsFixed(1)} m²',
+              value: MeasurementFormatter.area(
+                widget.areaSqm,
+                widget.distanceUnit,
+              ),
             ),
           ],
         ),
