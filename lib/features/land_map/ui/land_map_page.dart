@@ -2776,7 +2776,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               ),
                             if (st.current != null && hasLiveLocationAccess)
                               Text(
-                                '${referenceEllipsoid.displayName} • Accuracy: ${st.accuracyMeters == null ? '—' : _formatDistance(st.accuracyMeters!, distanceUnit)}',
+                                '${ref.watch(selectedReferenceNameProvider)} • Accuracy: ${st.accuracyMeters == null ? '—' : _formatDistance(st.accuracyMeters!, distanceUnit)}',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.grey.shade600,

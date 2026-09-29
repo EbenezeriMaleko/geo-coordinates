@@ -68,6 +68,25 @@ class GeodeticDatum {
 }
 
 class GeodeticDatumRegistry {
+  // EPSG:4263, operation EPSG:1168 (Minna to WGS 84 (2)).
+  // Parameters are source Minna -> WGS84; the converter inverts for display.
+  static const minnaNigeria = GeodeticDatum(
+    id: 'epsg_4263_1168',
+    displayName: 'Minna — Nigeria',
+    parentEllipsoid: ReferenceEllipsoid.clarke1880,
+    epsgCrsCode: 4263,
+    epsgOperationCode: 1168,
+    semiMajorAxis: 6378249.145,
+    inverseFlattening: 293.465,
+    dX: -92,
+    dY: -93,
+    dZ: 122,
+    areaOfUse: 'Nigeria — onshore and offshore',
+    bounds: GeographicBounds(1.92, 2.66, 13.9, 14.65),
+    accuracyMeters: 15,
+    epsgSource: 'https://epsg.io/1168',
+  );
+
   // All parameters and accuracy values below are copied from the cited EPSG
   // coordinate operations. Approximate entries explicitly represent EPSG's
   // stated assumption that the local datum and WGS 84 are coincident.
@@ -252,6 +271,7 @@ class GeodeticDatumRegistry {
       arc1960Kenya,
       arc1960,
       arc1950,
+      minnaNigeria,
     ],
     ReferenceEllipsoid.clarke1866: [nad27Conus],
     ReferenceEllipsoid.grs1980: [nad83, etrs89, gda94],

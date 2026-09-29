@@ -18,6 +18,7 @@ import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
 import '../services/utm_converter.dart';
+import '../services/coordinate_converter.dart';
 import '../services/land_sync_service.dart';
 import 'package:uuid/uuid.dart';
 
@@ -2184,7 +2185,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final createdAt = _formatDate(item['createdAt']?.toString());
     final updatedAt = _formatDate(item['updatedAt']?.toString());
     final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
-    final ellipsoid = _referenceEllipsoidForItem(item);
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
     final buffer = StringBuffer();
 
     if (includeHeader) {
@@ -2203,14 +2204,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final lat = _toDouble(point['lat']) ?? _toDouble(point['latitude']);
       final lng = _toDouble(point['lng']) ?? _toDouble(point['longitude']);
       if (lat == null || lng == null) continue;
-      final computed = UtmConverter.fromLatLng(lat, lng, ellipsoid);
-      final easting = _toDouble(point['easting']) ?? computed?.easting;
-      final northing = _toDouble(point['northing']) ?? computed?.northing;
-      final band = point['band']?.toString().trim() ?? '';
-      final rawZone = point['zone']?.toString().trim() ?? '';
-      final zone = rawZone.isNotEmpty
-          ? (band.isNotEmpty ? '$rawZone$band' : rawZone)
-          : null;
+      final computed = CoordinateConverter.deriveDisplayCoordinate(
+        LatLng(lat, lng),
+        ellipsoid,
+        ref.read(selectedDatumProvider),
+      ).utm;
+      final easting = computed?.easting;
+      final northing = computed?.northing;
+      final zone = computed?.zone;
       buffer.writeln(
         _formatPointShareBlock(
           title: 'Point ${i + 1}',
@@ -2257,9 +2258,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           _toDouble(point.raw['lng']) ??
           _toDouble(point.raw['longitude']);
       if (lat == null || lng == null) continue;
-      final computed = UtmConverter.fromLatLng(lat, lng, ellipsoid);
-      final easting = point.easting ?? computed?.easting;
-      final northing = point.northing ?? computed?.northing;
+      final computed = CoordinateConverter.deriveDisplayCoordinate(
+        LatLng(lat, lng),
+        ellipsoid,
+        ref.read(selectedDatumProvider),
+      ).utm;
+      final easting = computed?.easting;
+      final northing = computed?.northing;
       buffer.writeln(
         _formatPointShareBlock(
           title: 'Point ${pointLabels[i]}',
@@ -2267,11 +2272,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           longitude: lng,
           easting: easting,
           northing: northing,
-          zone:
-              (point.zone != null &&
-                  (point.raw['band']?.toString().trim() ?? '').isNotEmpty)
-              ? '${point.zone}${point.raw['band'].toString().trim()}'
-              : point.zone,
+          zone: computed?.zone,
           ellipsoid: ellipsoid,
         ),
       );
@@ -2304,21 +2305,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       );
       if (zone != null && zone.isNotEmpty) {
         final ellipsoidSuffix = ellipsoid != null
-            ? ' ${ellipsoid.displayName}'
+            ? ' ${ref.read(selectedReferenceNameProvider)}'
             : '';
         buffer.writeln('Zone: $zone$ellipsoidSuffix');
       }
     }
 
     return buffer.toString().trimRight();
-  }
-
-  ReferenceEllipsoid _referenceEllipsoidForItem(Map<String, dynamic> item) {
-    final raw = item['referenceEllipsoid']?.toString().trim() ?? '';
-    for (final ellipsoid in ReferenceEllipsoid.values) {
-      if (ellipsoid.name == raw) return ellipsoid;
-    }
-    return ref.read(referenceEllipsoidProvider);
   }
 
   double? _toDouble(dynamic value) {

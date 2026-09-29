@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
+import 'package:latlong2/latlong.dart' as ll;
 import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 
@@ -24,7 +25,6 @@ import '../models/location_media_models.dart';
 import '../models/reference_ellipsoid.dart';
 import '../services/coordinate_converter.dart';
 import '../services/location_media_service.dart';
-import '../services/utm_converter.dart';
 import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 import 'location_media_page.dart';
@@ -1405,7 +1405,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Ellipsoid · ${ellipsoid.displayName}   ·   Updated $lastUpdateText',
+                        'Datum · ${ref.watch(selectedReferenceNameProvider)}   ·   Updated $lastUpdateText',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white54,
                           fontWeight: FontWeight.w500,
@@ -1808,16 +1808,24 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
     final pos = _currentPosition;
     if (pos == null) return '--';
     final ellipsoid = ref.read(referenceEllipsoidProvider);
-    final utm = UtmConverter.fromLatLng(pos.latitude, pos.longitude, ellipsoid);
+    final utm = CoordinateConverter.deriveDisplayCoordinate(
+      ll.LatLng(pos.latitude, pos.longitude),
+      ellipsoid,
+      ref.read(selectedDatumProvider),
+    ).utm;
     if (utm == null) return '--';
-    return '${utm.zoneNumber}${utm.zoneLetter} ${ellipsoid.displayName}';
+    return '${utm.zoneNumber}${utm.zoneLetter} ${ref.read(selectedReferenceNameProvider)}';
   }
 
   String get _eastingText {
     final pos = _currentPosition;
     if (pos == null) return '--';
     final ellipsoid = ref.read(referenceEllipsoidProvider);
-    final utm = UtmConverter.fromLatLng(pos.latitude, pos.longitude, ellipsoid);
+    final utm = CoordinateConverter.deriveDisplayCoordinate(
+      ll.LatLng(pos.latitude, pos.longitude),
+      ellipsoid,
+      ref.read(selectedDatumProvider),
+    ).utm;
     if (utm == null) return '--';
     return utm.easting.toStringAsFixed(1);
   }
@@ -1826,7 +1834,11 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
     final pos = _currentPosition;
     if (pos == null) return '--';
     final ellipsoid = ref.read(referenceEllipsoidProvider);
-    final utm = UtmConverter.fromLatLng(pos.latitude, pos.longitude, ellipsoid);
+    final utm = CoordinateConverter.deriveDisplayCoordinate(
+      ll.LatLng(pos.latitude, pos.longitude),
+      ellipsoid,
+      ref.read(selectedDatumProvider),
+    ).utm;
     if (utm == null) return '--';
     return utm.northing.toStringAsFixed(1);
   }
@@ -2867,7 +2879,7 @@ class _GeoTaggedPhoto {
 // Capture details sheet (unchanged logic, minor style tweaks)
 // ─────────────────────────────────────────────────────────
 
-class _CapturedPhotoDetailsSheet extends StatelessWidget {
+class _CapturedPhotoDetailsSheet extends ConsumerWidget {
   final _GeoTaggedPhoto capture;
   final String formattedCoordinates;
   final CoordinateFormat coordinateFormat;
@@ -2894,7 +2906,7 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final pos = capture.position;
     final placemarkText = _formatPlacemark(capture.placemark);
@@ -2905,7 +2917,12 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
         '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}';
     final utmText = pos == null
         ? '—'
-        : _formatUtmCoordinate(pos.latitude, pos.longitude, referenceEllipsoid);
+        : CoordinateConverter.deriveDisplayCoordinate(
+                ll.LatLng(pos.latitude, pos.longitude),
+                ref.watch(referenceEllipsoidProvider),
+                ref.watch(selectedDatumProvider),
+              ).utm?.toDisplayString() ??
+              'UTM unavailable for this latitude';
     final accuracyText = pos == null
         ? '—'
         : '${pos.accuracy.toStringAsFixed(1)} m';
@@ -3068,8 +3085,8 @@ class _CapturedPhotoDetailsSheet extends StatelessWidget {
                 title: 'Reference',
                 children: [
                   _DetailRow(
-                    label: 'Ellipsoid',
-                    value: referenceEllipsoid.displayName,
+                    label: 'Display datum',
+                    value: ref.watch(selectedReferenceNameProvider),
                   ),
                   _DetailRow(label: 'Captured at', value: when),
                 ],
@@ -4638,16 +4655,6 @@ class _DetailRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────
 // Pure utility functions (unchanged)
 // ─────────────────────────────────────────────────────────
-
-String _formatUtmCoordinate(
-  double latitude,
-  double longitude,
-  ReferenceEllipsoid ellipsoid,
-) {
-  final utm = UtmConverter.fromLatLng(latitude, longitude, ellipsoid);
-  if (utm == null) return 'UTM unavailable for this latitude';
-  return utm.toDisplayString();
-}
 
 List<String> _buildOverlayLines({
   required _GeoTaggedPhoto capture,
