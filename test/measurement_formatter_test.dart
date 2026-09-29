@@ -22,4 +22,56 @@ void main() {
       '1.00 ac',
     );
   });
+
+  test('area display units convert only the view from square metres', () {
+    const sqm = 10000.0;
+    expect(
+      MeasurementFormatter.areaIn(
+        sqm,
+        AreaDisplayUnit.automatic,
+        DistanceUnit.meters,
+      ),
+      '1.00 ha',
+    );
+    expect(
+      MeasurementFormatter.areaIn(
+        sqm,
+        AreaDisplayUnit.squareMeters,
+        DistanceUnit.feet,
+      ),
+      '10000.0 m²',
+    );
+    expect(
+      MeasurementFormatter.areaIn(
+        sqm,
+        AreaDisplayUnit.hectares,
+        DistanceUnit.feet,
+      ),
+      '1.00 ha',
+    );
+    expect(
+      MeasurementFormatter.areaIn(
+        sqm,
+        AreaDisplayUnit.squareKilometers,
+        DistanceUnit.meters,
+      ),
+      '0.0100 km²',
+    );
+    expect(
+      MeasurementFormatter.areaIn(
+        MeasurementFormatter.squareMetersPerAcre,
+        AreaDisplayUnit.acres,
+        DistanceUnit.meters,
+      ),
+      '1.00 ac',
+    );
+    expect(
+      MeasurementFormatter.areaIn(
+        100,
+        AreaDisplayUnit.squareFeet,
+        DistanceUnit.meters,
+      ),
+      '1076.4 ft²',
+    );
+  });
 }

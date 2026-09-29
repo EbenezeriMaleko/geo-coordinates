@@ -1488,10 +1488,6 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return sum.abs() / 2.0;
   }
 
-  String _formatArea(double sqm, DistanceUnit unit) {
-    return MeasurementFormatter.area(sqm, unit);
-  }
-
   Future<void> _stopAutoFieldCapture() async {
     await _fieldTrackingSubscription?.cancel();
     _fieldTrackingSubscription = null;
@@ -3408,7 +3404,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     }
 
     try {
-      await showModalBottomSheet<void>(
+      final savedMessage = await showModalBottomSheet<String>(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.white,
@@ -3418,6 +3414,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         builder: (sheetContext) {
           String? fieldSheetMessage;
           bool fieldSheetIsError = false;
+          var areaDisplayUnit = AreaDisplayUnit.automatic;
 
           return StatefulBuilder(
             builder: (sheetStateContext, setSheetState) {
@@ -3697,9 +3694,44 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                       'Perimeter: ${_formatDistance(perimeter, distanceUnit)}',
                                       style: const TextStyle(fontSize: 12),
                                     ),
-                                    Text(
-                                      'Area: ${_formatArea(area, distanceUnit)}',
-                                      style: const TextStyle(fontSize: 12),
+                                    PopupMenuButton<AreaDisplayUnit>(
+                                      tooltip: 'Choose area display unit',
+                                      initialValue: areaDisplayUnit,
+                                      onSelected: (unit) => setSheetState(
+                                        () => areaDisplayUnit = unit,
+                                      ),
+                                      itemBuilder: (_) => [
+                                        for (final unit
+                                            in AreaDisplayUnit.values)
+                                          PopupMenuItem(
+                                            value: unit,
+                                            child: Text(unit.label),
+                                          ),
+                                      ],
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 6,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'Area: ${MeasurementFormatter.areaIn(area, areaDisplayUnit, distanceUnit)}',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF001F3F),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            const Icon(
+                                              Icons.arrow_drop_down,
+                                              size: 18,
+                                              color: Color(0xFF001F3F),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -3859,23 +3891,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                     fieldSheetIsError = true;
                                                   });
                                                 } else {
-                                                  await _stopAutoFieldCapture();
-                                                  if (!sheetStateContext
-                                                      .mounted) {
-                                                    return;
+                                                  if (sheetContext.mounted) {
+                                                    Navigator.of(
+                                                      sheetContext,
+                                                    ).pop(
+                                                      mapState.activeFieldId !=
+                                                              null
+                                                          ? 'Field updated offline successfully. Sync queued.'
+                                                          : 'Field saved offline successfully. Sync queued.',
+                                                    );
                                                   }
-                                                  _placeController.clear();
-                                                  _phoneController.clear();
-                                                  _descriptionController
-                                                      .clear();
-                                                  setSheetState(() {
-                                                    fieldSheetMessage =
-                                                        mapState.activeFieldId !=
-                                                            null
-                                                        ? 'Field updated offline successfully. Sync queued.'
-                                                        : 'Field saved offline successfully. Sync queued.';
-                                                    fieldSheetIsError = false;
-                                                  });
                                                 }
                                               },
                                         style: ElevatedButton.styleFrom(
@@ -3927,6 +3952,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           );
         },
       );
+      if (savedMessage != null && mounted) {
+        _placeController.clear();
+        _phoneController.clear();
+        _descriptionController.clear();
+        _snack(savedMessage);
+      }
     } finally {
       for (final controller in labelControllers) {
         controller.dispose();
@@ -4956,6 +4987,7 @@ class _BottomActionBar extends StatefulWidget {
 class _BottomActionBarState extends State<_BottomActionBar>
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
+  AreaDisplayUnit _areaDisplayUnit = AreaDisplayUnit.automatic;
   late final AnimationController _animController;
   late final Animation<double> _expandAnim;
 
@@ -5015,6 +5047,47 @@ class _BottomActionBarState extends State<_BottomActionBar>
 
   String _fmt(double meters) {
     return MeasurementFormatter.distance(meters, widget.distanceUnit);
+  }
+
+  Future<void> _chooseAreaUnit() async {
+    final selected = await showModalBottomSheet<AreaDisplayUnit>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.7,
+          ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+                child: Text(
+                  'View area in',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+              ),
+              for (final unit in AreaDisplayUnit.values)
+                ListTile(
+                  title: Text(unit.label),
+                  trailing: unit == _areaDisplayUnit
+                      ? const Icon(Icons.check, color: Color(0xFF001F3F))
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop(unit),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null && mounted) {
+      setState(() => _areaDisplayUnit = selected);
+    }
   }
 
   @override
@@ -5285,10 +5358,12 @@ class _BottomActionBarState extends State<_BottomActionBar>
             const SizedBox(width: 8),
             _StatChip(
               label: 'Area',
-              value: MeasurementFormatter.area(
+              value: MeasurementFormatter.areaIn(
                 widget.areaSqm,
+                _areaDisplayUnit,
                 widget.distanceUnit,
               ),
+              onTap: _chooseAreaUnit,
             ),
           ],
         ),
@@ -5480,41 +5555,62 @@ class _TabButton extends StatelessWidget {
 class _StatChip extends StatelessWidget {
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
-  const _StatChip({required this.label, required this.value});
+  const _StatChip({required this.label, required this.value, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+      child: Material(
+        color: Colors.grey.shade50,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade200),
+          side: BorderSide(color: Colors.grey.shade200),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade500,
-                letterSpacing: 0.5,
-              ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade500,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    if (onTap != null)
+                      const Icon(
+                        Icons.arrow_drop_down,
+                        size: 14,
+                        color: Color(0xFF001F3F),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF001F3F),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF001F3F),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

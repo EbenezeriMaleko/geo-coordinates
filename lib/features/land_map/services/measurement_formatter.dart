@@ -1,10 +1,25 @@
 import '../state/settings_provider.dart';
 
+enum AreaDisplayUnit {
+  automatic('Automatic'),
+  squareMeters('Square metres (m²)'),
+  hectares('Hectares (ha)'),
+  squareKilometers('Square kilometres (km²)'),
+  squareFeet('Square feet (ft²)'),
+  acres('Acres (ac)');
+
+  const AreaDisplayUnit(this.label);
+
+  final String label;
+}
+
 class MeasurementFormatter {
   static const double metersToFeet = 3.280839895013123;
   static const double metersPerMile = 1609.344;
   static const double squareMetersToSquareFeet = 10.763910416709722;
   static const double squareMetersPerAcre = 4046.8564224;
+  static const double squareMetersPerHectare = 10000;
+  static const double squareMetersPerSquareKilometer = 1000000;
 
   const MeasurementFormatter._();
 
@@ -33,4 +48,28 @@ class MeasurementFormatter {
     }
     return '${squareMeters.toStringAsFixed(1)} m²';
   }
+
+  static String areaIn(
+    double squareMeters,
+    AreaDisplayUnit displayUnit,
+    DistanceUnit defaultUnit,
+  ) {
+    switch (displayUnit) {
+      case AreaDisplayUnit.automatic:
+        return area(squareMeters, defaultUnit);
+      case AreaDisplayUnit.squareMeters:
+        return '${squareMeters.toStringAsFixed(1)} m²';
+      case AreaDisplayUnit.hectares:
+        return '${_areaDecimal(squareMeters / squareMetersPerHectare)} ha';
+      case AreaDisplayUnit.squareKilometers:
+        return '${_areaDecimal(squareMeters / squareMetersPerSquareKilometer)} km²';
+      case AreaDisplayUnit.squareFeet:
+        return '${(squareMeters * squareMetersToSquareFeet).toStringAsFixed(1)} ft²';
+      case AreaDisplayUnit.acres:
+        return '${_areaDecimal(squareMeters / squareMetersPerAcre)} ac';
+    }
+  }
+
+  static String _areaDecimal(double value) =>
+      value.abs() < 1 ? value.toStringAsFixed(4) : value.toStringAsFixed(2);
 }
