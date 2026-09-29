@@ -12,6 +12,8 @@ import 'land_map_page.dart';
 import 'my_location_page.dart';
 import 'saved_locations_page.dart';
 import '../services/land_sync_service.dart';
+import '../services/app_review_service.dart';
+import '../services/survey_sync_service.dart';
 import '../services/coordinate_converter.dart';
 import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
@@ -280,7 +282,13 @@ class _MainNavigationState extends State<MainNavigation> {
       final service = LandSyncService(Hive.box('landbox'));
       await service.syncPendingLands(limit: 10);
     } finally {
-      _syncInProgress = false;
+      // Survey answers are anonymous and should retry even when land sync
+      // cannot run (for example, when the user is signed out).
+      try {
+        await SurveySyncService(Hive.box('landbox')).syncPending();
+      } finally {
+        _syncInProgress = false;
+      }
     }
   }
 
@@ -358,6 +366,7 @@ class _MainNavigationState extends State<MainNavigation> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Location saved')));
+        unawaited(AppReviewService(box).recordSuccessfulSave());
         await _runBackgroundSync();
         return;
 
@@ -550,6 +559,7 @@ class _MainNavigationState extends State<MainNavigation> {
         onMenuAction: _handleMyLocationMenu,
       ),
       SavedLocationsPage(
+        isActive: _currentIndex == 2,
         toolbarController: _savedLocationsToolbarController,
         onOpenMapRequested: () => _navigateToPage(0),
         onToolbarStateChanged: () {

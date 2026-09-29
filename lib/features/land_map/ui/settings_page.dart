@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:hive/hive.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -15,6 +17,9 @@ import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
 import '../state/settings_provider.dart';
 import '../state/land_map_notifier.dart';
+import '../services/app_review_service.dart';
+import '../services/survey_invitation.dart';
+import 'user_survey_page.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -136,6 +141,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             subtitle:
                 'Send suggestions or report a bug. We appreciate your feedback.',
             onTap: _openContactUsPage,
+          ),
+          _item(
+            title: 'Share your experience',
+            subtitle: 'Tell us what works and what is difficult.',
+            onTap: _openSurveyPage,
+          ),
+          if (kDebugMode)
+            _item(
+              title: 'Preview survey invitation',
+              subtitle: 'Debug only. Open Saved locations after tapping.',
+              onTap: _previewSurveyInvitation,
+            ),
+          _item(
+            title: 'Rate our app',
+            subtitle: 'Leave a rating or review in the app store.',
+            onTap: _openStoreReview,
           ),
           _item(
             title: 'Version',
@@ -449,6 +470,43 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       barrierDismissible: true,
       barrierColor: Colors.transparent,
       builder: (_) => const _ContactDialog(),
+    );
+  }
+
+  Future<void> _openSurveyPage() async {
+    final saved = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const UserSurveyPage()));
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Response saved. It will sync automatically.'),
+      ),
+    );
+  }
+
+  Future<void> _previewSurveyInvitation() async {
+    await SurveyInvitation(Hive.box('landbox')).requestDebugPreview();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Preview ready. Open Saved locations. Submitting the form sends a real response.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openStoreReview() async {
+    var opened = false;
+    try {
+      opened = await AppReviewService(Hive.box('landbox')).openStoreListing();
+    } catch (_) {
+      opened = false;
+    }
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open the app store.')),
     );
   }
 

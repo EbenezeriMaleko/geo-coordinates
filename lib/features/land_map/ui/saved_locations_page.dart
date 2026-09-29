@@ -20,6 +20,8 @@ import '../state/settings_provider.dart';
 import '../services/utm_converter.dart';
 import '../services/coordinate_converter.dart';
 import '../services/land_sync_service.dart';
+import '../services/survey_invitation.dart';
+import 'user_survey_page.dart';
 import 'package:uuid/uuid.dart';
 
 enum _ViewMode { combined, basic, text, photo }
@@ -85,6 +87,7 @@ String _navigationKind(String rawKind, int pointsCount) {
 }
 
 class SavedLocationsPage extends ConsumerStatefulWidget {
+  final bool isActive;
   final VoidCallback? onOpenMapRequested;
   final VoidCallback? onToolbarStateChanged;
   final bool showEmbeddedToolbar;
@@ -96,6 +99,7 @@ class SavedLocationsPage extends ConsumerStatefulWidget {
     this.onToolbarStateChanged,
     this.toolbarController,
     this.showEmbeddedToolbar = true,
+    this.isActive = false,
   });
 
   @override
@@ -121,6 +125,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   String _groupFilter = 'All groups';
   bool _compactMode = false;
   bool _isLoadingMoreRemote = false;
+  bool _showSurveyInvitation = false;
+  bool _previewSurveyInvitation = false;
+  bool _checkingSurveyInvitation = false;
   ProviderSubscription<AuthSession>? _authSubscription;
 
   @override
@@ -137,6 +144,19 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     });
 
     Future.microtask(_fetchRemoteData);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isActive) _considerSurveyInvitation();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant SavedLocationsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _considerSurveyInvitation();
+      });
+    }
   }
 
   @override
@@ -156,6 +176,70 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .read(remoteLandsProvider.notifier)
         .fetch(search: _searchQuery.isEmpty ? null : _searchQuery);
     await ref.read(remoteLandSummaryProvider.notifier).fetch();
+    if (mounted && widget.isActive) _considerSurveyInvitation();
+  }
+
+  Future<void> _considerSurveyInvitation() async {
+    if (!mounted || !widget.isActive || _checkingSurveyInvitation) return;
+    _checkingSurveyInvitation = true;
+    try {
+      final box = Hive.box('landbox');
+      final localCount = box.values.whereType<Map>().where((record) {
+        final type = record['entityType']?.toString() ?? '';
+        return type == 'land' ||
+            type == 'polygon' ||
+            type == 'polyline' ||
+            type == 'point';
+      }).length;
+      final remoteCount =
+          ref.read(remoteLandsProvider).asData?.value?.total ?? 0;
+      final invitation = SurveyInvitation(box);
+      final preview =
+          _previewSurveyInvitation || await invitation.consumeDebugPreview();
+      final show =
+          preview ||
+          await invitation.shouldShow(
+            savedRecordCount: max(localCount, remoteCount),
+          );
+      if (mounted &&
+          widget.isActive &&
+          (_showSurveyInvitation != show ||
+              _previewSurveyInvitation != preview)) {
+        setState(() {
+          _previewSurveyInvitation = preview;
+          _showSurveyInvitation = show;
+        });
+      }
+    } finally {
+      _checkingSurveyInvitation = false;
+    }
+  }
+
+  Future<void> _dismissSurveyInvitation() async {
+    if (!_previewSurveyInvitation) {
+      await SurveyInvitation(Hive.box('landbox')).dismiss();
+    }
+    if (mounted) {
+      setState(() {
+        _previewSurveyInvitation = false;
+        _showSurveyInvitation = false;
+      });
+    }
+  }
+
+  Future<void> _openSurveyFromInvitation() async {
+    final saved = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const UserSurveyPage()));
+    if (!mounted) return;
+    if (saved == true) {
+      setState(() => _showSurveyInvitation = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Response saved. It will sync automatically.'),
+        ),
+      );
+    }
   }
 
   Future<void> _loadMoreRemoteData() async {
@@ -326,6 +410,66 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         ),
                       ],
                     ],
+                  ),
+                ),
+              if (_showSurveyInvitation && widget.isActive && !_selectionMode)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF1F7),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFCFDDEB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              color: Color(0xFF001F3F),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Help us improve TaREF',
+                                style: TextStyle(
+                                  color: Color(0xFF001F3F),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Not now',
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: _dismissSurveyInvitation,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ],
+                        ),
+                        const Text(
+                          'Tell us what is working and what is difficult. '
+                          'It takes about a minute.',
+                          style: TextStyle(
+                            color: Color(0xFF374151),
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: _openSurveyFromInvitation,
+                            child: const Text('Share feedback'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               const SizedBox(height: 10),
