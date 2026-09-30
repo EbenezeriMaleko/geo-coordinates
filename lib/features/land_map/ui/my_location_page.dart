@@ -31,6 +31,7 @@ import 'location_media_page.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:permission_handler/permission_handler.dart' hide ServiceStatus;
+import '../../../core/localization/app_localizations.dart';
 
 enum MyLocationAction { savePoint, copyBoth, share }
 
@@ -628,8 +629,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to capture GPS photo. Try again.'),
+        SnackBar(
+          content: Text(context.l10n.t('Failed to capture GPS photo. Try again.')),
         ),
       );
     } finally {
@@ -726,13 +727,13 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       _debugLog('Upload finished. Location id=${location.id}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$mediaTypeName uploaded to cloud')),
+        SnackBar(content: Text(context.l10n.uploaded(mediaTypeName))),
       );
     } on AuthException catch (error) {
       _debugLog('Upload auth error: ${error.message}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved locally: ${error.message}')),
+        SnackBar(content: Text(context.l10n.savedLocally(error.message))),
       );
     } catch (e) {
       _debugLog('Upload failed: $e');
@@ -740,7 +741,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
       final mediaTypeName = capture.mediaType == 'video' ? 'Video' : 'Photo';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$mediaTypeName saved locally. Cloud upload failed.'),
+          content: Text(context.l10n.t('$mediaTypeName saved locally. Cloud upload failed.')),
         ),
       );
     }
@@ -798,8 +799,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not save to gallery — file not found.'),
+          SnackBar(
+            content: Text(context.l10n.t('Could not save to gallery — file not found.')),
           ),
         );
         return;
@@ -815,27 +816,27 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              capture.mediaType == 'video'
-                  ? 'Video saved to gallery'
-                  : 'Photo saved to gallery',
+              context.l10n.t(
+                capture.mediaType == 'video'
+                    ? 'Video saved to gallery'
+                    : 'Photo saved to gallery',
+              ),
             ),
           ),
         );
       } else {
         _debugLog('Gallery save failed: ${result.errorMessage}');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not save media to gallery. Check permissions.',
-            ),
+          SnackBar(
+            content: Text(context.l10n.t('Could not save media to gallery. Check permissions.')),
           ),
         );
       }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not save media to gallery. Check permissions.'),
+        SnackBar(
+          content: Text(context.l10n.t('Could not save media to gallery. Check permissions.')),
         ),
       );
     }
@@ -1157,18 +1158,18 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete media?'),
-        content: const Text(
-          'This will delete the media from this device and from the cloud if uploaded.',
+        title: Text(context.l10n.t('Delete media?')),
+        content: Text(
+          context.l10n.t('This will delete the media from this device and from the cloud if uploaded.'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.t('Cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text(context.l10n.t('Delete'), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -1226,6 +1227,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final l10n = context.l10n;
     final theme = Theme.of(context);
     final st = ref.watch(landMapProvider);
     final ellipsoid = ref.watch(referenceEllipsoidProvider);
@@ -1301,7 +1303,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                           _HeaderCompassButton(onTap: _openCompassPage),
                           const Spacer(),
                           Text(
-                            'My Location',
+                            l10n.t('My Location'),
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
@@ -1318,18 +1320,18 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                               color: Colors.white,
                               onSelected: (action) =>
                                   widget.onMenuAction!(action),
-                              itemBuilder: (_) => const [
+                              itemBuilder: (_) => [
                                 PopupMenuItem(
                                   value: MyLocationAction.copyBoth,
-                                  child: Text('Copy coordinates'),
+                                  child: Text(l10n.t('Copy coordinates')),
                                 ),
                                 PopupMenuItem(
                                   value: MyLocationAction.share,
-                                  child: Text('Share location'),
+                                  child: Text(l10n.t('Share location')),
                                 ),
                                 PopupMenuItem(
                                   value: MyLocationAction.savePoint,
-                                  child: Text('Save location'),
+                                  child: Text(l10n.t('Save location')),
                                 ),
                               ],
                             )
@@ -1348,13 +1350,13 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
 
                       // UTM coordinates — hero numbers
                       _CoordDisplay(
-                        label: 'EASTING',
+                        label: l10n.t('EASTING'),
                         value: eastingText,
                         theme: theme,
                       ),
                       const SizedBox(height: 18),
                       _CoordDisplay(
-                        label: 'NORTHING',
+                        label: l10n.t('NORTHING'),
                         value: northingText,
                         theme: theme,
                       ),
@@ -1376,10 +1378,10 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _SubInfoChip(label: 'Zone', value: utmZoneText),
+                                _SubInfoChip(label: l10n.t('Zone'), value: utmZoneText),
                                 _SubInfoDot(),
                                 _SubInfoChip(
-                                  label: 'Format',
+                                  label: l10n.t('Format'),
                                   value: coordinateFormat.shortName,
                                 ),
                               ],
@@ -1405,7 +1407,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Datum · ${ref.watch(selectedReferenceNameProvider)}   ·   Updated $lastUpdateText',
+                        '${l10n.t('Datum')} · ${ref.watch(selectedReferenceNameProvider)}   ·   ${l10n.t('Updated')} $lastUpdateText',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.white54,
                           fontWeight: FontWeight.w500,
@@ -1448,17 +1450,17 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                           color: theme.colorScheme.primary,
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Live location is unavailable',
+                                l10n.t('Live location is unavailable'),
                                 style: TextStyle(fontWeight: FontWeight.w700),
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'Live coordinates and GPS tracking are off. Other app features remain available.',
+                                l10n.t('Live coordinates and GPS tracking are off. Other app features remain available.'),
                                 style: TextStyle(
                                   color: Colors.black54,
                                   height: 1.3,
@@ -1470,7 +1472,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                         const SizedBox(width: 8),
                         TextButton(
                           onPressed: _enableLiveLocation,
-                          child: const Text('Enable'),
+                          child: Text(l10n.t('Enable')),
                         ),
                       ],
                     ),
@@ -1996,7 +1998,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                       _CompassDetailRow(
                                         icon: Icons.adjust_rounded,
                                         iconColor: _accuracyColor(),
-                                        label: 'Compass accuracy',
+                                        label: context.l10n.t('Compass accuracy'),
                                         value: _accuracyText,
                                         badge: _accuracyQualityText,
                                         badgeColor: _accuracyColor(),
@@ -2006,7 +2008,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                       _CompassDetailRow(
                                         icon: Icons.grid_on_rounded,
                                         iconColor: const Color(0xFF667085),
-                                        label: 'UTM Zone',
+                                        label: context.l10n.t('UTM Zone'),
                                         value: _utmZoneText,
                                       ),
                                       const Divider(height: 20),
@@ -2014,7 +2016,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                       _CompassDetailRow(
                                         icon: Icons.arrow_forward_rounded,
                                         iconColor: primary,
-                                        label: 'Easting',
+                                        label: context.l10n.t('Easting'),
                                         value: _eastingText,
                                         badge: 'E',
                                         badgeColor: primary,
@@ -2024,7 +2026,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                       _CompassDetailRow(
                                         icon: Icons.arrow_upward_rounded,
                                         iconColor: primary,
-                                        label: 'Northing',
+                                        label: context.l10n.t('Northing'),
                                         value: _northingText,
                                         badge: 'N',
                                         badgeColor: primary,
@@ -2119,7 +2121,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                 setState(() => _checkingPermission = true);
                 _checkPermissionAndStart();
               },
-              child: const Text('Grant Permission'),
+              child: Text(context.l10n.t('Grant Permission')),
             ),
           ],
         ),
@@ -2655,7 +2657,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 icon: Icons.landscape_rounded,
-                label: 'Altitude',
+                label: context.l10n.t('Altitude'),
                 value: altitude,
                 iconColor: const Color(0xFF0284C7),
               ),
@@ -2664,7 +2666,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 icon: Icons.gps_fixed_rounded,
-                label: 'Accuracy',
+                label: context.l10n.t('Accuracy'),
                 value: accuracy,
                 valueColor: qualityColor,
                 iconColor: qualityColor,
@@ -2678,7 +2680,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 icon: Icons.signal_cellular_alt_rounded,
-                label: 'Signal',
+                label: context.l10n.t('Signal'),
                 value: quality,
                 valueColor: qualityColor,
                 iconColor: qualityColor,
@@ -2688,7 +2690,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 icon: Icons.schedule_rounded,
-                label: 'Location age',
+                label: context.l10n.t('Location age'),
                 value: age,
                 iconColor: const Color(0xFF7C3AED),
               ),
@@ -2701,7 +2703,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 icon: Icons.wifi_tethering_rounded,
-                label: 'Tracking',
+                label: context.l10n.t('Tracking'),
                 value: isStreaming ? 'Live' : 'Stopped',
                 valueColor: isStreaming
                     ? const Color(0xFF1B8F4B)
@@ -2715,7 +2717,7 @@ class _StatsGrid extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 icon: Icons.speed_rounded,
-                label: 'Speed',
+                label: context.l10n.t('Speed'),
                 value: speed,
                 iconColor: const Color(0xFF0369A1),
               ),
@@ -3018,11 +3020,11 @@ class _CapturedPhotoDetailsSheet extends ConsumerWidget {
                         : Icons.photo_camera,
                   ),
                   _MetaChip(
-                    label: 'Accuracy $accuracyText',
+                    label: '${context.l10n.t('Accuracy')} $accuracyText',
                     icon: Icons.gps_fixed,
                   ),
                   _MetaChip(
-                    label: 'Altitude $altitudeText',
+                    label: '${context.l10n.t('Altitude')} $altitudeText',
                     icon: Icons.landscape,
                   ),
                 ],
@@ -3066,39 +3068,39 @@ class _CapturedPhotoDetailsSheet extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               _DetailSection(
-                title: 'Coordinates',
+                title: context.l10n.t('Coordinates'),
                 children: [
-                  _DetailRow(label: 'Lat/Lon', value: formattedCoordinates),
-                  _DetailRow(label: 'UTM', value: utmText),
+                  _DetailRow(label: context.l10n.t('Lat/Lon'), value: formattedCoordinates),
+                  _DetailRow(label: context.l10n.t('UTM'), value: utmText),
                 ],
               ),
               const SizedBox(height: 12),
               _DetailSection(
-                title: 'Motion',
+                title: context.l10n.t('Motion'),
                 children: [
-                  _DetailRow(label: 'Speed', value: speedText),
-                  _DetailRow(label: 'Heading', value: headingText),
+                  _DetailRow(label: context.l10n.t('Speed'), value: speedText),
+                  _DetailRow(label: context.l10n.t('Heading'), value: headingText),
                 ],
               ),
               const SizedBox(height: 12),
               _DetailSection(
-                title: 'Reference',
+                title: context.l10n.t('Reference'),
                 children: [
                   _DetailRow(
-                    label: 'Display datum',
+                    label: context.l10n.t('Display datum'),
                     value: ref.watch(selectedReferenceNameProvider),
                   ),
-                  _DetailRow(label: 'Captured at', value: when),
+                  _DetailRow(label: context.l10n.t('Captured at'), value: when),
                 ],
               ),
               const SizedBox(height: 12),
               _DetailSection(
-                title: 'Address',
+                title: context.l10n.t('Address'),
                 children: [
-                  _DetailRow(label: 'Location', value: placemarkText),
+                  _DetailRow(label: context.l10n.t('Location'), value: placemarkText),
                   if (capture.locationError != null)
                     _DetailRow(
-                      label: 'Location note',
+                      label: context.l10n.t('Location note'),
                       value: capture.locationError!,
                     ),
                 ],
@@ -3392,7 +3394,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to capture photo.')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.t('Failed to capture photo.'))));
     } finally {
       if (mounted) setState(() => _isTakingPhoto = false);
     }
@@ -3421,7 +3423,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to stop video recording.')),
+        SnackBar(content: Text(context.l10n.t('Failed to stop video recording.'))),
       );
     } finally {
       if (mounted) {
@@ -3463,28 +3465,28 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Place name'),
+        title: Text(context.l10n.t('Place name')),
         content: TextField(
           controller: _nameController,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(hintText: 'Enter place name'),
+          decoration: InputDecoration(hintText: context.l10n.t('Enter place name')),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.t('Cancel')),
           ),
           TextButton(
             onPressed: () {
               _nameController.clear();
               Navigator.of(dialogContext).pop(true);
             },
-            child: const Text('Skip'),
+            child: Text(context.l10n.t('Skip')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Save'),
+            child: Text(context.l10n.t('Save')),
           ),
         ],
       ),
@@ -3571,7 +3573,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                             await _initialize();
                           },
                           icon: const Icon(Icons.settings_outlined, size: 18),
-                          label: const Text('Open Settings'),
+                          label: Text(context.l10n.t('Open Settings')),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: Colors.black87,
@@ -3985,7 +3987,7 @@ class _CameraBottomControls extends StatelessWidget {
                       side: const BorderSide(color: Colors.white70),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Retake'),
+                    child: Text(context.l10n.t('Retake')),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -3997,7 +3999,7 @@ class _CameraBottomControls extends StatelessWidget {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Save'),
+                    child: Text(context.l10n.t('Save')),
                   ),
                 ),
               ],
@@ -4477,7 +4479,7 @@ class _RecentMediaStrip extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            TextButton(onPressed: onViewMore, child: const Text('View more')),
+            TextButton(onPressed: onViewMore, child: Text(context.l10n.t('View more'))),
           ],
         ),
         const SizedBox(height: 8),

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/auth_provider.dart';
 import 'login_page.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -78,11 +79,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (ok || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open terms and conditions')),
+      SnackBar(content: Text(context.l10n.t('Could not open terms and conditions'))),
     );
   }
 
   void _showSuccessDialog(String message) {
+    final l10n = context.l10n;
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -108,7 +110,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               ),
               const SizedBox(height: 20),
               Text(
-                'Account Created!',
+                l10n.t('Account Created!'),
                 style: GoogleFonts.inter(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -149,7 +151,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                     ),
                   ),
                   child: Text(
-                    'Sign In Now',
+                    l10n.t('Sign In Now'),
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
@@ -169,6 +171,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     final authState = ref.watch(registerProvider);
     final isLoading = authState.isLoading;
     final errorMsg = authState.hasError ? authState.error.toString() : null;
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -181,11 +184,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildHeader(),
+                  _buildHeader(l10n),
                   const SizedBox(height: 36),
-                  _buildCard(isLoading, errorMsg),
+                  _buildCard(isLoading, errorMsg, l10n),
                   const SizedBox(height: 24),
-                  _buildFooter(),
+                  _buildFooter(l10n),
                 ],
               ),
             ),
@@ -195,7 +198,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppLocalizations l10n) {
     return Column(
       children: [
         Container(
@@ -213,7 +216,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
         ),
         const SizedBox(height: 20),
         Text(
-          'Create Account',
+          l10n.t('Create Account'),
           style: GoogleFonts.inter(
             fontSize: 30,
             fontWeight: FontWeight.w800,
@@ -223,7 +226,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
         ),
         const SizedBox(height: 8),
         Text(
-          'Join Taref Gps today',
+          l10n.t('Join Taref Gps today'),
           style: GoogleFonts.inter(
             fontSize: 15,
             color: Colors.black.withValues(alpha: 0.75),
@@ -234,7 +237,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     );
   }
 
-  Widget _buildCard(bool isLoading, String? errorMsg) {
+  Widget _buildCard(bool isLoading, String? errorMsg, AppLocalizations l10n) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -263,7 +266,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildLabel('First Name'),
+                      _buildLabel(l10n.t('First Name')),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _firstNameController,
@@ -271,7 +274,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                         textCapitalization: TextCapitalization.words,
                         enabled: !isLoading,
                         decoration: _inputDecoration(
-                          hint: 'John',
+                          hint: context.l10n.t('John'),
                           icon: Icons.person_outline_rounded,
                         ),
                         validator: (v) {
@@ -287,7 +290,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildLabel('Last Name'),
+                      _buildLabel(l10n.t('Last Name')),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _lastNameController,
@@ -295,7 +298,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                         textCapitalization: TextCapitalization.words,
                         enabled: !isLoading,
                         decoration: _inputDecoration(
-                          hint: 'Doe',
+                          hint: context.l10n.t('Doe'),
                           icon: Icons.person_outline_rounded,
                         ),
                         validator: (v) {
@@ -309,7 +312,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               ],
             ),
             const SizedBox(height: 20),
-            _buildLabel('Email address'),
+            _buildLabel(l10n.t('Email address')),
             const SizedBox(height: 8),
             TextFormField(
               controller: _emailController,
@@ -317,7 +320,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               textInputAction: TextInputAction.next,
               enabled: !isLoading,
               decoration: _inputDecoration(
-                hint: 'you@example.com',
+                hint: context.l10n.t('you@example.com'),
                 icon: Icons.email_outlined,
               ),
               validator: (v) {
@@ -330,7 +333,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               },
             ),
             const SizedBox(height: 20),
-            _buildLabel('Password'),
+            _buildLabel(l10n.t('Password')),
             const SizedBox(height: 8),
             TextFormField(
               controller: _passwordController,
@@ -338,7 +341,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               textInputAction: TextInputAction.next,
               enabled: !isLoading,
               decoration: _inputDecoration(
-                hint: 'Min. 8 characters',
+                hint: context.l10n.t('Min. 8 characters'),
                 icon: Icons.lock_outline_rounded,
                 suffix: IconButton(
                   icon: Icon(
@@ -363,7 +366,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               },
             ),
             const SizedBox(height: 20),
-            _buildLabel('Confirm Password'),
+            _buildLabel(l10n.t('Confirm Password')),
             const SizedBox(height: 8),
             TextFormField(
               controller: _confirmPasswordController,
@@ -372,7 +375,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               enabled: !isLoading,
               onFieldSubmitted: (_) => _submit(),
               decoration: _inputDecoration(
-                hint: 'Repeat your password',
+                hint: context.l10n.t('Repeat your password'),
                 icon: Icons.lock_outline_rounded,
                 suffix: IconButton(
                   icon: Icon(
@@ -472,7 +475,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                         ),
                       )
                     : Text(
-                        'Create Account',
+                        l10n.t('Create Account'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -487,12 +490,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     );
   }
 
-  Widget _buildFooter() {
+  Widget _buildFooter(AppLocalizations l10n) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          'Already have an account? ',
+          l10n.t('Already have an account? '),
           style: GoogleFonts.inter(
             color: Colors.black.withValues(alpha: 0.8),
             fontSize: 14,
@@ -504,7 +507,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
             Navigator.of(context).pop();
           },
           child: Text(
-            'Sign In',
+            l10n.t('Sign In'),
             style: GoogleFonts.inter(
               color: Colors.black,
               fontSize: 14,

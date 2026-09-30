@@ -23,6 +23,7 @@ import '../services/land_sync_service.dart';
 import '../services/survey_invitation.dart';
 import 'user_survey_page.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/localization/app_localizations.dart';
 
 enum _ViewMode { combined, basic, text, photo }
 
@@ -235,8 +236,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (saved == true) {
       setState(() => _showSurveyInvitation = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Response saved. It will sync automatically.'),
+        SnackBar(
+          content: Text(context.l10n.t('Response saved. It will sync automatically.')),
         ),
       );
     }
@@ -255,7 +256,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load more cloud records.')),
+        SnackBar(content: Text(context.l10n.t('Could not load more cloud records.'))),
       );
     } finally {
       if (mounted) {
@@ -342,6 +343,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final box = Hive.box('landbox');
     final authSession = ref.watch(authSessionProvider);
     final remoteLandsState = ref.watch(remoteLandsProvider);
@@ -360,7 +362,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     children: [
                       if (_selectionMode)
                         Text(
-                          '${_selectedIds.length} selected',
+                          '${_selectedIds.length} ${l10n.t('selected')}',
                           style: Theme.of(context).textTheme.titleSmall
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
@@ -371,7 +373,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                               ? null
                               : _setGroupForSelectedItems,
                           icon: const Icon(Icons.folder_outlined, size: 20),
-                          tooltip: 'Set group',
+                          tooltip: l10n.t('Set group'),
                         ),
                       if (_selectionMode)
                         IconButton(
@@ -379,7 +381,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                               ? null
                               : _shareSelectedItems,
                           icon: const Icon(Icons.share_outlined, size: 20),
-                          tooltip: 'Share selected',
+                          tooltip: l10n.t('Share selected'),
                         ),
                       if (_selectionMode)
                         IconButton(
@@ -387,13 +389,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                               ? null
                               : _deleteSelectedItems,
                           icon: const Icon(Icons.delete_outline, size: 20),
-                          tooltip: 'Delete selected',
+                          tooltip: l10n.t('Delete selected'),
                         ),
                       if (_selectionMode)
                         IconButton(
                           onPressed: _exitSelectionMode,
                           icon: const Icon(Icons.close, size: 20),
-                          tooltip: 'Exit selection',
+                          tooltip: l10n.t('Exit selection'),
                         ),
                       if (!_selectionMode) ...[
                         IconButton(
@@ -434,9 +436,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                               size: 20,
                             ),
                             const SizedBox(width: 8),
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Help us improve TaREF',
+                                l10n.t('Help us improve TaREF'),
                                 style: TextStyle(
                                   color: Color(0xFF001F3F),
                                   fontSize: 14,
@@ -445,16 +447,15 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                               ),
                             ),
                             IconButton(
-                              tooltip: 'Not now',
+                              tooltip: l10n.t('Not now'),
                               icon: const Icon(Icons.close, size: 18),
                               onPressed: _dismissSurveyInvitation,
                               visualDensity: VisualDensity.compact,
                             ),
                           ],
                         ),
-                        const Text(
-                          'Tell us what is working and what is difficult. '
-                          'It takes about a minute.',
+                        Text(
+                          l10n.t('Tell us what is working and what is difficult. It takes about a minute.'),
                           style: TextStyle(
                             color: Color(0xFF374151),
                             fontSize: 12,
@@ -465,7 +466,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                           alignment: Alignment.centerLeft,
                           child: TextButton(
                             onPressed: _openSurveyFromInvitation,
-                            child: const Text('Share feedback'),
+                            child: Text(l10n.t('Share feedback')),
                           ),
                         ),
                       ],
@@ -484,7 +485,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     }
                   },
                   decoration: InputDecoration(
-                    hintText: 'Search saved locations',
+                    hintText: l10n.t('Search saved locations'),
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
@@ -514,7 +515,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     children: [
                       if (_searchQuery.isNotEmpty)
                         _ActiveTag(
-                          label: 'Search: $_searchQuery',
+                          label: '${l10n.t('Search')}: $_searchQuery',
                           onClear: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -525,19 +526,19 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         ),
                       if (_filter != _SavedFilter.all)
                         _ActiveTag(
-                          label: 'Filter: ${_filterLabel(_filter)}',
+                          label: '${l10n.t('Filter')}: ${_filterLabel(_filter)}',
                           onClear: () =>
                               setState(() => _filter = _SavedFilter.all),
                         ),
                       if (_sort != _SavedSort.newest)
                         _ActiveTag(
-                          label: 'Sort: ${_sortLabel(_sort)}',
+                          label: '${l10n.t('Sort')}: ${_sortLabel(_sort)}',
                           onClear: () =>
                               setState(() => _sort = _SavedSort.newest),
                         ),
                       if (_groupFilter != 'All groups')
                         _ActiveTag(
-                          label: 'Group: $_groupFilter',
+                          label: '${l10n.t('Group')}: $_groupFilter',
                           onClear: () =>
                               setState(() => _groupFilter = 'All groups'),
                         ),
@@ -613,7 +614,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                             child: Row(
                               children: [
                                 _SectionChip(
-                                  label: 'All',
+                                  label: l10n.t('All'),
                                   count: items.length,
                                   selected:
                                       _contentSection ==
@@ -625,7 +626,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 _SectionChip(
-                                  label: 'Points',
+                                  label: l10n.t('Points'),
                                   count: counts.markers,
                                   selected:
                                       _contentSection ==
@@ -637,7 +638,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 _SectionChip(
-                                  label: 'Area',
+                                  label: l10n.t('Area'),
                                   count: counts.fields,
                                   selected:
                                       _contentSection ==
@@ -649,7 +650,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 _SectionChip(
-                                  label: 'Route',
+                                  label: l10n.t('Route'),
                                   count: counts.distances,
                                   selected:
                                       _contentSection ==
@@ -682,10 +683,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                                           _groupFilter != 'All groups' ||
                                           _contentSection !=
                                               _SavedContentSection.all
-                                      ? const _EmptyState(
-                                          title: 'No matching saved locations',
-                                          subtitle:
-                                              'Try changing search text, filter, sort, or group.',
+                                      ? _EmptyState(
+                                          title: l10n.t('No matching saved locations'),
+                                          subtitle: l10n.t('Try changing search text, filter, sort, or group.'),
                                         )
                                       : const _EmptyState(),
                                 ),
@@ -711,7 +711,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${searched.length} result${searched.length == 1 ? '' : 's'}',
+                                  '${searched.length} ${l10n.t(searched.length == 1 ? 'result' : 'results')}',
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
                                         color: Colors.black54,
@@ -721,7 +721,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                                 if (hasReachedMobileLimit) ...[
                                   const SizedBox(height: 3),
                                   Text(
-                                    'Showing latest $latestRemoteLandsLimit records. Use the web app to view older records.',
+                                    l10n.t('Showing latest records. Use the web app to view older records.'),
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(color: Colors.black45),
                                   ),
@@ -1168,13 +1168,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
-            const Text(
-              'Filter',
+            Text(
+              sheetContext.l10n.t('Filter'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             _FilterTile(
-              title: 'All saved lands',
+              title: sheetContext.l10n.t('All saved lands'),
               selected: _filter == _SavedFilter.all,
               onTap: () {
                 setState(() => _filter = _SavedFilter.all);
@@ -1182,7 +1182,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
             _FilterTile(
-              title: '3+ points only',
+              title: sheetContext.l10n.t('3+ points only'),
               selected: _filter == _SavedFilter.threePlusPoints,
               onTap: () {
                 setState(() => _filter = _SavedFilter.threePlusPoints);
@@ -1190,7 +1190,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
             _FilterTile(
-              title: 'Updated only',
+              title: sheetContext.l10n.t('Updated only'),
               selected: _filter == _SavedFilter.updatedOnly,
               onTap: () {
                 setState(() => _filter = _SavedFilter.updatedOnly);
@@ -1215,13 +1215,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
-            const Text(
-              'Sort',
+            Text(
+              sheetContext.l10n.t('Sort'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             _FilterTile(
-              title: 'Newest first',
+              title: sheetContext.l10n.t('Newest first'),
               selected: _sort == _SavedSort.newest,
               onTap: () {
                 setState(() => _sort = _SavedSort.newest);
@@ -1229,7 +1229,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
             _FilterTile(
-              title: 'Oldest first',
+              title: sheetContext.l10n.t('Oldest first'),
               selected: _sort == _SavedSort.oldest,
               onTap: () {
                 setState(() => _sort = _SavedSort.oldest);
@@ -1237,7 +1237,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
             _FilterTile(
-              title: 'Name A-Z',
+              title: sheetContext.l10n.t('Name A-Z'),
               selected: _sort == _SavedSort.nameAsc,
               onTap: () {
                 setState(() => _sort = _SavedSort.nameAsc);
@@ -1245,7 +1245,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
             _FilterTile(
-              title: 'Name Z-A',
+              title: sheetContext.l10n.t('Name Z-A'),
               selected: _sort == _SavedSort.nameDesc,
               onTap: () {
                 setState(() => _sort = _SavedSort.nameDesc);
@@ -1253,7 +1253,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
             _FilterTile(
-              title: 'Most points',
+              title: sheetContext.l10n.t('Most points'),
               selected: _sort == _SavedSort.pointsDesc,
               onTap: () {
                 setState(() => _sort = _SavedSort.pointsDesc);
@@ -1279,7 +1279,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           children: [
             ListTile(
               leading: const Icon(Icons.checklist_outlined),
-              title: const Text('Select multiple'),
+              title: Text(sheetContext.l10n.t('Select multiple')),
               onTap: () {
                 Navigator.pop(sheetContext);
                 setState(() => _selectionMode = true);
@@ -1287,7 +1287,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
             ),
             ListTile(
               leading: const Icon(Icons.filter_alt_off_outlined),
-              title: const Text('Reset filters/sort/group'),
+              title: Text(sheetContext.l10n.t('Reset filters/sort/group')),
               onTap: () {
                 Navigator.pop(sheetContext);
                 setState(() {
@@ -1302,7 +1302,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 Icons.delete_sweep_outlined,
                 color: Colors.red,
               ),
-              title: const Text('Delete all saved lands'),
+              title: Text(sheetContext.l10n.t('Delete all saved lands')),
               textColor: Colors.red,
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -1319,14 +1319,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete all saved lands?'),
-        content: const Text(
-          'Markers will be kept. This action cannot be undone.',
+        title: Text(dialogContext.l10n.t('Delete all saved lands?')),
+        content: Text(
+          dialogContext.l10n.t('Markers will be kept. This action cannot be undone.'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(dialogContext.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1346,7 +1346,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 Navigator.pop(dialogContext);
               }
             },
-            child: const Text('Delete all'),
+            child: Text(dialogContext.l10n.t('Delete all')),
           ),
         ],
       ),
@@ -1399,7 +1399,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Nothing to share')));
+        ).showSnackBar(SnackBar(content: Text(context.l10n.t('Nothing to share'))));
       }
       return;
     }
@@ -1410,7 +1410,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Selected items shared')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t('Selected items shared'))));
   }
 
   Future<void> _deleteSelectedItems() async {
@@ -1419,14 +1419,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete selected locations?'),
+        title: Text(dialogContext.l10n.t('Delete selected locations?')),
         content: Text(
           'This will delete ${_selectedIds.length} selected item(s). This action cannot be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(dialogContext.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1459,9 +1459,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Sign in again to delete cloud records.'),
-                    ),
+                    SnackBar(content: Text(context.l10n.t('Sign in again to delete cloud records.'))),
                   );
                 }
                 return;
@@ -1502,7 +1500,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ),
               );
             },
-            child: const Text('Delete'),
+            child: Text(dialogContext.l10n.t('Delete')),
           ),
         ],
       ),
@@ -1517,13 +1515,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         title: Text(
-          'Set group for selected',
+          dialogContext.l10n.t('Set group for selected'),
           style: TextStyle(fontSize: 18, color: Color(0xFF111827)),
         ),
         content: TextField(
           controller: controller,
           decoration: InputDecoration(
-            labelText: 'Group name',
+            labelText: dialogContext.l10n.t('Group name'),
             labelStyle: TextStyle(color: Colors.grey.shade600),
             border: OutlineInputBorder(),
           ),
@@ -1531,7 +1529,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(dialogContext.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1551,12 +1549,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               if (!mounted) return;
               if (dialogContext.mounted) Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Group updated for selected items'),
-                ),
+                SnackBar(content: Text(context.l10n.t('Group updated for selected items'))),
               );
             },
-            child: const Text('Save'),
+            child: Text(dialogContext.l10n.t('Save')),
           ),
         ],
       ),
@@ -1592,7 +1588,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ),
                 _ActionTile(
                   icon: Icons.navigation_outlined,
-                  label: 'Go to',
+                  label: sheetContext.l10n.t('Go to'),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     if (isRemote) {
@@ -1617,7 +1613,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ),
                 _ActionTile(
                   icon: Icons.remove_red_eye_outlined,
-                  label: 'View on map',
+                  label: sheetContext.l10n.t('View on map'),
                   onTap: () {
                     Navigator.pop(sheetContext);
                     if (isRemote) {
@@ -1641,7 +1637,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (isRemote)
                   _ActionTile(
                     icon: Icons.visibility_outlined,
-                    label: 'View details',
+                    label: sheetContext.l10n.t('View details'),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       final remoteLand = _remoteLandFromItem(item);
@@ -1653,7 +1649,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     _localItemForCloudId(item['id']?.toString() ?? '') != null)
                   _ActionTile(
                     icon: Icons.edit_outlined,
-                    label: 'Edit metadata',
+                    label: sheetContext.l10n.t('Edit metadata'),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       final detail = _cachedDetailForRemote(item);
@@ -1675,7 +1671,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (!isRemote)
                   _ActionTile(
                     icon: Icons.edit,
-                    label: 'Rename',
+                    label: sheetContext.l10n.t('Rename'),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       _renameItem(context, id, item['name']?.toString() ?? '');
@@ -1684,7 +1680,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (!isRemote)
                   _ActionTile(
                     icon: Icons.copy,
-                    label: 'Copy coordinates',
+                    label: sheetContext.l10n.t('Copy coordinates'),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       _copyCoordinates(context, item);
@@ -1693,7 +1689,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (!isRemote)
                   _ActionTile(
                     icon: Icons.share,
-                    label: 'Share',
+                    label: sheetContext.l10n.t('Share'),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       _shareItem(context, item);
@@ -1702,7 +1698,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (!isRemote)
                   _ActionTile(
                     icon: Icons.folder_outlined,
-                    label: 'Set group',
+                    label: sheetContext.l10n.t('Set group'),
                     onTap: () {
                       Navigator.pop(sheetContext);
                       _setGroupForItem(context, id, item);
@@ -1710,7 +1706,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   ),
                 _ActionTile(
                   icon: Icons.delete_outline,
-                  label: 'Delete',
+                  label: sheetContext.l10n.t('Delete'),
                   isDestructive: true,
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -1742,7 +1738,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final target = _buildNavigationTarget(item);
     if (target == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No points found for guidance')),
+        SnackBar(content: Text(context.l10n.t('No points found for guidance'))),
       );
       return;
     }
@@ -1755,7 +1751,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final points = _extractLatLngPoints(item);
     if (points.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No points to display on map')),
+        SnackBar(content: Text(context.l10n.t('No points to display on map'))),
       );
       return;
     }
@@ -1796,7 +1792,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
     if (cloudId.isEmpty) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('No cloud ID found for this record.')),
+        SnackBar(content: Text(context.l10n.t('No cloud ID found for this record.'))),
       );
       return;
     }
@@ -1804,8 +1800,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final session = ref.read(authSessionProvider);
     if (!session.isLoggedIn || !session.isVerified) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Sign in required to load cloud coordinates.'),
+        SnackBar(
+          content: Text(context.l10n.t('Sign in required to load cloud coordinates.')),
         ),
       );
       return;
@@ -1813,7 +1809,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
     // Show a brief loading indicator so the user knows something is happening.
     messenger.showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Row(
           children: [
             SizedBox(
@@ -1825,7 +1821,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               ),
             ),
             SizedBox(width: 12),
-            Text('Loading coordinates…'),
+            Text(context.l10n.t('Loading coordinates…')),
           ],
         ),
         duration: Duration(seconds: 10),
@@ -1842,8 +1838,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
       if (detail.points.isEmpty) {
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('This record has no coordinates available.'),
+          SnackBar(
+            content: Text(context.l10n.t('This record has no coordinates available.')),
           ),
         );
         return;
@@ -1999,18 +1995,18 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Set group'),
+        title: Text(dialogContext.l10n.t('Set group')),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Group name',
+          decoration: InputDecoration(
+            labelText: dialogContext.l10n.t('Group name'),
             border: OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(dialogContext.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -2026,7 +2022,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               await box.put(id, data);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            child: const Text('Save'),
+            child: Text(dialogContext.l10n.t('Save')),
           ),
         ],
       ),
@@ -2089,18 +2085,18 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Rename location'),
+        title: Text(dialogContext.l10n.t('Rename location')),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Name',
+          decoration: InputDecoration(
+            labelText: dialogContext.l10n.t('Name'),
             border: OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(dialogContext.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -2119,7 +2115,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               await box.put(id, item);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            child: const Text('Save'),
+            child: Text(dialogContext.l10n.t('Save')),
           ),
         ],
       ),
@@ -2185,12 +2181,12 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete location?'),
-        content: const Text('This action cannot be undone.'),
+        title: Text(dialogContext.l10n.t('Delete location?')),
+        content: Text(dialogContext.l10n.t('This action cannot be undone.')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(dialogContext.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -2209,7 +2205,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               }
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            child: const Text('Delete'),
+            child: Text(dialogContext.l10n.t('Delete')),
           ),
         ],
       ),
@@ -2248,7 +2244,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Land deleted from cloud and app')),
+      SnackBar(content: Text(context.l10n.t('Land deleted from cloud and app'))),
     );
   }
 
@@ -2262,7 +2258,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Coordinates copied')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.t('Coordinates copied'))));
     }
   }
 
@@ -3063,9 +3059,7 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Changes saved. They will sync when connected.'),
-        ),
+        SnackBar(content: Text(context.l10n.t('Changes saved. They will sync when connected.'))),
       );
       unawaited(_syncAndRefresh(syncService));
     } catch (error) {
@@ -3123,14 +3117,14 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
-                    'Edit cloud land',
+                  Text(
+                    context.l10n.t('Edit cloud land'),
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 18),
                   TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Name'),
+                    decoration: InputDecoration(labelText: context.l10n.t('Name')),
                     validator: (value) => value == null || value.trim().isEmpty
                         ? 'Name is required'
                         : null,
@@ -3138,19 +3132,19 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _placeController,
-                    decoration: const InputDecoration(labelText: 'Place'),
+                    decoration: InputDecoration(labelText: context.l10n.t('Place')),
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _phoneController,
-                    decoration: const InputDecoration(labelText: 'Phone'),
+                    decoration: InputDecoration(labelText: context.l10n.t('Phone')),
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _descriptionController,
                     minLines: 2,
                     maxLines: 4,
-                    decoration: const InputDecoration(labelText: 'Description'),
+                    decoration: InputDecoration(labelText: context.l10n.t('Description')),
                   ),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -3166,7 +3160,7 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text('Save changes'),
+                          : Text(context.l10n.t('Save changes')),
                     ),
                   ),
                 ],
@@ -3570,7 +3564,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                               onPressed: () => ref.invalidate(
                                 remoteLandDetailProvider(widget.cloudItem!.id),
                               ),
-                              child: const Text('Retry'),
+                              child: Text(context.l10n.t('Retry')),
                             ),
                           ],
                         ),
@@ -3749,7 +3743,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               Icon(Icons.info_outline, size: 16, color: Colors.grey.shade500),
               const SizedBox(width: 6),
               Text(
-                'Details',
+                context.l10n.t('Details'),
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -3759,19 +3753,19 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          _InfoRow(label: 'Type', value: _typeBadgeLabel(type)),
+          _InfoRow(label: context.l10n.t('Type'), value: _typeBadgeLabel(type)),
           if (place?.trim().isNotEmpty == true)
-            _InfoRow(label: 'Place', value: place!),
+            _InfoRow(label: context.l10n.t('Place'), value: place!),
           if (phone?.trim().isNotEmpty == true)
-            _InfoRow(label: 'Phone', value: phone!),
+            _InfoRow(label: context.l10n.t('Phone'), value: phone!),
           if (description?.trim().isNotEmpty == true)
-            _InfoRow(label: 'Description', value: description!),
+            _InfoRow(label: context.l10n.t('Description'), value: description!),
           if (perimeterText != null)
-            _InfoRow(label: 'Perimeter', value: perimeterText),
-          if (areaText != null) _InfoRow(label: 'Area', value: areaText),
-          _InfoRow(label: 'Created', value: _formatDate(createdAt)),
+            _InfoRow(label: context.l10n.t('Perimeter'), value: perimeterText),
+          if (areaText != null) _InfoRow(label: context.l10n.t('Area'), value: areaText),
+          _InfoRow(label: context.l10n.t('Created'), value: _formatDate(createdAt)),
           if (updatedAt?.trim().isNotEmpty == true)
-            _InfoRow(label: 'Updated', value: _formatDate(updatedAt)),
+            _InfoRow(label: context.l10n.t('Updated'), value: _formatDate(updatedAt)),
         ],
       ),
     );
@@ -4001,7 +3995,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           // Go to map — always shown
           _ActionRow(
             icon: Icons.navigation_outlined,
-            label: 'Go to map',
+            label: context.l10n.t('Go to map'),
             color: theme.colorScheme.primary,
             onTap: () {
               Navigator.of(context).pop();
@@ -4076,7 +4070,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           // View on map — loads points without navigation
           _ActionRow(
             icon: Icons.remove_red_eye_outlined,
-            label: 'View on map',
+            label: context.l10n.t('View on map'),
             onTap: () async {
               final points = widget.isCloud ? _cloudPoints : _localPoints;
               if (points.isEmpty) return;
@@ -4105,7 +4099,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           if (widget.isCloud) ...[
             _ActionRow(
               icon: Icons.edit_outlined,
-              label: 'Edit metadata',
+              label: context.l10n.t('Edit metadata'),
               onTap: () async {
                 final detail = _cloudDetail;
                 if (detail == null) return;
@@ -4126,7 +4120,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             const Divider(height: 1, indent: 56),
             _ActionRow(
               icon: Icons.refresh,
-              label: 'Refresh',
+              label: context.l10n.t('Refresh'),
               onTap: () => ref.invalidate(
                 remoteLandDetailProvider(widget.cloudItem!.id),
               ),
@@ -4134,14 +4128,14 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             const Divider(height: 1, indent: 56),
             _ActionRow(
               icon: Icons.delete_outline,
-              label: _isDeleting ? 'Deleting...' : 'Delete land',
+              label: _isDeleting ? context.l10n.t('Deleting...') : context.l10n.t('Delete land'),
               color: Colors.red,
               onTap: _isDeleting ? null : () => _deleteCloudLand(context),
             ),
           ] else ...[
             _ActionRow(
               icon: Icons.edit_outlined,
-              label: 'Rename',
+              label: context.l10n.t('Rename'),
               onTap: () {
                 Navigator.of(context).pop();
                 // Caller handles rename
@@ -4150,7 +4144,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             const Divider(height: 1, indent: 56),
             _ActionRow(
               icon: Icons.copy_outlined,
-              label: 'Copy coordinates',
+              label: context.l10n.t('Copy coordinates'),
               onTap: () async {
                 final pts = (widget.localItem!['points'] as List?) ?? [];
                 final coords = pts
@@ -4159,14 +4153,14 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                 await Clipboard.setData(ClipboardData(text: coords));
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Coordinates copied')),
+                  SnackBar(content: Text(context.l10n.t('Coordinates copied'))),
                 );
               },
             ),
             const Divider(height: 1, indent: 56),
             _ActionRow(
               icon: Icons.delete_outline,
-              label: 'Delete',
+              label: context.l10n.t('Delete'),
               color: Colors.red,
               onTap: () => _deleteLocalItem(context),
             ),
@@ -4189,18 +4183,18 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete cloud land?'),
+        title: Text(ctx.l10n.t('Delete cloud land?')),
         content: Text(
           'This will delete "${widget.cloudItem!.name}" from the server.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(ctx.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(ctx.l10n.t('Delete')),
           ),
         ],
       ),
@@ -4218,7 +4212,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Land deleted from cloud')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.t('Land deleted from cloud'))));
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
@@ -4233,12 +4227,12 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete location?'),
-        content: const Text('This action cannot be undone.'),
+        title: Text(ctx.l10n.t('Delete location?')),
+        content: Text(ctx.l10n.t('This action cannot be undone.')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(ctx.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -4250,7 +4244,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               if (!context.mounted) return;
               Navigator.of(context).pop();
             },
-            child: const Text('Delete'),
+            child: Text(ctx.l10n.t('Delete')),
           ),
         ],
       ),
@@ -4717,6 +4711,7 @@ class _ManualCoordinateEntrySheetState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
@@ -4764,14 +4759,14 @@ class _ManualCoordinateEntrySheetState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Add location manually',
+                        l10n.t('Add location manually'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF111827),
                         ),
                       ),
                       Text(
-                        'Enter coordinates in your preferred format',
+                        l10n.t('Enter coordinates in your preferred format'),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.grey.shade500,
                         ),
@@ -4795,34 +4790,34 @@ class _ManualCoordinateEntrySheetState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Location metadata ──────────────────
-                  _SectionHeader(title: 'Location details'),
+                  _SectionHeader(title: l10n.t('Location details')),
                   const SizedBox(height: 10),
                   _Field(
                     controller: _nameController,
-                    label: 'Name *',
-                    hint: 'e.g. Farm boundary, Warehouse',
+                    label: l10n.t('Name *'),
+                    hint: l10n.t('e.g. Farm boundary, Warehouse'),
                     icon: Icons.label_outline,
                   ),
                   const SizedBox(height: 10),
                   _Field(
                     controller: _placeController,
-                    label: 'Place',
-                    hint: 'e.g. Dodoma, Tanzania',
+                    label: l10n.t('Place'),
+                    hint: l10n.t('e.g. Dodoma, Tanzania'),
                     icon: Icons.place_outlined,
                   ),
                   const SizedBox(height: 10),
                   _Field(
                     controller: _phoneController,
-                    label: 'Phone',
-                    hint: 'Contact number',
+                    label: l10n.t('Phone'),
+                    hint: l10n.t('Contact number'),
                     icon: Icons.phone_outlined,
                     keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 10),
                   _Field(
                     controller: _descriptionController,
-                    label: 'Description',
-                    hint: 'Notes about this location',
+                    label: l10n.t('Description'),
+                    hint: l10n.t('Notes about this location'),
                     icon: Icons.notes_outlined,
                     minLines: 2,
                     maxLines: 3,
@@ -4831,7 +4826,7 @@ class _ManualCoordinateEntrySheetState
                   const SizedBox(height: 20),
 
                   // ── Record type selector ─────────────
-                  _SectionHeader(title: 'Record type'),
+                  _SectionHeader(title: l10n.t('Record type')),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(4),
@@ -4842,25 +4837,25 @@ class _ManualCoordinateEntrySheetState
                     child: Row(
                       children: [
                         _RecordTypeChip(
-                          label: 'Auto',
+                          label: l10n.t('Auto'),
                           icon: Icons.auto_awesome,
                           selected: _recordType == 'auto',
                           onTap: () => setState(() => _recordType = 'auto'),
                         ),
                         _RecordTypeChip(
-                          label: 'Point',
+                          label: l10n.t('Point'),
                           icon: Icons.location_on_outlined,
                           selected: _recordType == 'point',
                           onTap: () => setState(() => _recordType = 'point'),
                         ),
                         _RecordTypeChip(
-                          label: 'Distance',
+                          label: l10n.t('Distance'),
                           icon: Icons.straighten_rounded,
                           selected: _recordType == 'polyline',
                           onTap: () => setState(() => _recordType = 'polyline'),
                         ),
                         _RecordTypeChip(
-                          label: 'Area',
+                          label: l10n.t('Area'),
                           icon: Icons.crop_square_rounded,
                           selected: _recordType == 'polygon',
                           onTap: () => setState(() => _recordType = 'polygon'),
@@ -4872,7 +4867,7 @@ class _ManualCoordinateEntrySheetState
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        'Type is determined by point count: 1 = Point, 2 = Distance, 3+ = Area',
+                        l10n.t('Type is determined by point count: 1 = Point, 2 = Distance, 3+ = Area'),
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade500,
@@ -4883,10 +4878,10 @@ class _ManualCoordinateEntrySheetState
                   const SizedBox(height: 20),
 
                   // ── Coordinate input mode ──────────────
-                  _SectionHeader(title: 'Add coordinate points'),
+                  _SectionHeader(title: l10n.t('Add coordinate points')),
                   const SizedBox(height: 8),
                   Text(
-                    'Choose your preferred coordinate format to add points one by one.',
+                    l10n.t('Choose your preferred coordinate format to add points one by one.'),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.grey.shade500,
                     ),
@@ -5066,7 +5061,7 @@ class _ManualCoordinateEntrySheetState
                   // ── Points list ────────────────────────
                   if (_points.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    _SectionHeader(title: 'Added points (${_points.length})'),
+                    _SectionHeader(title: '${l10n.t('Added points')} (${_points.length})'),
                     const SizedBox(height: 8),
                     Container(
                       decoration: BoxDecoration(
@@ -5386,7 +5381,7 @@ class _LatLngInputSection extends StatelessWidget {
               Expanded(
                 child: _CompactField(
                   controller: latController,
-                  label: 'Latitude',
+                  label: context.l10n.t('Latitude'),
                   hint: '-6.792453',
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -5398,7 +5393,7 @@ class _LatLngInputSection extends StatelessWidget {
               Expanded(
                 child: _CompactField(
                   controller: lngController,
-                  label: 'Longitude',
+                  label: context.l10n.t('Longitude'),
                   hint: '39.208328',
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -5411,8 +5406,8 @@ class _LatLngInputSection extends StatelessWidget {
           const SizedBox(height: 10),
           _CompactField(
             controller: labelController,
-            label: 'Point label (optional)',
-            hint: 'e.g. A1, Corner 1',
+            label: context.l10n.t('Point label (optional)'),
+            hint: context.l10n.t('e.g. A1, Corner 1'),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -5420,7 +5415,7 @@ class _LatLngInputSection extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add point'),
+              label: Text(context.l10n.t('Add point')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF001F3F),
                 foregroundColor: Colors.white,
@@ -5476,7 +5471,7 @@ class _UtmInputSection extends StatelessWidget {
               Expanded(
                 child: _CompactField(
                   controller: eastingController,
-                  label: 'Easting',
+                  label: context.l10n.t('Easting'),
                   hint: '525893.68',
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -5487,7 +5482,7 @@ class _UtmInputSection extends StatelessWidget {
               Expanded(
                 child: _CompactField(
                   controller: northingController,
-                  label: 'Northing',
+                  label: context.l10n.t('Northing'),
                   hint: '9252392.60',
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -5502,7 +5497,7 @@ class _UtmInputSection extends StatelessWidget {
               Expanded(
                 child: _CompactField(
                   controller: zoneController,
-                  label: 'Zone number',
+                  label: context.l10n.t('Zone number'),
                   hint: '37',
                   keyboardType: TextInputType.number,
                 ),
@@ -5511,7 +5506,7 @@ class _UtmInputSection extends StatelessWidget {
               Expanded(
                 child: _CompactField(
                   controller: bandController,
-                  label: 'Band letter',
+                  label: context.l10n.t('Band letter'),
                   hint: 'M',
                   textCapitalization: TextCapitalization.characters,
                 ),
@@ -5521,8 +5516,8 @@ class _UtmInputSection extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Hemisphere',
+                    Text(
+                      context.l10n.t('Hemisphere'),
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -5579,8 +5574,8 @@ class _UtmInputSection extends StatelessWidget {
           const SizedBox(height: 10),
           _CompactField(
             controller: labelController,
-            label: 'Point label (optional)',
-            hint: 'e.g. A1, Corner 1',
+            label: context.l10n.t('Point label (optional)'),
+            hint: context.l10n.t('e.g. A1, Corner 1'),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -5588,7 +5583,7 @@ class _UtmInputSection extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add point'),
+              label: Text(context.l10n.t('Add point')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF001F3F),
                 foregroundColor: Colors.white,

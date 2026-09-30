@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_provider.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class ChangePasswordPage extends ConsumerStatefulWidget {
   const ChangePasswordPage({super.key});
@@ -49,12 +50,13 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final state = ref.watch(changePasswordProvider);
     final isLoading = state.isLoading;
     final error = state.hasError ? state.error.toString() : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Change Password')),
+      appBar: AppBar(title: Text(l10n.t('Change Password'))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -71,7 +73,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   controller: _currentController,
                   obscureText: _obscureCurrent,
                   decoration: _passwordDecoration(
-                    'Current password',
+                    l10n.t('Current password'),
                     _obscureCurrent,
                     () => setState(() => _obscureCurrent = !_obscureCurrent),
                   ),
@@ -87,7 +89,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   controller: _newController,
                   obscureText: _obscureNew,
                   decoration: _passwordDecoration(
-                    'New password',
+                    l10n.t('New password'),
                     _obscureNew,
                     () => setState(() => _obscureNew = !_obscureNew),
                   ),
@@ -106,7 +108,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   controller: _confirmController,
                   obscureText: _obscureConfirm,
                   decoration: _passwordDecoration(
-                    'Confirm new password',
+                    l10n.t('Confirm new password'),
                     _obscureConfirm,
                     () => setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
@@ -134,7 +136,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Update password'),
+                        : Text(l10n.t('Update password')),
                   ),
                 ),
               ],

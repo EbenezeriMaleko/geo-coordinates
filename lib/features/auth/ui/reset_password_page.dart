@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/auth_provider.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class ResetPasswordPage extends ConsumerStatefulWidget {
   final String initialEmail;
@@ -61,12 +62,13 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final state = ref.watch(resetPasswordProvider);
     final isLoading = state.isLoading;
     final error = state.hasError ? state.error.toString() : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset Password')),
+      appBar: AppBar(title: Text(l10n.t('Reset Password'))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -76,7 +78,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Enter the reset token from email and choose a new password.',
+                  l10n.t('Enter the reset token from email and choose a new password.'),
                   style: GoogleFonts.inter(
                     fontSize: 15,
                     color: Colors.black54,
@@ -90,8 +92,8 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                 ],
                 TextFormField(
                   controller: _tokenController,
-                  decoration: const InputDecoration(
-                    labelText: 'Reset token',
+                  decoration: InputDecoration(
+                    labelText: l10n.t('Reset token'),
                     prefixIcon: Icon(Icons.password_outlined),
                   ),
                   validator: (value) {
@@ -105,8 +107,8 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email address',
+                  decoration: InputDecoration(
+                    labelText: l10n.t('Email address'),
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   validator: (value) {
@@ -121,7 +123,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'New password',
+                    labelText: l10n.t('New password'),
                     prefixIcon: const Icon(Icons.lock_outline_rounded),
                     suffixIcon: IconButton(
                       onPressed: () =>
@@ -148,7 +150,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                   controller: _confirmController,
                   obscureText: _obscureConfirm,
                   decoration: InputDecoration(
-                    labelText: 'Confirm password',
+                    labelText: l10n.t('Confirm password'),
                     prefixIcon: const Icon(Icons.lock_outline_rounded),
                     suffixIcon: IconButton(
                       onPressed: () =>
@@ -184,7 +186,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Reset password'),
+                        : Text(l10n.t('Reset password')),
                   ),
                 ),
               ],

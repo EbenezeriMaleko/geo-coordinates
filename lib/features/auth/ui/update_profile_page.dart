@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_provider.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class UpdateProfilePage extends ConsumerStatefulWidget {
   const UpdateProfilePage({super.key});
@@ -47,19 +48,20 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
 
     if (!mounted || user == null) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated successfully')),
+      SnackBar(content: Text(context.l10n.t('Profile updated successfully'))),
     );
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final state = ref.watch(updateProfileProvider);
     final isLoading = state.isLoading;
     final error = state.hasError ? state.error.toString() : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Update Profile')),
+      appBar: AppBar(title: Text(l10n.t('Update Profile'))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -74,8 +76,8 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
                 ],
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full name',
+                  decoration: InputDecoration(
+                    labelText: l10n.t('Full name'),
                     prefixIcon: Icon(Icons.person_outline_rounded),
                   ),
                   validator: (value) {
@@ -89,8 +91,8 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email address',
+                  decoration: InputDecoration(
+                    labelText: l10n.t('Email address'),
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   validator: (value) {
@@ -104,8 +106,8 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone number',
+                  decoration: InputDecoration(
+                    labelText: l10n.t('Phone number'),
                     prefixIcon: Icon(Icons.phone_outlined),
                   ),
                 ),
@@ -123,7 +125,7 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Save changes'),
+                        : Text(l10n.t('Save changes')),
                   ),
                 ),
               ],

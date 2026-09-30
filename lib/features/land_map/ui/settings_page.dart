@@ -12,6 +12,8 @@ import 'package:flutter/foundation.dart';
 import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/ui/account_page.dart';
+import '../../../core/localization/app_localizations.dart';
+import '../../../core/localization/locale_provider.dart';
 import '../models/coordinate_format.dart';
 import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
@@ -49,6 +51,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final selectedDatum = ref.watch(selectedDatumProvider);
     final session = ref.watch(authSessionProvider);
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
     final accountSubtitle = _accountSubtitle(session);
 
@@ -59,44 +62,52 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         children: [
           _sectionHeader('Cloud synchronization', theme),
           _item(
-            title: 'Account',
+            title: l10n.t('Account'),
             subtitle: accountSubtitle,
             onTap: _openAccountPage,
           ),
           _sectionDivider(),
 
-          _sectionHeader('Location Settings', theme),
+          _sectionHeader(l10n.t('Language'), theme),
           _item(
-            title: 'Coordinates format',
+            title: l10n.t('Language'),
+            subtitle: _languageLabel(ref.watch(localeProvider), l10n),
+            onTap: _showLanguageSelector,
+          ),
+          _sectionDivider(),
+
+          _sectionHeader(l10n.t('Location Settings'), theme),
+          _item(
+            title: l10n.t('Coordinates format'),
             subtitle: selectedFormat.displayName,
             onTap: _showCoordinateFormatSelector,
           ),
 
           _item(
-            title: 'Geodetic datum',
+            title: l10n.t('Geodetic datum'),
             subtitle:
                 selectedDatum?.displayName ?? selectedEllipsoid.displayName,
             onTap: _showReferenceEllipsoidSelector,
           ),
 
           _item(
-            title: 'Compass north reference',
+            title: l10n.t('Compass north reference'),
             subtitle: _compassNorthLabel(ref.watch(compassNorthTypeProvider)),
             onTap: _showCompassNorthSelector,
           ),
 
           _sectionDivider(),
 
-          _sectionHeader('Units', theme),
+          _sectionHeader(l10n.t('Units'), theme),
           _item(
-            title: 'Units',
-            subtitle: unitLabel,
+            title: l10n.t('Units'),
+            subtitle: l10n.t(unitLabel),
             onTap: _showDistanceUnitSelector,
           ),
           _sectionDivider(),
-          _sectionHeader('Photo', theme),
+          _sectionHeader(l10n.t('Photo'), theme),
           _switchItem(
-            title: 'Save original photo',
+            title: l10n.t('Save original photo'),
             subtitle:
                 'Save with no data on it. Useful for editing before sharing.',
             value: saveOriginalPhoto,
@@ -104,8 +115,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ref.read(saveOriginalPhotoProvider.notifier).setValue(value),
           ),
           _switchItem(
-            title: 'Save to gallery',
-            subtitle: 'Save image with data',
+            title: l10n.t('Save to gallery'),
+            subtitle: l10n.t('Save image with data'),
             value: saveToGallery,
             onChanged: (value) =>
                 ref.read(saveToGalleryProvider.notifier).setValue(value),
@@ -123,57 +134,57 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           // ),
           _sectionDivider(),
 
-          _sectionHeader('Other', theme),
-          _item(title: 'Privacy policy', onTap: _openPrivacyPolicy),
+          _sectionHeader(l10n.t('Other'), theme),
+          _item(title: l10n.t('Privacy policy'), onTap: _openPrivacyPolicy),
           _sectionDivider(),
 
-          _sectionHeader('Cache', theme),
+          _sectionHeader(l10n.t('Cache'), theme),
           _item(
-            title: 'Clear cache',
-            subtitle: 'Remove cached data and temporary files',
+            title: l10n.t('Clear cache'),
+            subtitle: l10n.t('Remove cached data and temporary files'),
             onTap: _clearCache,
           ),
           _sectionDivider(),
 
-          _sectionHeader('Information', theme),
+          _sectionHeader(l10n.t('Information'), theme),
           _item(
-            title: 'Contact us',
+            title: l10n.t('Contact us'),
             subtitle:
                 'Send suggestions or report a bug. We appreciate your feedback.',
             onTap: _openContactUsPage,
           ),
           _item(
-            title: 'Share your experience',
-            subtitle: 'Tell us what works and what is difficult.',
+            title: l10n.t('Share your experience'),
+            subtitle: l10n.t('Tell us what works and what is difficult.'),
             onTap: _openSurveyPage,
           ),
           if (kDebugMode)
             _item(
-              title: 'Preview survey invitation',
-              subtitle: 'Debug only. Open Saved locations after tapping.',
+              title: l10n.t('Preview survey invitation'),
+              subtitle: l10n.t('Debug only. Open Saved locations after tapping.'),
               onTap: _previewSurveyInvitation,
             ),
           _item(
-            title: 'Rate our app',
-            subtitle: 'Leave a rating or review in the app store.',
+            title: l10n.t('Rate our app'),
+            subtitle: l10n.t('Leave a rating or review in the app store.'),
             onTap: _openStoreReview,
           ),
           _item(
-            title: 'Version',
+            title: l10n.t('Version'),
             subtitleWidget: FutureBuilder<PackageInfo>(
               future: _packageInfoFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Text(
-                    'Loading version...',
+                  return Text(
+                    l10n.t('Loading version...'),
                     style: TextStyle(fontSize: 14, color: Colors.black54),
                   );
                 }
 
                 final info = snapshot.data;
                 if (info == null) {
-                  return const Text(
-                    'Version unavailable',
+                  return Text(
+                    l10n.t('Version unavailable'),
                     style: TextStyle(fontSize: 14, color: Colors.black54),
                   );
                 }
@@ -298,6 +309,83 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return Divider(height: 1, color: Colors.grey.shade300);
   }
 
+  String _languageLabel(Locale? locale, AppLocalizations l10n) {
+    if (locale == null) return 'System default';
+    if (locale.languageCode == 'fr') return l10n.t('French');
+    if (locale.languageCode == 'ar') return l10n.t('Arabic');
+    return l10n.t('English');
+  }
+
+  void _showLanguageSelector() {
+    final current = ref.read(localeProvider);
+    final l10n = context.l10n;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              l10n.t('Language'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            ListTile(
+              title: Text(l10n.t('System default')),
+              trailing: current == null
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () async {
+                await ref.read(localeProvider.notifier).setLocale(null);
+                if (mounted) Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text(l10n.t('English')),
+              trailing: current?.languageCode == 'en'
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () async {
+                await ref
+                    .read(localeProvider.notifier)
+                    .setLocale(const Locale('en'));
+                if (mounted) Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text(l10n.t('French')),
+              trailing: current?.languageCode == 'fr'
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () async {
+                await ref
+                    .read(localeProvider.notifier)
+                    .setLocale(const Locale('fr'));
+                if (mounted) Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text(l10n.t('Arabic')),
+              trailing: current?.languageCode == 'ar'
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
+                  : const Icon(Icons.circle_outlined),
+              onTap: () async {
+                await ref
+                    .read(localeProvider.notifier)
+                    .setLocale(const Locale('ar'));
+                if (mounted) Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showVersionDetails() {
     showModalBottomSheet<void>(
       context: context,
@@ -359,16 +447,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear cache?'),
-        content: const Text(
-          'This will clear all cached data including images, '
-          'temporary files, and app cache storage. '
-          'Your saved locations will not be affected.',
+        title: Text(context.l10n.t('Clear cache?')),
+        content: Text(
+          context.l10n.t('This will clear all cached data including images, temporary files, and app cache storage. Your saved locations will not be affected.'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.t('Cancel')),
           ),
           TextButton(
             onPressed: () async {
@@ -415,11 +501,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               } catch (e) {
                 if (!mounted) return;
                 messenger.showSnackBar(
-                  SnackBar(content: Text('Error clearing cache: $e')),
+                  SnackBar(content: Text(context.l10n.t('Error clearing cache: $e'))),
                 );
               }
             },
-            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+            child: Text(context.l10n.t('Clear'), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -479,9 +565,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ).push<bool>(MaterialPageRoute(builder: (_) => const UserSurveyPage()));
     if (!mounted || saved != true) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Response saved. It will sync automatically.'),
-      ),
+        SnackBar(content: Text(context.l10n.t('Response saved. It will sync automatically.'))),
     );
   }
 
@@ -489,11 +573,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await SurveyInvitation(Hive.box('landbox')).requestDebugPreview();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Preview ready. Open Saved locations. Submitting the form sends a real response.',
-        ),
-      ),
+      SnackBar(content: Text(context.l10n.t('Preview ready. Open Saved locations. Submitting the form sends a real response.'))),
     );
   }
 
@@ -506,7 +586,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
     if (!mounted || opened) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open the app store.')),
+      SnackBar(content: Text(context.l10n.t('Could not open the app store.'))),
     );
   }
 
@@ -516,7 +596,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (ok) return;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open privacy policy')),
+      SnackBar(content: Text(context.l10n.t('Could not open privacy policy'))),
     );
   }
 
@@ -570,14 +650,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 10),
-            const Text(
-              'Units',
+            Text(
+              context.l10n.t('Units'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
             ListTile(
-              title: const Text('Meters'),
-              subtitle: const Text('Use meters (m)'),
+              title: Text(context.l10n.t('Meters')),
+              subtitle: Text(context.l10n.t('Use meters (m)')),
               trailing: current == DistanceUnit.meters
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
@@ -589,8 +669,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               },
             ),
             ListTile(
-              title: const Text('Feet'),
-              subtitle: const Text('Use feet (ft)'),
+              title: Text(context.l10n.t('Feet')),
+              subtitle: Text(context.l10n.t('Use feet (ft)')),
               trailing: current == DistanceUnit.feet
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
@@ -790,7 +870,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error changing coordinate display: $e'),
+          content: Text(context.l10n.t('Error changing coordinate display: $e')),
           backgroundColor: Colors.red,
         ),
       );
@@ -818,16 +898,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 10),
-            const Text(
-              'Compass north reference',
+            Text(
+              context.l10n.t('Compass north reference'),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
             ListTile(
-              title: const Text('Magnetic North'),
-              subtitle: const Text(
-                'Uses raw compass sensor reading. No correction applied.',
-              ),
+              title: Text(context.l10n.t('Magnetic North')),
+              subtitle: Text(context.l10n.t('Uses raw compass sensor reading. No correction applied.')),
               trailing: current == CompassNorthType.magnetic
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
@@ -839,10 +917,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               },
             ),
             ListTile(
-              title: const Text('True North'),
-              subtitle: const Text(
-                'Corrects for magnetic declination to point to geographic north.',
-              ),
+              title: Text(context.l10n.t('True North')),
+              subtitle: Text(context.l10n.t('Corrects for magnetic declination to point to geographic north.')),
               trailing: current == CompassNorthType.trueNorth
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
@@ -955,8 +1031,8 @@ class _ContactDialogState extends State<_ContactDialog> {
       if (launched) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Email app opened — tap Send to submit.'),
+          SnackBar(
+            content: Text(context.l10n.t('Email app opened — tap Send to submit.')),
           ),
         );
       } else {
@@ -977,8 +1053,8 @@ class _ContactDialogState extends State<_ContactDialog> {
       if (!mounted) return;
       setState(() => _isSending = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
+        SnackBar(
+          content: Text(context.l10n.t('Something went wrong. Please try again.')),
         ),
       );
     }

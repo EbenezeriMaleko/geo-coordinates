@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/auth_provider.dart';
 import 'login_page.dart';
+import '../../../core/localization/app_localizations.dart';
 
 
 class ForgotPasswordPage extends ConsumerStatefulWidget {
@@ -54,6 +55,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final state = ref.watch(forgotPasswordProvider);
     final isLoading = state.isLoading;
     final errorMsg = state.hasError ? state.error.toString() : null;
@@ -69,9 +71,9 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildHeader(),
+                  _buildHeader(l10n),
                   const SizedBox(height: 40),
-                  _buildCard(isLoading, errorMsg),
+                  _buildCard(isLoading, errorMsg, l10n),
                   const SizedBox(height: 24),
                   _buildFooter(),
                 ],
@@ -83,7 +85,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppLocalizations l10n) {
     return Column(
       children: [
         Container(
@@ -101,7 +103,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
         ),
         const SizedBox(height: 20),
         Text(
-          'Reset Password',
+          l10n.t('Reset Password'),
           style: GoogleFonts.inter(
             fontSize: 30,
             fontWeight: FontWeight.w800,
@@ -111,7 +113,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
         ),
         const SizedBox(height: 8),
         Text(
-          'Enter your email to receive a reset link',
+          l10n.t('Enter your email to receive a reset link'),
           textAlign: TextAlign.center,
           style: GoogleFonts.inter(
             fontSize: 15,
@@ -123,7 +125,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
     );
   }
 
-  Widget _buildCard(bool isLoading, String? errorMsg) {
+  Widget _buildCard(bool isLoading, String? errorMsg, AppLocalizations l10n) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -147,7 +149,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
               _buildErrorBanner(errorMsg),
               const SizedBox(height: 20),
             ],
-            _buildLabel('Email address'),
+            _buildLabel(l10n.t('Email address')),
             const SizedBox(height: 8),
             TextFormField(
               controller: _emailController,
@@ -156,7 +158,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
               enabled: !isLoading,
               onFieldSubmitted: (_) => _submit(),
               decoration: _inputDecoration(
-                hint: 'you@example.com',
+                hint: context.l10n.t('you@example.com'),
                 icon: Icons.email_outlined,
               ),
               validator: (value) {

@@ -6,6 +6,7 @@ import '../../land_map/ui/main_navigation.dart';
 import '../providers/auth_provider.dart';
 import 'forgot_password_page.dart';
 import 'register_page.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key, this.returnToPreviousPage = false});
@@ -72,6 +73,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final authState = ref.watch(loginProvider);
     final isLoading = authState.isLoading;
     final errorMsg = authState.hasError ? authState.error.toString() : null;
@@ -88,9 +90,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildHeader(isCompact),
+                  _buildHeader(isCompact, l10n),
                   const SizedBox(height: 40),
-                  _buildCard(isLoading, errorMsg, isCompact),
+                  _buildCard(isLoading, errorMsg, isCompact, l10n),
                   const SizedBox(height: 24),
                   _buildFooter(),
                 ],
@@ -102,7 +104,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
     );
   }
 
-  Widget _buildHeader(bool isCompact) {
+  Widget _buildHeader(bool isCompact, AppLocalizations l10n) {
   return Column(
     children: [
       Container(
@@ -132,7 +134,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
       ),
       SizedBox(height: isCompact ? 4 : 8),
       Text(
-        'Sign in to your account',
+        l10n.t('Sign in to your account'),
         style: GoogleFonts.inter(
           fontSize: isCompact ? 13 : 15,
           color: Colors.black.withValues(alpha: 0.75),
@@ -143,7 +145,12 @@ class _LoginPageState extends ConsumerState<LoginPage>
   );
 }
 
-  Widget _buildCard(bool isLoading, String? errorMsg, bool isCompact) {
+  Widget _buildCard(
+    bool isLoading,
+    String? errorMsg,
+    bool isCompact,
+    AppLocalizations l10n,
+  ) {
   return Container(
     decoration: BoxDecoration(
       color: Colors.white,
@@ -166,7 +173,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
             _buildErrorBanner(errorMsg),
             SizedBox(height: isCompact ? 14 : 20),
           ],
-          _buildLabel('Email address'),
+          _buildLabel(l10n.t('Email address')),
           const SizedBox(height: 8),
           TextFormField(
             controller: _emailController,
@@ -174,7 +181,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
             textInputAction: TextInputAction.next,
             enabled: !isLoading,
             decoration: _inputDecoration(
-              hint: 'you@example.com',
+              hint: context.l10n.t('you@example.com'),
               icon: Icons.email_outlined,
             ),
             validator: (v) {
@@ -187,7 +194,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
             },
           ),
           SizedBox(height: isCompact ? 14 : 20),
-          _buildLabel('Password'),
+          _buildLabel(l10n.t('Password')),
           const SizedBox(height: 8),
           TextFormField(
             controller: _passwordController,
@@ -196,7 +203,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
             enabled: !isLoading,
             onFieldSubmitted: (_) => _submit(),
             decoration: _inputDecoration(
-              hint: 'Enter your password',
+              hint: context.l10n.t('Enter your password'),
               icon: Icons.lock_outline_rounded,
               suffix: IconButton(
                 icon: Icon(
@@ -262,7 +269,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                         ),
                       );
                     },
-              child: const Text('Forgot password?'),
+              child: Text(context.l10n.t('Forgot password?')),
             ),
           ),
         ],

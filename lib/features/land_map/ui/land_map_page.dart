@@ -25,6 +25,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import '../services/map_tile_cache.dart';
 import '../services/measurement_formatter.dart';
+import '../../../core/localization/app_localizations.dart';
 
 enum MapType { normal, satellite, terrain, hybrid }
 
@@ -959,7 +960,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Save location',
+                  sheetContext.l10n.t('Save location'),
                   style: GoogleFonts.inter(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -968,7 +969,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Add location name and point label before saving.',
+                  sheetContext.l10n.t('Add location name and point label before saving.'),
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     color: Colors.grey.shade600,
@@ -984,7 +985,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     FocusScope.of(sheetContext).nextFocus();
                   },
                   decoration: _sheetInputDecoration(
-                    hint: 'e.g. Home, Office, Farm Entrace',
+                    hint: sheetContext.l10n.t('e.g. Home, Office, Farm Entrace'),
                     icon: Icons.place_outlined,
                   ),
                 ),
@@ -1004,7 +1005,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     );
                   },
                   decoration: _sheetInputDecoration(
-                    hint: 'Point label (e.g. A1, P1)',
+                    hint: sheetContext.l10n.t('Point label (e.g. A1, P1)'),
                     icon: Icons.label_outline,
                   ),
                 ),
@@ -1020,7 +1021,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text('Cancel'),
+                        child: Text(sheetContext.l10n.t('Cancel')),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -2296,7 +2297,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 leading: const HugeIcon(
                   icon: HugeIcons.strokeRoundedPinLocation02,
                 ),
-                title: const Text('Center here'),
+                title: Text(sheetContext.l10n.t('Center here')),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _mapController.move(marker.point, 17);
@@ -2304,7 +2305,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Delete marker'),
+                title: Text(sheetContext.l10n.t('Delete marker')),
                 textColor: Colors.red,
                 onTap: () async {
                   Navigator.pop(sheetContext);
@@ -3184,6 +3185,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   void _showMapTypeSelector() {
+    final l10n = context.l10n;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3196,8 +3198,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Map Type',
+              Text(
+                l10n.t('Map Type'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 20),
@@ -3205,7 +3207,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _MapTypeOption(
-                    label: 'Normal',
+                    label: l10n.t('Normal'),
                     preview: Image.asset(
                       'lib/assets/mapsImages/Normal.jpg',
                       fit: BoxFit.cover,
@@ -3216,7 +3218,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     },
                   ),
                   _MapTypeOption(
-                    label: 'Satellite',
+                    label: l10n.t('Satellite'),
                     preview: Image.asset(
                       'lib/assets/mapsImages/satellite.png',
                       fit: BoxFit.cover,
@@ -3227,7 +3229,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     },
                   ),
                   _MapTypeOption(
-                    label: 'Terrain',
+                    label: l10n.t('Terrain'),
                     preview: Image.asset(
                       'lib/assets/mapsImages/terrain.jpg',
                       fit: BoxFit.cover,
@@ -3238,7 +3240,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     },
                   ),
                   _MapTypeOption(
-                    label: 'Hybrid',
+                    label: l10n.t('Hybrid'),
                     preview: Image.asset(
                       'lib/assets/mapsImages/satellite.png',
                       fit: BoxFit.cover,
@@ -3253,8 +3255,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 16),
-              const Text(
-                'Layers',
+              Text(
+                l10n.t('Layers'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
@@ -3262,7 +3264,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _LayerOption(
-                    label: 'Field',
+                    label: l10n.t('Field'),
                     icon: SvgPicture.asset(
                       'lib/assets/icons/golf-hole.svg',
                       width: 28,
@@ -3294,7 +3296,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     },
                   ),
                   _LayerOption(
-                    label: 'Distance',
+                    label: l10n.t('Distance'),
                     icon: SvgPicture.asset(
                       'lib/assets/icons/map-location-track.svg',
                       width: 28,
@@ -3335,7 +3337,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     },
                   ),
                   _LayerOption(
-                    label: 'Marker',
+                    label: l10n.t('Marker'),
                     icon: SvgPicture.asset(
                       'lib/assets/icons/marker.svg',
                       width: 28,
@@ -3420,6 +3422,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             builder: (sheetStateContext, setSheetState) {
               return Consumer(
                 builder: (context, ref, child) {
+                  final l10n = context.l10n;
                   final mapState = ref.watch(landMapProvider);
                   final distanceUnit = ref.watch(distanceUnitProvider);
                   final pointsCount = mapState.points.length;
@@ -3477,7 +3480,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 fieldSheetMessage = null;
                               });
                             },
-                            child: const Text('Dismiss'),
+                            child: Text(l10n.t('Dismiss')),
                           ),
                         ],
                       ),
@@ -3516,8 +3519,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               const SizedBox(height: 14),
                               Text(
                                 mapState.activeFieldId != null
-                                    ? 'Update Area'
-                                    : 'Create Area',
+                                    ? l10n.t('Update Area')
+                                    : l10n.t('Create Area'),
                                 style: GoogleFonts.inter(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w800,
@@ -3526,26 +3529,26 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Capture boundary points and save your land details.',
+                                l10n.t('Capture boundary points and save your land details.'),
                                 style: GoogleFonts.inter(
                                   fontSize: 13,
                                   color: Colors.grey.shade600,
                                 ),
                               ),
                               const SizedBox(height: 20),
-                              Text('Place *', style: _sheetLabelStyle()),
+                              Text(l10n.t('Place *'), style: _sheetLabelStyle()),
                               const SizedBox(height: 8),
                               TextField(
                                 controller: _placeController,
                                 textInputAction: TextInputAction.next,
                                 decoration: _sheetInputDecoration(
-                                  hint: 'Enter place name',
+                                  hint: l10n.t('Enter place name'),
                                   icon: Icons.place_outlined,
                                 ),
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'Phone (optional)',
+                                l10n.t('Phone (optional)'),
                                 style: _sheetLabelStyle(),
                               ),
                               const SizedBox(height: 8),
@@ -3570,13 +3573,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 maxLines: 3,
                                 textInputAction: TextInputAction.done,
                                 decoration: _sheetInputDecoration(
-                                  hint: 'Add notes about this land',
+                                  hint: l10n.t('Add notes about this land'),
                                   icon: Icons.notes_outlined,
                                 ),
                               ),
                               const SizedBox(height: 18),
                               Text(
-                                'Boundary capture',
+                                l10n.t('Boundary capture'),
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
@@ -3585,7 +3588,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Mark current Location while walking around the field boundary.',
+                                l10n.t('Mark current Location while walking around the field boundary.'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey.shade600,
@@ -3611,9 +3614,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               });
                                             },
                                       icon: const Icon(Icons.my_location),
-                                      label: const Text(
-                                        'Mark Current Location',
-                                      ),
+                                      label: Text(l10n.t('Mark Current Location')),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(
                                           0xFF001F3F,
@@ -3639,7 +3640,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                           ? null
                                           : notifier.undoLastPoint,
                                       icon: const Icon(Icons.undo),
-                                      label: const Text('Undo Last'),
+                                      label: Text(l10n.t('Undo Last')),
                                       style: OutlinedButton.styleFrom(
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
@@ -3659,7 +3660,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                       icon: const Icon(
                                         Icons.delete_sweep_outlined,
                                       ),
-                                      label: const Text('Clear All'),
+                                      label: Text(l10n.t('Clear All')),
                                       style: OutlinedButton.styleFrom(
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
@@ -3695,7 +3696,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                       style: const TextStyle(fontSize: 12),
                                     ),
                                     PopupMenuButton<AreaDisplayUnit>(
-                                      tooltip: 'Choose area display unit',
+                                      tooltip: l10n.t('Choose area display unit'),
                                       initialValue: areaDisplayUnit,
                                       onSelected: (unit) => setSheetState(
                                         () => areaDisplayUnit = unit,
@@ -3829,7 +3830,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                 Navigator.pop(sheetContext);
                                               }
                                             },
-                                      child: const Text('Cancel'),
+                                      child: Text(context.l10n.t('Cancel')),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
@@ -3981,6 +3982,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
+        final l10n = sheetContext.l10n;
         final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
         final totalDistance = _totalDistanceMeters();
         return SafeArea(
@@ -4004,7 +4006,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Save Distance',
+                    l10n.t('Save Distance'),
                     style: GoogleFonts.inter(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -4013,41 +4015,41 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Store this measured line locally and send it to the server as a distance record.',
+                    l10n.t('Store this measured line locally and send it to the server as a distance record.'),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 18),
-                  Text('Place', style: _sheetLabelStyle()),
+                  Text(l10n.t('Place'), style: _sheetLabelStyle()),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _placeController,
                     decoration: _sheetInputDecoration(
-                      hint: 'Distance name or place',
+                      hint: l10n.t('Distance name or place'),
                       icon: Icons.place_outlined,
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Text('Phone', style: _sheetLabelStyle()),
+                  Text(l10n.t('Phone'), style: _sheetLabelStyle()),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
                     decoration: _sheetInputDecoration(
-                      hint: 'Contact phone',
+                      hint: l10n.t('Contact phone'),
                       icon: Icons.phone_outlined,
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Text('Description', style: _sheetLabelStyle()),
+                  Text(l10n.t('Description'), style: _sheetLabelStyle()),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _descriptionController,
                     maxLines: 3,
                     decoration: _sheetInputDecoration(
-                      hint: 'Notes about this distance',
+                      hint: l10n.t('Notes about this distance'),
                       icon: Icons.notes_outlined,
                     ),
                   ),
@@ -4071,8 +4073,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         ),
                         if (_distancePoints.isNotEmpty) ...[
                           const SizedBox(height: 10),
-                          const Text(
-                            'Point labels',
+                          Text(
+                            l10n.t('Point labels'),
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -4109,7 +4111,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               fontSize: 13,
                                             ),
                                             decoration: InputDecoration(
-                                              hintText: 'Point ${index + 1}',
+                                              hintText: '${l10n.t('Point')} ${index + 1}',
                                               hintStyle: TextStyle(
                                                 color: Colors.grey.shade400,
                                                 fontSize: 13,
@@ -4174,7 +4176,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         final place = _placeController.text.trim();
                         if (place.isEmpty) {
                           ScaffoldMessenger.of(sheetContext).showSnackBar(
-                            const SnackBar(content: Text('Place is required.')),
+                            SnackBar(content: Text(l10n.t('Place is required.'))),
                           );
                           return;
                         }
@@ -4191,7 +4193,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         _descriptionController.clear();
                         Navigator.pop(sheetContext);
                       },
-                      child: const Text('Save distance'),
+                      child: Text(l10n.t('Save distance')),
                     ),
                   ),
                 ],
@@ -5065,10 +5067,10 @@ class _BottomActionBarState extends State<_BottomActionBar>
           child: ListView(
             shrinkWrap: true,
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
                 child: Text(
-                  'View area in',
+                  sheetContext.l10n.t('View area in'),
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -5093,6 +5095,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -5174,7 +5177,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                 child: Row(
                   children: [
                     _TabButton(
-                      label: 'Area',
+                      label: l10n.t('Area'),
                       icon: Icons.crop_square_rounded,
                       isActive: widget.activeTool == _MapTool.none,
                       hasData: widget.fieldPoints.isNotEmpty,
@@ -5182,7 +5185,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                     ),
                     const SizedBox(width: 6),
                     _TabButton(
-                      label: 'Distance',
+                      label: l10n.t('Distance'),
                       icon: Icons.straighten_rounded,
                       isActive: widget.activeTool == _MapTool.distance,
                       hasData: widget.distancePoints.isNotEmpty,
@@ -5194,7 +5197,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                     ),
                     const SizedBox(width: 6),
                     _TabButton(
-                      label: 'Marker',
+                      label: l10n.t('Marker'),
                       icon: Icons.push_pin_outlined,
                       isActive: widget.activeTool == _MapTool.marker,
                       hasData: false,
@@ -5247,7 +5250,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                   ),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                    child: _buildExpandedContent(theme),
+                    child: _buildExpandedContent(theme, l10n),
                   ),
                 ),
               ),
@@ -5258,18 +5261,18 @@ class _BottomActionBarState extends State<_BottomActionBar>
     );
   }
 
-  Widget _buildExpandedContent(ThemeData theme) {
+  Widget _buildExpandedContent(ThemeData theme, AppLocalizations l10n) {
     switch (widget.activeTool) {
       case _MapTool.distance:
-        return _buildDistanceContent(theme);
+        return _buildDistanceContent(theme, l10n);
       case _MapTool.marker:
-        return _buildMarkerContent(theme);
+        return _buildMarkerContent(theme, l10n);
       case _MapTool.none:
-        return _buildAreaContent(theme);
+        return _buildAreaContent(theme, l10n);
     }
   }
 
-  Widget _buildDistanceContent(ThemeData theme) {
+  Widget _buildDistanceContent(ThemeData theme, AppLocalizations l10n) {
     final canSave = widget.distancePoints.length >= 2;
     final canUndo = widget.distancePoints.isNotEmpty;
     return Column(
@@ -5279,11 +5282,11 @@ class _BottomActionBarState extends State<_BottomActionBar>
         Row(
           children: [
             _StatChip(
-              label: 'Points',
+              label: l10n.t('Points'),
               value: '${widget.distancePoints.length}',
             ),
             const SizedBox(width: 8),
-            _StatChip(label: 'Total', value: _fmt(widget.totalDistanceMeters)),
+            _StatChip(label: l10n.t('Total'), value: _fmt(widget.totalDistanceMeters)),
           ],
         ),
         const SizedBox(height: 10),
@@ -5292,7 +5295,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
           children: [
             Expanded(
               child: _ActionBtn(
-                label: '+ GPS',
+                label: l10n.t('+ GPS'),
                 isLoading: widget.isLocating,
                 enabled: !widget.isLocating,
                 isPrimary: true,
@@ -5302,7 +5305,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             const SizedBox(width: 6),
             Expanded(
               child: _ActionBtn(
-                label: 'Undo',
+                label: l10n.t('Undo'),
                 enabled: canUndo,
                 onTap: widget.onUndoDistance,
               ),
@@ -5310,7 +5313,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             const SizedBox(width: 6),
             Expanded(
               child: _ActionBtn(
-                label: 'Clear',
+                label: l10n.t('Clear'),
                 enabled: canUndo,
                 onTap: widget.onClearDistance,
               ),
@@ -5332,8 +5335,8 @@ class _BottomActionBarState extends State<_BottomActionBar>
                 ),
                 elevation: 0,
               ),
-              child: const Text(
-                'Save distance',
+              child: Text(
+                l10n.t('Save distance'),
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               ),
             ),
@@ -5343,7 +5346,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
     );
   }
 
-  Widget _buildAreaContent(ThemeData theme) {
+  Widget _buildAreaContent(ThemeData theme, AppLocalizations l10n) {
     final count = widget.fieldPoints.length;
     final canSave = count >= 3;
     final canUndo = count > 0;
@@ -5352,12 +5355,12 @@ class _BottomActionBarState extends State<_BottomActionBar>
       children: [
         Row(
           children: [
-            _StatChip(label: 'Points', value: '$count'),
+            _StatChip(label: l10n.t('Points'), value: '$count'),
             const SizedBox(width: 8),
-            _StatChip(label: 'Perimeter', value: _fmt(widget.perimeterMeters)),
+            _StatChip(label: l10n.t('Perimeter'), value: _fmt(widget.perimeterMeters)),
             const SizedBox(width: 8),
             _StatChip(
-              label: 'Area',
+              label: l10n.t('Area'),
               value: MeasurementFormatter.areaIn(
                 widget.areaSqm,
                 _areaDisplayUnit,
@@ -5369,7 +5372,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
         ),
         const SizedBox(height: 8),
         Text(
-          'Long-press the map to add area points, or use + GPS for your current location.',
+          l10n.t('Long-press the map to add area points, or use + GPS for your current location.'),
           style: TextStyle(
             fontSize: 11,
             color: Colors.grey.shade600,
@@ -5382,7 +5385,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
           children: [
             Expanded(
               child: _ActionBtn(
-                label: '+ GPS',
+                label: l10n.t('+ GPS'),
                 isLoading: widget.isLocating,
                 enabled: !widget.isLocating,
                 isPrimary: true,
@@ -5392,7 +5395,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             const SizedBox(width: 6),
             Expanded(
               child: _ActionBtn(
-                label: 'Undo',
+                label: l10n.t('Undo'),
                 enabled: canUndo,
                 onTap: widget.onUndoField,
               ),
@@ -5400,7 +5403,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             const SizedBox(width: 6),
             Expanded(
               child: _ActionBtn(
-                label: 'Clear',
+                label: l10n.t('Clear'),
                 enabled: canUndo,
                 onTap: widget.onClearField,
               ),
@@ -5422,8 +5425,8 @@ class _BottomActionBarState extends State<_BottomActionBar>
                 ),
                 elevation: 0,
               ),
-              child: const Text(
-                'Save area',
+              child: Text(
+                l10n.t('Save area'),
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               ),
             ),
@@ -5433,7 +5436,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
     );
   }
 
-  Widget _buildMarkerContent(ThemeData theme) {
+  Widget _buildMarkerContent(ThemeData theme, AppLocalizations l10n) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -5460,9 +5463,9 @@ class _BottomActionBarState extends State<_BottomActionBar>
                 ),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Long-press anywhere on the map to place a marker',
+                  l10n.t('Long-press anywhere on the map to place a marker'),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.black54,
@@ -5477,7 +5480,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
         SizedBox(
           width: double.infinity,
           child: _ActionBtn(
-            label: '+ GPS',
+            label: l10n.t('+ GPS'),
             isLoading: widget.isLocating || widget.isMarkerSaving,
             enabled: !widget.isLocating && !widget.isMarkerSaving,
             isPrimary: true,

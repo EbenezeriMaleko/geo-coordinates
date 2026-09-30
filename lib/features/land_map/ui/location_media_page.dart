@@ -17,6 +17,7 @@ import '../models/geodetic_datum.dart';
 import '../services/location_media_service.dart';
 import '../services/coordinate_converter.dart';
 import '../state/settings_provider.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class LocationMediaPage extends ConsumerStatefulWidget {
   final String? initialType;
@@ -75,7 +76,7 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
           _showDeleteToast = false;
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('Media deleted.')));
+          ).showSnackBar(SnackBar(content: Text(context.l10n.t('Media deleted.'))));
         }
       });
     } catch (error) {
@@ -96,11 +97,12 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Location media',
+        title: Text(
+          l10n.t('Location media'),
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.w700,
@@ -138,17 +140,17 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
                 runSpacing: 8,
                 children: [
                   ChoiceChip(
-                    label: const Text('All'),
+                    label: Text(l10n.t('All')),
                     selected: _filterType == null,
                     onSelected: (_) => _setFilter(null),
                   ),
                   ChoiceChip(
-                    label: const Text('Images'),
+                    label: Text(l10n.t('Images')),
                     selected: _filterType == 'image',
                     onSelected: (_) => _setFilter('image'),
                   ),
                   ChoiceChip(
-                    label: const Text('Videos'),
+                    label: Text(l10n.t('Videos')),
                     selected: _filterType == 'video',
                     onSelected: (_) => _setFilter('video'),
                   ),
@@ -206,7 +208,7 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
                                 }
                               },
                               icon: const Icon(Icons.login_rounded, size: 18),
-                              label: const Text('Sign In'),
+                              label: Text(l10n.t('Sign In')),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF001F3F),
                                 foregroundColor: Colors.white,
@@ -467,25 +469,30 @@ class _LocationMediaViewerPageState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Sign in to delete media.')));
+      ).showSnackBar(
+        SnackBar(content: Text(context.l10n.t('Sign in to delete media.'))),
+      );
       return;
     }
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete media?'),
-        content: const Text(
-          'This will permanently delete the media from the server.',
+        title: Text(context.l10n.t('Delete media?')),
+        content: Text(
+          context.l10n.t('This will permanently delete the media from the server.'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.t('Cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text(
+              context.l10n.t('Delete'),
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -515,8 +522,8 @@ class _LocationMediaViewerPageState
       if (response.statusCode != 200) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to download media for sharing.'),
+          SnackBar(
+            content: Text(context.l10n.t('Failed to download media for sharing.')),
           ),
         );
         return;
@@ -535,7 +542,9 @@ class _LocationMediaViewerPageState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to share media.')));
+      ).showSnackBar(
+        SnackBar(content: Text(context.l10n.t('Failed to share media.'))),
+      );
     }
   }
 
@@ -712,7 +721,7 @@ class _LocationMediaViewerPageState
             ),
             const SizedBox(height: 14),
             _MediaSection(
-              title: 'Location',
+              title: context.l10n.t('Location'),
               children: [
                 _detailRow('Place', placeText),
                 _detailRow('Address', addressText),
@@ -720,7 +729,7 @@ class _LocationMediaViewerPageState
             ),
             const SizedBox(height: 12),
             _MediaSection(
-              title: 'Coordinates',
+              title: context.l10n.t('Coordinates'),
               children: [
                 _detailRow('Lat/Lon', coordinateText),
                 _detailRow('UTM', utmText),
@@ -733,7 +742,7 @@ class _LocationMediaViewerPageState
             ),
             const SizedBox(height: 12),
             _MediaSection(
-              title: 'File',
+              title: context.l10n.t('File'),
               children: [
                 _detailRow(
                   'File name',
@@ -746,7 +755,7 @@ class _LocationMediaViewerPageState
             ),
             const SizedBox(height: 12),
             _MediaSection(
-              title: 'System',
+              title: context.l10n.t('System'),
               children: [
                 _detailRow(
                   'Location ID',

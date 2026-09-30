@@ -21,6 +21,7 @@ import 'settings_page.dart';
 import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../../core/localization/app_localizations.dart';
 
 enum _StartupLocationIssue { serviceOff, permissionDenied, permissionForever }
 
@@ -310,7 +311,7 @@ class _MainNavigationState extends State<MainNavigation> {
     }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Location refreshed')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t('Location refreshed'))));
   }
 
   Future<void> _copyText(String text, String label) async {
@@ -318,7 +319,7 @@ class _MainNavigationState extends State<MainNavigation> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('$label copied')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.copied(label))));
   }
 
   Future<void> _handleMyLocationMenu(MyLocationAction action) async {
@@ -329,7 +330,7 @@ class _MainNavigationState extends State<MainNavigation> {
         if (current == null) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location not available yet')),
+            SnackBar(content: Text(context.l10n.t('Location not available yet'))),
           );
           return;
         }
@@ -365,7 +366,7 @@ class _MainNavigationState extends State<MainNavigation> {
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Location saved')));
+        ).showSnackBar(SnackBar(content: Text(context.l10n.t('Location saved'))));
         unawaited(AppReviewService(box).recordSuccessfulSave());
         await _runBackgroundSync();
         return;
@@ -406,24 +407,24 @@ class _MainNavigationState extends State<MainNavigation> {
     final result = await showDialog<String?>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Save location'),
+        title: Text(dialogContext.l10n.t('Save location')),
         content: TextField(
           controller: controller,
           autofocus: true,
           textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            hintText: 'Enter location name (optional)',
+          decoration: InputDecoration(
+            hintText: dialogContext.l10n.t('Enter location name (optional)'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(dialogContext.l10n.t('Cancel')),
           ),
           ElevatedButton(
             onPressed: () =>
                 Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Save'),
+            child: Text(dialogContext.l10n.t('Save')),
           ),
         ],
       ),
@@ -484,7 +485,7 @@ class _MainNavigationState extends State<MainNavigation> {
         return [
           IconButton(
             icon: const Icon(Icons.folder_outlined, color: Colors.black87),
-            tooltip: 'Set group',
+            tooltip: context.l10n.t('Set group'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
                     SavedLocationsToolbarAction.setGroup,
@@ -493,7 +494,7 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
           IconButton(
             icon: const Icon(Icons.share_outlined, color: Colors.black87),
-            tooltip: 'Share selected',
+            tooltip: context.l10n.t('Share selected'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
                     SavedLocationsToolbarAction.share,
@@ -502,7 +503,7 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.black87),
-            tooltip: 'Delete selected',
+            tooltip: context.l10n.t('Delete selected'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
                     SavedLocationsToolbarAction.delete,
@@ -511,7 +512,7 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
           IconButton(
             icon: const Icon(Icons.close, color: Colors.black87),
-            tooltip: 'Exit selection',
+            tooltip: context.l10n.t('Exit selection'),
             onPressed: () => _savedLocationsToolbarController.dispatch(
               SavedLocationsToolbarAction.exitSelection,
             ),
@@ -529,14 +530,14 @@ class _MainNavigationState extends State<MainNavigation> {
         // ),
         IconButton(
           icon: const Icon(Icons.sort, color: Colors.black87),
-          tooltip: 'Sort',
+          tooltip: context.l10n.t('Sort'),
           onPressed: () => _savedLocationsToolbarController.dispatch(
             SavedLocationsToolbarAction.sort,
           ),
         ),
         IconButton(
           icon: const Icon(Icons.more_vert, color: Colors.black87),
-          tooltip: 'More',
+          tooltip: context.l10n.t('More'),
           onPressed: () => _savedLocationsToolbarController.dispatch(
             SavedLocationsToolbarAction.menu,
           ),
@@ -549,6 +550,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final bottomInset =
         _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom;
     final pages = [
@@ -603,7 +605,7 @@ class _MainNavigationState extends State<MainNavigation> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             _BottomNavItem(
-              label: 'Map',
+              label: l10n.t('Map'),
               icon: Icons.public,
               isSelected: _currentIndex == 0,
               selectedColor: _selectedColor,
@@ -611,7 +613,7 @@ class _MainNavigationState extends State<MainNavigation> {
               onTap: () => _navigateToPage(0),
             ),
             _BottomNavItem(
-              label: 'My location',
+              label: l10n.t('My location'),
               icon: Icons.navigation,
               isSelected: _currentIndex == 1,
               selectedColor: _selectedColor,
@@ -619,7 +621,7 @@ class _MainNavigationState extends State<MainNavigation> {
               onTap: () => _navigateToPage(1),
             ),
             _BottomNavItem(
-              label: 'Saved locations',
+              label: l10n.t('Saved locations'),
               icon: Icons.list_alt,
               isSelected: _currentIndex == 2,
               selectedColor: _selectedColor,
@@ -627,7 +629,7 @@ class _MainNavigationState extends State<MainNavigation> {
               onTap: () => _navigateToPage(2),
             ),
             _BottomNavItem(
-              label: 'Settings',
+              label: l10n.t('Settings'),
               icon: Icons.settings,
               isSelected: _currentIndex == 3,
               selectedColor: _selectedColor,

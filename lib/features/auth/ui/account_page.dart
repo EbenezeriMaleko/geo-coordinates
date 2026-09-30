@@ -9,6 +9,7 @@ import 'forgot_password_page.dart';
 import 'login_page.dart';
 import 'register_page.dart';
 import 'package:hugeicons/hugeicons.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class AccountPage extends ConsumerWidget {
   const AccountPage({super.key});
@@ -17,6 +18,7 @@ class AccountPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(authSessionProvider);
     final user = session.user;
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -29,7 +31,7 @@ class AccountPage extends ConsumerWidget {
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         title: Text(
-          'Account',
+          l10n.t('Account'),
           style: GoogleFonts.inter(color: Colors.black87, fontSize: 18),
         ),
         backgroundColor: Colors.white,
@@ -43,7 +45,7 @@ class AccountPage extends ConsumerWidget {
                     .refreshCurrentUser();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Account refreshed')),
+                    SnackBar(content: Text(l10n.t('Account refreshed'))),
                   );
                 }
               },
@@ -64,8 +66,8 @@ class AccountPage extends ConsumerWidget {
               child: Column(
                 children: [
                   _ActionTile(
-                    title: 'Sign In',
-                    subtitle: 'Connect this device to your cloud account',
+                    title: l10n.t('Sign In'),
+                    subtitle: l10n.t('Connect this device to your cloud account'),
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -77,8 +79,8 @@ class AccountPage extends ConsumerWidget {
                   ),
                   _divider(),
                   _ActionTile(
-                    title: 'Create account',
-                    subtitle: 'Register a new account for sync access',
+                    title: l10n.t('Create account'),
+                    subtitle: l10n.t('Register a new account for sync access'),
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -89,8 +91,8 @@ class AccountPage extends ConsumerWidget {
                   ),
                   _divider(),
                   _ActionTile(
-                    title: 'Forgot password',
-                    subtitle: 'Request password reset by email',
+                    title: l10n.t('Forgot password'),
+                    subtitle: l10n.t('Request password reset by email'),
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -104,31 +106,31 @@ class AccountPage extends ConsumerWidget {
             ),
           ] else ...[
             _ProfileCard(
-              name: user?.name.isNotEmpty == true ? user!.name : 'Account',
+              name: user?.name.isNotEmpty == true ? user!.name : l10n.t('Account'),
               email: user?.email ?? '',
               phone: user?.phone,
               isVerified: session.isVerified,
             ),
             const SizedBox(height: 16),
-            const _SectionLabel('Profile'),
+            _SectionLabel(l10n.t('Profile')),
             _PanelCard(
               child: Column(
                 children: [
                   _ActionTile(
-                    title: 'Update profile',
-                    subtitle: 'Edit name, email and phone number',
+                    title: l10n.t('Update profile'),
+                    subtitle: l10n.t('Edit name, email and phone number'),
                     onTap: () => _showUpdateProfileSheet(context),
                   ),
                   _divider(),
                   _ActionTile(
-                    title: 'Change password',
-                    subtitle: 'Update your account password',
+                    title: l10n.t('Change password'),
+                    subtitle: l10n.t('Update your account password'),
                     onTap: () => _showChangePasswordSheet(context),
                   ),
                   _divider(),
                   _ActionTile(
-                    title: 'Open TaREF web app',
-                    subtitle: 'Manage your data at ardhi.co.tz',
+                    title: l10n.t('Open TaREF web app'),
+                    subtitle: l10n.t('Manage your data at ardhi.co.tz'),
                     onTap: () => _openArdhiWebApp(context),
                     trailing: const HugeIcon(
                       icon: HugeIcons.strokeRoundedGlobe02,
@@ -140,10 +142,10 @@ class AccountPage extends ConsumerWidget {
             ),
             if (!session.isVerified) ...[
               const SizedBox(height: 16),
-              const _SectionLabel('Verification'),
+              _SectionLabel(l10n.t('Verification')),
               _PanelCard(
                 child: _ActionTile(
-                  title: 'Resend verification email',
+                  title: l10n.t('Resend verification email'),
                   subtitle:
                       'Send a new verification email to ${user?.email ?? ''}',
                   onTap: () async {
@@ -163,16 +165,16 @@ class AccountPage extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 16),
-            const _SectionLabel('Session'),
+            _SectionLabel(l10n.t('Session')),
             _PanelCard(
               child: _ActionTile(
-                title: 'Logout',
-                subtitle: 'Stop cloud sync on this device and keep local data',
+                title: l10n.t('Logout'),
+                subtitle: l10n.t('Stop cloud sync on this device and keep local data'),
                 onTap: () async {
                   await ref.read(authSessionProvider.notifier).logout();
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logged out successfully')),
+                    SnackBar(content: Text(l10n.t('Logged out successfully'))),
                   );
                 },
                 titleColor: Colors.red,
@@ -183,12 +185,11 @@ class AccountPage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const _SectionLabel('Danger zone'),
+            _SectionLabel(l10n.t('Danger zone')),
             _PanelCard(
               child: _ActionTile(
-                title: 'Delete account',
-                subtitle:
-                    'Permanently delete your account. You will need your password and email access to confirm.',
+                title: l10n.t('Delete account'),
+                subtitle: l10n.t('Permanently delete your account. You will need your password and email access to confirm.'),
                 onTap: () => _showDeleteAccountSheet(context),
                 titleColor: const Color(0xFFB42318),
                 trailing: const Icon(
@@ -236,7 +237,7 @@ class AccountPage extends ConsumerWidget {
     if (ok) return;
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open Ardhi web app')),
+      SnackBar(content: Text(context.l10n.t('Could not open Ardhi web app'))),
     );
   }
 
@@ -468,7 +469,7 @@ class _UpdateProfileSheetState extends ConsumerState<_UpdateProfileSheet> {
     if (!mounted || user == null) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated successfully')),
+      SnackBar(content: Text(context.l10n.t('Profile updated successfully'))),
     );
   }
 
@@ -479,7 +480,7 @@ class _UpdateProfileSheetState extends ConsumerState<_UpdateProfileSheet> {
     final error = state.hasError ? state.error.toString() : null;
 
     return _SheetFrame(
-      title: 'Update profile',
+      title: context.l10n.t('Update profile'),
       child: Form(
         key: _formKey,
         child: Column(
@@ -492,32 +493,32 @@ class _UpdateProfileSheetState extends ConsumerState<_UpdateProfileSheet> {
             ],
             TextFormField(
               controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Full name',
+              decoration: InputDecoration(
+                labelText: context.l10n.t('Full name'),
                 prefixIcon: Icon(Icons.person_outline_rounded),
               ),
               validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Name is required'
+                  ? context.l10n.t('Name is required')
                   : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email address',
+              decoration: InputDecoration(
+                labelText: context.l10n.t('Email address'),
                 prefixIcon: Icon(Icons.email_outlined),
               ),
               validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Email is required'
+                  ? context.l10n.t('Email is required')
                   : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone number',
+              decoration: InputDecoration(
+                labelText: context.l10n.t('Phone number'),
                 prefixIcon: Icon(Icons.phone_outlined),
               ),
             ),
@@ -535,7 +536,7 @@ class _UpdateProfileSheetState extends ConsumerState<_UpdateProfileSheet> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('Save changes'),
+                    : Text(context.l10n.t('Save changes')),
               ),
             ),
           ],
@@ -593,7 +594,7 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
     final error = state.hasError ? state.error.toString() : null;
 
     return _SheetFrame(
-      title: 'Change password',
+      title: context.l10n.t('Change password'),
       child: Form(
         key: _formKey,
         child: Column(
@@ -608,12 +609,12 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
               controller: _currentController,
               obscureText: _obscureCurrent,
               decoration: _passwordDecoration(
-                'Current password',
+                context.l10n.t('Current password'),
                 _obscureCurrent,
                 () => setState(() => _obscureCurrent = !_obscureCurrent),
               ),
               validator: (value) => value == null || value.isEmpty
-                  ? 'Current password is required'
+                  ? context.l10n.t('Current password is required')
                   : null,
             ),
             const SizedBox(height: 16),
@@ -621,15 +622,15 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
               controller: _newController,
               obscureText: _obscureNew,
               decoration: _passwordDecoration(
-                'New password',
+                context.l10n.t('New password'),
                 _obscureNew,
                 () => setState(() => _obscureNew = !_obscureNew),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'New password is required';
+                  return context.l10n.t('New password is required');
                 }
-                if (value.length < 8) return 'Minimum 8 characters';
+                if (value.length < 8) return context.l10n.t('Minimum 8 characters');
                 return null;
               },
             ),
@@ -638,16 +639,16 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
               controller: _confirmController,
               obscureText: _obscureConfirm,
               decoration: _passwordDecoration(
-                'Confirm new password',
+                context.l10n.t('Confirm new password'),
                 _obscureConfirm,
                 () => setState(() => _obscureConfirm = !_obscureConfirm),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Confirm your new password';
+                  return context.l10n.t('Confirm your new password');
                 }
                 if (value != _newController.text) {
-                  return 'Passwords do not match';
+                  return context.l10n.t('Passwords do not match');
                 }
                 return null;
               },
@@ -666,7 +667,7 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('Update password'),
+                    : Text(context.l10n.t('Update password')),
               ),
             ),
           ],
@@ -791,7 +792,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
         : (_bannerMessage ?? providerError);
 
     return _SheetFrame(
-      title: 'Delete account',
+      title: context.l10n.t('Delete account'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -813,7 +814,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'This action is irreversible. All tokens will be revoked and your account data will be deleted after code confirmation.',
+                    context.l10n.t('This action is irreversible. All tokens will be revoked and your account data will be deleted after code confirmation.'),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       height: 1.45,
@@ -830,14 +831,14 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
             children: [
               Expanded(
                 child: _StepChip(
-                  label: '1 Request code',
+                  label: context.l10n.t('1 Request code'),
                   active: _stage == _AccountDeletionStage.request,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _StepChip(
-                  label: '2 Confirm deletion',
+                  label: context.l10n.t('2 Confirm deletion'),
                   active: _stage == _AccountDeletionStage.confirm,
                 ),
               ),
@@ -849,7 +850,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
             const SizedBox(height: 14),
           ],
           Text(
-            'Email address',
+            context.l10n.t('Email address'),
             style: GoogleFonts.inter(
               fontSize: 13,
               fontWeight: FontWeight.w700,
@@ -866,7 +867,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
               border: Border.all(color: Colors.grey.shade300),
             ),
             child: Text(
-              email.isEmpty ? 'No email found' : email,
+              email.isEmpty ? context.l10n.t('No email found') : email,
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -889,7 +890,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                           obscureText: _obscurePassword,
                           autofillHints: const [AutofillHints.password],
                           decoration: InputDecoration(
-                            labelText: 'Current password',
+                            labelText: context.l10n.t('Current password'),
                             prefixIcon: const Icon(Icons.lock_outline_rounded),
                             suffixIcon: IconButton(
                               onPressed: () {
@@ -905,7 +906,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                             ),
                           ),
                           validator: (value) => value == null || value.isEmpty
-                              ? 'Current password is required'
+                              ? context.l10n.t('Current password is required')
                               : null,
                         ),
                         const SizedBox(height: 12),
@@ -935,7 +936,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text('Send verification code'),
+                                : Text(context.l10n.t('Send verification code')),
                           ),
                         ),
                       ],
@@ -954,15 +955,15 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(6),
                           ],
-                          decoration: const InputDecoration(
-                            labelText: 'Verification code',
+                          decoration: InputDecoration(
+                            labelText: context.l10n.t('Verification code'),
                             prefixIcon: Icon(Icons.pin_outlined),
                             helperText:
-                                'Enter the 6-digit code sent to your email.',
+                                context.l10n.t('Enter the 6-digit code sent to your email.'),
                           ),
                           validator: (value) =>
                               value == null || value.trim().length != 6
-                              ? 'Enter the 6-digit verification code'
+                              ? context.l10n.t('Enter the 6-digit verification code')
                               : null,
                         ),
                         const SizedBox(height: 12),
@@ -992,7 +993,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text('Delete my account'),
+                                : Text(context.l10n.t('Delete my account')),
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -1007,7 +1008,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                                   });
                                   _codeController.clear();
                                 },
-                          child: const Text('Back to password step'),
+                          child: Text(context.l10n.t('Back to password step')),
                         ),
                       ],
                     ),

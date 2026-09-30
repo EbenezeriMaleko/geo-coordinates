@@ -6,6 +6,7 @@ import 'package:hive/hive.dart';
 
 import '../services/survey_queue.dart';
 import '../services/survey_sync_service.dart';
+import '../../../core/localization/app_localizations.dart';
 
 class UserSurveyPage extends StatefulWidget {
   const UserSurveyPage({super.key});
@@ -48,7 +49,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
 
   Future<void> _save() async {
     if (_role == null || _difficulty == null || _satisfaction == null) {
-      setState(() => _error = 'Please answer the three required questions.');
+      setState(() => _error = context.l10n.t('Please answer the three required questions.'));
       return;
     }
     setState(() {
@@ -67,7 +68,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
       Navigator.of(context).pop(true);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Could not save your response. Try again.');
+      setState(() => _error = context.l10n.t('Could not save your response. Try again.'));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -76,6 +77,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -85,7 +87,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         title: Text(
-          'Share your experience',
+          l10n.t('Share your experience'),
           style: GoogleFonts.inter(
             color: Colors.black87,
             fontSize: 18,
@@ -119,7 +121,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Help us improve TaREF',
+                    l10n.t('Help us improve TaREF'),
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 20,
@@ -128,8 +130,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'A few quick answers will help us understand what works '
-                    'and what needs attention.',
+                    l10n.t('A few quick answers will help us understand what works and what needs attention.'),
                     style: GoogleFonts.inter(
                       color: Colors.white.withValues(alpha: 0.9),
                       fontSize: 13,
@@ -142,19 +143,21 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
             const SizedBox(height: 16),
             _sectionCard(
               children: [
-                _label('What is your role? *'),
+                _label(l10n.t('What is your role? *')),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _role,
                   isExpanded: true,
                   decoration: _fieldDecoration(
-                    hint: 'Select your role',
+                    hint: l10n.t('Select your role'),
                     icon: Icons.work_outline_rounded,
                   ),
                   items: _roles
                       .map(
-                        (role) =>
-                            DropdownMenuItem(value: role, child: Text(role)),
+                            (role) => DropdownMenuItem(
+                              value: role,
+                              child: Text(l10n.t(role)),
+                            ),
                       )
                       .toList(),
                   onChanged: _saving
@@ -162,20 +165,20 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                       : (value) => setState(() => _role = value),
                 ),
                 const SizedBox(height: 20),
-                _label('What is most difficult? *'),
+                _label(l10n.t('What is most difficult? *')),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _difficulty,
                   isExpanded: true,
                   decoration: _fieldDecoration(
-                    hint: 'Choose one area',
+                    hint: l10n.t('Choose one area'),
                     icon: Icons.help_outline_rounded,
                   ),
                   items: _difficulties
                       .map(
                         (difficulty) => DropdownMenuItem(
                           value: difficulty,
-                          child: Text(difficulty),
+                          child: Text(l10n.t(difficulty)),
                         ),
                       )
                       .toList(),
@@ -188,7 +191,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
             const SizedBox(height: 12),
             _sectionCard(
               children: [
-                _label('Overall, how satisfied are you? *'),
+                _label(l10n.t('Overall, how satisfied are you? *')),
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -198,7 +201,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                         child: Semantics(
                           button: true,
                           selected: _satisfaction == score,
-                          label: 'Satisfaction $score out of 5',
+                          label: l10n.satisfaction(score),
                           child: InkWell(
                             onTap: _saving
                                 ? null
@@ -240,8 +243,8 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _hint('Very dissatisfied'),
-                    _hint('Very satisfied'),
+                    _hint(l10n.t('Very dissatisfied')),
+                    _hint(l10n.t('Very satisfied')),
                   ],
                 ),
               ],
@@ -249,7 +252,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
             const SizedBox(height: 12),
             _sectionCard(
               children: [
-                _label('Anything else? (optional)'),
+                _label(l10n.t('Anything else? (optional)')),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _commentController,
@@ -259,7 +262,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                   maxLines: 5,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: _fieldDecoration(
-                    hint: 'Tell us more about your experience',
+                    hint: l10n.t('Tell us more about your experience'),
                     icon: Icons.notes_outlined,
                   ),
                 ),
@@ -279,10 +282,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Optional survey. No coordinates or saved records are '
-                      'collected. Your response stays on this device until '
-                      'it can be sent. We will retry automatically when '
-                      'the server is available.',
+                      l10n.t('Optional survey. No coordinates or saved records are collected. Your response stays on this device until it can be sent. We will retry automatically when the server is available.'),
                       style: GoogleFonts.inter(
                         color: const Color(0xFF374151),
                         fontSize: 12,
@@ -335,7 +335,7 @@ class _UserSurveyPageState extends State<UserSurveyPage> {
                 ),
               ),
               child: Text(
-                _saving ? 'Saving…' : 'Save response',
+                _saving ? l10n.t('Saving…') : l10n.t('Save response'),
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,

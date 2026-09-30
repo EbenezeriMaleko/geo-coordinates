@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:hugeicons/hugeicons.dart';
 
+import '../../../core/localization/app_localizations.dart';
+
 
 class ContactUsPage extends StatelessWidget {
   const ContactUsPage({super.key});
@@ -17,6 +19,7 @@ class ContactUsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -28,7 +31,7 @@ class ContactUsPage extends StatelessWidget {
           ),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        title: Text('Contact us',  style: GoogleFonts.inter(color: Colors.black87, fontSize: 18)),
+        title: Text(l10n.t('Contact us'), style: GoogleFonts.inter(color: Colors.black87, fontSize: 18)),
         backgroundColor: Colors.white,
         elevation: 0.5,
       ),
@@ -36,32 +39,32 @@ class ContactUsPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            _headerCard(primary: primary),
+            _headerCard(context, primary: primary),
             const SizedBox(height: 12),
             _infoCard(
               context,
               icon: Icons.location_on_rounded,
-              title: 'Address',
+              title: l10n.t('Address'),
               value: _address,
-              helperText: 'Tap to copy',
-              onTap: () => _copyToClipboard(context, 'Address', _address),
+              helperText: l10n.t('Tap to copy'),
+              onTap: () => _copyToClipboard(context, l10n.t('Address'), _address),
             ),
             const SizedBox(height: 10),
             _infoCard(
               context,
               icon: Icons.email_rounded,
-              title: 'Email',
+              title: l10n.t('Email'),
               value: _email,
-              helperText: 'Tap to email',
+              helperText: l10n.t('Tap to email'),
               onTap: () => _openEmail(context, _email),
             ),
             const SizedBox(height: 10),
             _infoCard(
               context,
               icon: Icons.phone_rounded,
-              title: 'Phone',
+              title: l10n.t('Phone'),
               value: _phone,
-              helperText: 'Tap to call',
+              helperText: l10n.t('Tap to call'),
               onTap: () => _openPhone(context, _phone),
             ),
           ],
@@ -70,7 +73,8 @@ class ContactUsPage extends StatelessWidget {
     );
   }
 
-  Widget _headerCard({required Color primary}) {
+  Widget _headerCard(BuildContext context, {required Color primary}) {
+    final l10n = context.l10n;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -88,11 +92,11 @@ class ContactUsPage extends StatelessWidget {
         ],
       ),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'We’d love to hear from you',
+            l10n.t('We’d love to hear from you'),
             style: TextStyle(
               color: Colors.white,
               fontSize: 18,
@@ -101,7 +105,7 @@ class ContactUsPage extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'Reach out anytime for support, feedback, or suggestions.',
+            l10n.t('Reach out anytime for support, feedback, or suggestions.'),
             style: TextStyle(color: Colors.white, fontSize: 13, height: 1.35),
           ),
         ],
@@ -196,7 +200,7 @@ class ContactUsPage extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$label copied'),
+        content: Text(context.l10n.copied(label)),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -209,7 +213,7 @@ class ContactUsPage extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Could not open email app')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t('Could not open email app'))));
   }
 
   Future<void> _openPhone(BuildContext context, String phone) async {
@@ -219,6 +223,6 @@ class ContactUsPage extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Could not open phone app')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t('Could not open phone app'))));
   }
 }
