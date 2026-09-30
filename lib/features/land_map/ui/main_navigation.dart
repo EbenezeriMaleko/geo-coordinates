@@ -42,7 +42,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final SavedLocationsToolbarController _savedLocationsToolbarController =
       SavedLocationsToolbarController();
 
-  static const double _bottomNavHeight = 72;
+  static const double _bottomNavHeight = 70;
   static const Color _bottomNavBackground = Colors.white;
   static const Color _selectedColor = Color(0xFF001F3F);
   static const Color _unselectedColor = Color(0xFF7C7C7C);
@@ -118,23 +118,30 @@ class _MainNavigationState extends State<MainNavigation> {
 
     final isService = issue == _StartupLocationIssue.serviceOff;
     final isForever = issue == _StartupLocationIssue.permissionForever;
+    final l10n = context.l10n;
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    final headline = isService
-        ? 'Location is turned off'
-        : isForever
-        ? 'Location access is blocked'
-        : 'Location access is off';
-    final body = isService
-        ? 'TaREF GPS needs Location Services for live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.'
-        : isForever
-        ? 'Location access is blocked for TaREF GPS. Enable it in Settings to use live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.'
-        : 'TaREF GPS uses location for live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.';
-    final primaryLabel = isService
-        ? 'Turn On Location'
-        : isForever
-        ? 'Open Settings'
-        : 'Grant Permission';
+    final headline = l10n.t(
+      isService
+          ? 'Location is turned off'
+          : isForever
+          ? 'Location access is blocked'
+          : 'Location access is off',
+    );
+    final body = l10n.t(
+      isService
+          ? 'TaREF GPS needs Location Services for live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.'
+          : isForever
+          ? 'Location access is blocked for TaREF GPS. Enable it in Settings to use live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.'
+          : 'TaREF GPS uses location for live coordinates, GPS point capture, navigation, distance tracking, and media geotagging. You can use the app without live GPS features.',
+    );
+    final primaryLabel = l10n.t(
+      isService
+          ? 'Turn On Location'
+          : isForever
+          ? 'Open Settings'
+          : 'Grant Permission',
+    );
     final icon = isService
         ? Icons.location_off_rounded
         : isForever
@@ -249,8 +256,8 @@ class _MainNavigationState extends State<MainNavigation> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    'Maybe Later',
+                  child: Text(
+                    l10n.t('Maybe Later'),
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -309,9 +316,9 @@ class _MainNavigationState extends State<MainNavigation> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(context.l10n.t('Location refreshed'))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.t('Location refreshed'))),
+    );
   }
 
   Future<void> _copyText(String text, String label) async {
@@ -330,7 +337,9 @@ class _MainNavigationState extends State<MainNavigation> {
         if (current == null) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.l10n.t('Location not available yet'))),
+            SnackBar(
+              content: Text(context.l10n.t('Location not available yet')),
+            ),
           );
           return;
         }
@@ -342,7 +351,7 @@ class _MainNavigationState extends State<MainNavigation> {
         final now = DateTime.now().toIso8601String();
         final ellipsoid = container.read(referenceEllipsoidProvider);
         final name = customName.trim().isEmpty
-            ? 'My location $now'
+            ? context.l10n.t('My location {date}', params: {'date': now})
             : customName.trim();
         await box.put(id, {
           'id': id,
@@ -364,9 +373,9 @@ class _MainNavigationState extends State<MainNavigation> {
           'updatedAt': now,
         });
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.t('Location saved'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.t('Location saved'))),
+        );
         unawaited(AppReviewService(box).recordSuccessfulSave());
         await _runBackgroundSync();
         return;
@@ -381,7 +390,7 @@ class _MainNavigationState extends State<MainNavigation> {
             referenceEllipsoid: ellipsoid,
             datum: container.read(selectedDatumProvider),
           ),
-          'Coordinates',
+          context.l10n.t('Coordinates'),
         );
         return;
       case MyLocationAction.share:
@@ -438,24 +447,25 @@ class _MainNavigationState extends State<MainNavigation> {
     required ReferenceEllipsoid referenceEllipsoid,
     GeodeticDatum? datum,
   }) {
+    final l10n = context.l10n;
     final utm = CoordinateConverter.deriveDisplayCoordinate(
       current,
       referenceEllipsoid,
       datum,
     ).utm;
     final buffer = StringBuffer()
-      ..writeln('My current location')
+      ..writeln(l10n.t('My current location'))
       ..writeln(
-        'Lat/Long: ${current.latitude.toStringAsFixed(6)}, ${current.longitude.toStringAsFixed(6)}',
+        '${l10n.t('Lat/Long')}: ${current.latitude.toStringAsFixed(6)}, ${current.longitude.toStringAsFixed(6)}',
       )
       ..writeln(
-        'E/N: ${utm?.easting.toStringAsFixed(2) ?? '—'}, ${utm?.northing.toStringAsFixed(2) ?? '—'}',
+        '${l10n.t('E/N')}: ${utm?.easting.toStringAsFixed(2) ?? '—'}, ${utm?.northing.toStringAsFixed(2) ?? '—'}',
       )
       ..writeln(
-        'UTM Zone: ${utm?.zone ?? '—'} ${datum?.displayName ?? referenceEllipsoid.displayName}',
+        '${l10n.t('UTM Zone')}: ${utm?.zone ?? '—'} ${datum?.displayName ?? referenceEllipsoid.displayName}',
       )
       ..writeln(
-        'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
+        '${l10n.t('Accuracy')}: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
       );
     return buffer.toString();
   }
@@ -463,13 +473,16 @@ class _MainNavigationState extends State<MainNavigation> {
   String _appBarTitleText() {
     if (_currentIndex != 2) {
       const titles = ['Map', 'My location', 'Saved locations', 'Settings'];
-      return titles[_currentIndex];
+      return context.l10n.t(titles[_currentIndex]);
     }
 
     if (_savedLocationsToolbarController.isSelectionMode) {
-      return '${_savedLocationsToolbarController.selectedCount} selected';
+      return context.l10n.t(
+        '{count} selected',
+        params: {'count': '${_savedLocationsToolbarController.selectedCount}'},
+      );
     }
-    return 'Saved locations';
+    return context.l10n.t('Saved locations');
   }
 
   List<Widget>? _buildAppBarActions() {
@@ -521,20 +534,6 @@ class _MainNavigationState extends State<MainNavigation> {
       }
 
       return [
-        // IconButton(
-        //   icon: const Icon(Icons.tune, color: Colors.black87),
-        //   tooltip: 'Filter',
-        //   onPressed: () => _savedLocationsToolbarController.dispatch(
-        //     SavedLocationsToolbarAction.filter,
-        //   ),
-        // ),
-        IconButton(
-          icon: const Icon(Icons.sort, color: Colors.black87),
-          tooltip: context.l10n.t('Sort'),
-          onPressed: () => _savedLocationsToolbarController.dispatch(
-            SavedLocationsToolbarAction.sort,
-          ),
-        ),
         IconButton(
           icon: const Icon(Icons.more_vert, color: Colors.black87),
           tooltip: context.l10n.t('More'),
@@ -595,10 +594,10 @@ class _MainNavigationState extends State<MainNavigation> {
       bottomNavigationBar: Container(
         height: _bottomNavHeight + MediaQuery.of(context).padding.bottom,
         padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 10,
-          bottom: 10 + MediaQuery.of(context).padding.bottom,
+          left: 12,
+          right: 12,
+          top: 6,
+          bottom: 6 + MediaQuery.of(context).padding.bottom,
         ),
         color: _bottomNavBackground,
         child: Row(
@@ -606,6 +605,7 @@ class _MainNavigationState extends State<MainNavigation> {
           children: [
             _BottomNavItem(
               label: l10n.t('Map'),
+              semanticLabel: l10n.t('Map'),
               icon: Icons.public,
               isSelected: _currentIndex == 0,
               selectedColor: _selectedColor,
@@ -613,7 +613,8 @@ class _MainNavigationState extends State<MainNavigation> {
               onTap: () => _navigateToPage(0),
             ),
             _BottomNavItem(
-              label: l10n.t('My location'),
+              label: l10n.t('Location'),
+              semanticLabel: l10n.t('My location'),
               icon: Icons.navigation,
               isSelected: _currentIndex == 1,
               selectedColor: _selectedColor,
@@ -621,7 +622,8 @@ class _MainNavigationState extends State<MainNavigation> {
               onTap: () => _navigateToPage(1),
             ),
             _BottomNavItem(
-              label: l10n.t('Saved locations'),
+              label: l10n.t('Saved'),
+              semanticLabel: l10n.t('Saved locations'),
               icon: Icons.list_alt,
               isSelected: _currentIndex == 2,
               selectedColor: _selectedColor,
@@ -630,6 +632,7 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             _BottomNavItem(
               label: l10n.t('Settings'),
+              semanticLabel: l10n.t('Settings'),
               icon: Icons.settings,
               isSelected: _currentIndex == 3,
               selectedColor: _selectedColor,
@@ -645,6 +648,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
 class _BottomNavItem extends StatelessWidget {
   final String label;
+  final String semanticLabel;
   final IconData icon;
   final bool isSelected;
   final Color selectedColor;
@@ -653,6 +657,7 @@ class _BottomNavItem extends StatelessWidget {
 
   const _BottomNavItem({
     required this.label,
+    required this.semanticLabel,
     required this.icon,
     required this.isSelected,
     required this.selectedColor,
@@ -663,39 +668,51 @@ class _BottomNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
+      child: Semantics(
+        label: semanticLabel,
+        button: true,
+        selected: isSelected,
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: isSelected ? selectedColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isSelected ? Colors.white : unselectedColor,
-              ),
-              if (isSelected) ...[
-                const SizedBox(width: 6),
-                Flexible(
+        child: ExcludeSemantics(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  width: 46,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: isSelected ? selectedColor : Colors.transparent,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 20,
+                    color: isSelected ? Colors.white : unselectedColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  style: TextStyle(
+                    color: isSelected ? selectedColor : unselectedColor,
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  ),
                   child: Text(
                     label,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),

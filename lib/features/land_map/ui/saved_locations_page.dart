@@ -20,6 +20,7 @@ import '../state/settings_provider.dart';
 import '../services/utm_converter.dart';
 import '../services/coordinate_converter.dart';
 import '../services/land_sync_service.dart';
+import '../services/measurement_formatter.dart';
 import '../services/survey_invitation.dart';
 import 'user_survey_page.dart';
 import 'package:uuid/uuid.dart';
@@ -29,7 +30,7 @@ enum _ViewMode { combined, basic, text, photo }
 
 enum _SavedSort { newest, oldest, nameAsc, nameDesc, pointsDesc }
 
-enum _SavedFilter { all, threePlusPoints, updatedOnly }
+enum _SavedFilter { all, threePlusPoints, updatedOnly, cloudOnly }
 
 enum _SavedContentSection { all, markers, fields, distances }
 
@@ -237,7 +238,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       setState(() => _showSurveyInvitation = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l10n.t('Response saved. It will sync automatically.')),
+          content: Text(
+            context.l10n.t('Response saved. It will sync automatically.'),
+          ),
         ),
       );
     }
@@ -256,7 +259,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.t('Could not load more cloud records.'))),
+        SnackBar(
+          content: Text(context.l10n.t('Could not load more cloud records.')),
+        ),
       );
     } finally {
       if (mounted) {
@@ -347,501 +352,568 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final box = Hive.box('landbox');
     final authSession = ref.watch(authSessionProvider);
     final remoteLandsState = ref.watch(remoteLandsProvider);
+    final distanceUnit = ref.watch(distanceUnitProvider);
     final canUseCloud = authSession.isLoggedIn && authSession.isVerified;
 
-    return Stack(
-      children: [
-        Container(
-          color: Colors.white70,
-          child: Column(
-            children: [
-              if (widget.showEmbeddedToolbar)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: Row(
-                    children: [
-                      if (_selectionMode)
-                        Text(
-                          '${_selectedIds.length} ${l10n.t('selected')}',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
+    return Container(
+      color: Colors.white70,
+      child: Column(
+        children: [
+          if (widget.showEmbeddedToolbar)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  if (_selectionMode)
+                    Text(
+                      l10n.t(
+                        '{count} selected',
+                        params: {'count': '${_selectedIds.length}'},
+                      ),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  const Spacer(),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : _setGroupForSelectedItems,
+                      icon: const Icon(Icons.folder_outlined, size: 20),
+                      tooltip: l10n.t('Set group'),
+                    ),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : _shareSelectedItems,
+                      icon: const Icon(Icons.share_outlined, size: 20),
+                      tooltip: l10n.t('Share selected'),
+                    ),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _selectedIds.isEmpty
+                          ? null
+                          : _deleteSelectedItems,
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      tooltip: l10n.t('Delete selected'),
+                    ),
+                  if (_selectionMode)
+                    IconButton(
+                      onPressed: _exitSelectionMode,
+                      icon: const Icon(Icons.close, size: 20),
+                      tooltip: l10n.t('Exit selection'),
+                    ),
+                  if (!_selectionMode) ...[
+                    IconButton(
+                      onPressed: _showFilterSheet,
+                      icon: const Icon(Icons.tune, size: 20),
+                    ),
+                    IconButton(
+                      onPressed: _showSortSheet,
+                      icon: const Icon(Icons.sort, size: 20),
+                    ),
+                    IconButton(
+                      onPressed: _showPageMenu,
+                      icon: const Icon(Icons.more_vert, size: 20),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          if (_showSurveyInvitation && widget.isActive && !_selectionMode)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF1F7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFCFDDEB)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          color: Color(0xFF001F3F),
+                          size: 20,
                         ),
-                      const Spacer(),
-                      if (_selectionMode)
-                        IconButton(
-                          onPressed: _selectedIds.isEmpty
-                              ? null
-                              : _setGroupForSelectedItems,
-                          icon: const Icon(Icons.folder_outlined, size: 20),
-                          tooltip: l10n.t('Set group'),
-                        ),
-                      if (_selectionMode)
-                        IconButton(
-                          onPressed: _selectedIds.isEmpty
-                              ? null
-                              : _shareSelectedItems,
-                          icon: const Icon(Icons.share_outlined, size: 20),
-                          tooltip: l10n.t('Share selected'),
-                        ),
-                      if (_selectionMode)
-                        IconButton(
-                          onPressed: _selectedIds.isEmpty
-                              ? null
-                              : _deleteSelectedItems,
-                          icon: const Icon(Icons.delete_outline, size: 20),
-                          tooltip: l10n.t('Delete selected'),
-                        ),
-                      if (_selectionMode)
-                        IconButton(
-                          onPressed: _exitSelectionMode,
-                          icon: const Icon(Icons.close, size: 20),
-                          tooltip: l10n.t('Exit selection'),
-                        ),
-                      if (!_selectionMode) ...[
-                        IconButton(
-                          onPressed: _showFilterSheet,
-                          icon: const Icon(Icons.tune, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            l10n.t('Help us improve TaREF'),
+                            style: TextStyle(
+                              color: Color(0xFF001F3F),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                         IconButton(
-                          onPressed: _showSortSheet,
-                          icon: const Icon(Icons.sort, size: 20),
-                        ),
-                        IconButton(
-                          onPressed: _showPageMenu,
-                          icon: const Icon(Icons.more_vert, size: 20),
+                          tooltip: l10n.t('Not now'),
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: _dismissSurveyInvitation,
+                          visualDensity: VisualDensity.compact,
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              if (_showSurveyInvitation && widget.isActive && !_selectionMode)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEAF1F7),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFCFDDEB)),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                    Text(
+                      l10n.t(
+                        'Tell us what is working and what is difficult. It takes about a minute.',
+                      ),
+                      style: TextStyle(
+                        color: Color(0xFF374151),
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: _openSurveyFromInvitation,
+                        child: Text(l10n.t('Share feedback')),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() => _searchQuery = value.trim());
+                if (canUseCloud) {
+                  _fetchRemoteData();
+                }
+              },
+              decoration: InputDecoration(
+                hintText: l10n.t('Search saved locations'),
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                          if (canUseCloud) {
+                            _fetchRemoteData();
+                          }
+                        },
+                        icon: const Icon(Icons.close),
+                      )
+                    : null,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_searchQuery.isNotEmpty ||
+              _filter != _SavedFilter.all ||
+              _sort != _SavedSort.newest ||
+              _groupFilter != 'All groups')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (_searchQuery.isNotEmpty)
+                    _ActiveTag(
+                      label: '${l10n.t('Search')}: $_searchQuery',
+                      onClear: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                        if (canUseCloud) {
+                          _fetchRemoteData();
+                        }
+                      },
+                    ),
+                  if (_filter != _SavedFilter.all)
+                    _ActiveTag(
+                      label:
+                          '${l10n.t('Filter')}: ${l10n.t(_filterLabel(_filter))}',
+                      onClear: () => setState(() => _filter = _SavedFilter.all),
+                    ),
+                  if (_sort != _SavedSort.newest)
+                    _ActiveTag(
+                      label: '${l10n.t('Sort')}: ${l10n.t(_sortLabel(_sort))}',
+                      onClear: () => setState(() => _sort = _SavedSort.newest),
+                    ),
+                  if (_groupFilter != 'All groups')
+                    _ActiveTag(
+                      label:
+                          '${l10n.t('Group')}: ${_groupFilter == 'General' ? l10n.t('General') : _groupFilter}',
+                      onClear: () =>
+                          setState(() => _groupFilter = 'All groups'),
+                    ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ValueListenableBuilder(
+              valueListenable: box.listenable(),
+              builder: (context, Box box, _) {
+                final localItems = box.values
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
+
+                final remoteItems =
+                    remoteLandsState.asData?.value?.items ??
+                    const <LandListItem>[];
+                final remotePage = remoteLandsState.asData?.value;
+                final allDisplayItems = _buildDisplayItems(
+                  localItems: localItems,
+                  remoteItems: remoteItems,
+                  canUseCloud: canUseCloud,
+                ).where((item) => _pointsCount(item) > 0).toList();
+                final items = _latestSavedItems(
+                  allDisplayItems,
+                  limit: latestRemoteLandsLimit,
+                );
+                final remoteTotal = remoteLandsState.asData?.value?.total ?? 0;
+                final remoteLoadedCount = remotePage?.items.length ?? 0;
+                final hasReachedMobileLimit =
+                    remoteLoadedCount >= latestRemoteLandsLimit &&
+                    remoteTotal > latestRemoteLandsLimit;
+                final showLoadingMoreFooter = _isLoadingMoreRemote;
+
+                final counts = _contentCounts(items);
+                final sectioned = _applyContentSection(items);
+                final filteredSorted = _applyFilterAndSort(sectioned);
+                final searched = _applySearch(filteredSorted);
+                final groups = _groupOptions(items);
+
+                return Column(
+                  children: [
+                    if (groups.any(
+                      (group) => group != 'All groups' && group != 'General',
+                    ))
+                      SizedBox(
+                        height: 40,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: groups.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final group = groups[index];
+                            return ChoiceChip(
+                              label: Text(
+                                group == 'General' || group == 'All groups'
+                                    ? l10n.t(group)
+                                    : group,
+                              ),
+                              selected: _groupFilter == group,
+                              onSelected: (_) =>
+                                  setState(() => _groupFilter = group),
+                            );
+                          },
+                        ),
+                      ),
+                    if (groups.any(
+                      (group) => group != 'All groups' && group != 'General',
+                    ))
+                      const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
                           children: [
-                            const Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              color: Color(0xFF001F3F),
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                l10n.t('Help us improve TaREF'),
-                                style: TextStyle(
-                                  color: Color(0xFF001F3F),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            _SectionChip(
+                              label: l10n.t('All'),
+                              count: items.length,
+                              selected:
+                                  _contentSection == _SavedContentSection.all,
+                              onTap: () => setState(
+                                () =>
+                                    _contentSection = _SavedContentSection.all,
                               ),
                             ),
-                            IconButton(
-                              tooltip: l10n.t('Not now'),
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: _dismissSurveyInvitation,
-                              visualDensity: VisualDensity.compact,
+                            const SizedBox(width: 8),
+                            _SectionChip(
+                              label: l10n.t('Points'),
+                              count: counts.markers,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.markers,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.markers,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _SectionChip(
+                              label: l10n.t('Area'),
+                              count: counts.fields,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.fields,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.fields,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _SectionChip(
+                              label: l10n.t('Route'),
+                              count: counts.distances,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.distances,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.distances,
+                              ),
                             ),
                           ],
                         ),
-                        Text(
-                          l10n.t('Tell us what is working and what is difficult. It takes about a minute.'),
-                          style: TextStyle(
-                            color: Color(0xFF374151),
-                            fontSize: 12,
-                            height: 1.3,
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton(
-                            onPressed: _openSurveyFromInvitation,
-                            child: Text(l10n.t('Share feedback')),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() => _searchQuery = value.trim());
-                    if (canUseCloud) {
-                      _fetchRemoteData();
-                    }
-                  },
-                  decoration: InputDecoration(
-                    hintText: l10n.t('Search saved locations'),
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                              if (canUseCloud) {
-                                _fetchRemoteData();
-                              }
-                            },
-                            icon: const Icon(Icons.close),
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (_searchQuery.isNotEmpty ||
-                  _filter != _SavedFilter.all ||
-                  _sort != _SavedSort.newest ||
-                  _groupFilter != 'All groups')
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (_searchQuery.isNotEmpty)
-                        _ActiveTag(
-                          label: '${l10n.t('Search')}: $_searchQuery',
-                          onClear: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                            if (canUseCloud) {
-                              _fetchRemoteData();
-                            }
-                          },
-                        ),
-                      if (_filter != _SavedFilter.all)
-                        _ActiveTag(
-                          label: '${l10n.t('Filter')}: ${_filterLabel(_filter)}',
-                          onClear: () =>
-                              setState(() => _filter = _SavedFilter.all),
-                        ),
-                      if (_sort != _SavedSort.newest)
-                        _ActiveTag(
-                          label: '${l10n.t('Sort')}: ${_sortLabel(_sort)}',
-                          onClear: () =>
-                              setState(() => _sort = _SavedSort.newest),
-                        ),
-                      if (_groupFilter != 'All groups')
-                        _ActiveTag(
-                          label: '${l10n.t('Group')}: $_groupFilter',
-                          onClear: () =>
-                              setState(() => _groupFilter = 'All groups'),
-                        ),
+                    const SizedBox(height: 4),
+                    if (canUseCloud && remoteLandsState.isLoading) ...[
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: _CloudRecordsLoadingBanner(),
+                      ),
                     ],
-                  ),
-                ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ValueListenableBuilder(
-                  valueListenable: box.listenable(),
-                  builder: (context, Box box, _) {
-                    final localItems = box.values
-                        .whereType<Map>()
-                        .map((e) => Map<String, dynamic>.from(e))
-                        .toList();
-
-                    final remoteItems =
-                        remoteLandsState.asData?.value?.items ??
-                        const <LandListItem>[];
-                    final remotePage = remoteLandsState.asData?.value;
-                    final allDisplayItems = _buildDisplayItems(
-                      localItems: localItems,
-                      remoteItems: remoteItems,
-                      canUseCloud: canUseCloud,
-                    ).where((item) => _pointsCount(item) > 0).toList();
-                    final items = _latestSavedItems(
-                      allDisplayItems,
-                      limit: latestRemoteLandsLimit,
-                    );
-                    final remoteTotal =
-                        remoteLandsState.asData?.value?.total ?? 0;
-                    final remoteLoadedCount = remotePage?.items.length ?? 0;
-                    final hasReachedMobileLimit =
-                        remoteLoadedCount >= latestRemoteLandsLimit &&
-                        remoteTotal > latestRemoteLandsLimit;
-                    final showLoadingMoreFooter = _isLoadingMoreRemote;
-
-                    final counts = _contentCounts(items);
-                    final sectioned = _applyContentSection(items);
-                    final filteredSorted = _applyFilterAndSort(sectioned);
-                    final searched = _applySearch(filteredSorted);
-                    final groups = _groupOptions(items);
-
-                    return Column(
-                      children: [
-                        if (groups.length > 1)
-                          SizedBox(
-                            height: 40,
-                            child: ListView.separated(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              scrollDirection: Axis.horizontal,
-                              itemCount: groups.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: 8),
-                              itemBuilder: (context, index) {
-                                final group = groups[index];
-                                return ChoiceChip(
-                                  label: Text(group),
-                                  selected: _groupFilter == group,
-                                  onSelected: (_) =>
-                                      setState(() => _groupFilter = group),
-                                );
-                              },
-                            ),
-                          ),
-                        if (groups.length > 1) const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _SectionChip(
-                                  label: l10n.t('All'),
-                                  count: items.length,
-                                  selected:
-                                      _contentSection ==
-                                      _SavedContentSection.all,
-                                  onTap: () => setState(
-                                    () => _contentSection =
-                                        _SavedContentSection.all,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                _SectionChip(
-                                  label: l10n.t('Points'),
-                                  count: counts.markers,
-                                  selected:
-                                      _contentSection ==
-                                      _SavedContentSection.markers,
-                                  onTap: () => setState(
-                                    () => _contentSection =
-                                        _SavedContentSection.markers,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                _SectionChip(
-                                  label: l10n.t('Area'),
-                                  count: counts.fields,
-                                  selected:
-                                      _contentSection ==
-                                      _SavedContentSection.fields,
-                                  onTap: () => setState(
-                                    () => _contentSection =
-                                        _SavedContentSection.fields,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                _SectionChip(
-                                  label: l10n.t('Route'),
-                                  count: counts.distances,
-                                  selected:
-                                      _contentSection ==
-                                      _SavedContentSection.distances,
-                                  onTap: () => setState(
-                                    () => _contentSection =
-                                        _SavedContentSection.distances,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (canUseCloud && remoteLandsState.isLoading) ...[
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            child: _CloudRecordsLoadingBanner(),
-                          ),
-                        ],
-                        if (searched.isEmpty)
-                          Expanded(
-                            child: Column(
-                              children: [
-                                Expanded(
-                                  child:
-                                      _searchQuery.isNotEmpty ||
-                                          _filter != _SavedFilter.all ||
-                                          _sort != _SavedSort.newest ||
-                                          _groupFilter != 'All groups' ||
-                                          _contentSection !=
-                                              _SavedContentSection.all
-                                      ? _EmptyState(
-                                          title: l10n.t('No matching saved locations'),
-                                          subtitle: l10n.t('Try changing search text, filter, sort, or group.'),
-                                        )
-                                      : const _EmptyState(),
-                                ),
-                                if (showLoadingMoreFooter)
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      16,
-                                      0,
-                                      16,
-                                      16,
-                                    ),
-                                    child: _CloudRecordsLoadMoreFooter(
-                                      isLoading: _isLoadingMoreRemote,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          )
-                        else ...[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${searched.length} ${l10n.t(searched.length == 1 ? 'result' : 'results')}',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: Colors.black54,
-                                        fontWeight: FontWeight.w600,
+                    if (searched.isEmpty)
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(18, 0, 12, 2),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      l10n.t(
+                                        '{count} results',
+                                        params: {'count': '0'},
                                       ),
-                                ),
-                                if (hasReachedMobileLimit) ...[
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    l10n.t('Showing latest records. Use the web app to view older records.'),
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: Colors.black45),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: Colors.black54),
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: _showFilterSheet,
+                                    icon: const Icon(Icons.tune, size: 17),
+                                    label: Text(l10n.t('Filter')),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: _showSortSheet,
+                                    icon: const Icon(Icons.sort, size: 17),
+                                    label: Text(l10n.t('Sort')),
                                   ),
                                 ],
+                              ),
+                            ),
+                            Expanded(
+                              child:
+                                  _searchQuery.isNotEmpty ||
+                                      _filter != _SavedFilter.all ||
+                                      _sort != _SavedSort.newest ||
+                                      _groupFilter != 'All groups' ||
+                                      _contentSection !=
+                                          _SavedContentSection.all
+                                  ? const _EmptyState(
+                                      title: 'No matching saved locations',
+                                      subtitle:
+                                          'Try changing search text, filter, sort, or group.',
+                                    )
+                                  : const _EmptyState(),
+                            ),
+                            if (showLoadingMoreFooter)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  16,
+                                ),
+                                child: _CloudRecordsLoadMoreFooter(
+                                  isLoading: _isLoadingMoreRemote,
+                                ),
+                              ),
+                          ],
+                        ),
+                      )
+                    else ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 0, 12, 2),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    l10n.t(
+                                      searched.length == 1
+                                          ? '{count} result'
+                                          : '{count} results',
+                                      params: {'count': '${searched.length}'},
+                                    ),
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Colors.black54,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _showFilterSheet,
+                                  icon: const Icon(Icons.tune, size: 17),
+                                  label: Text(
+                                    _filter == _SavedFilter.all
+                                        ? l10n.t('Filter')
+                                        : l10n.t(_filterLabel(_filter)),
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _showSortSheet,
+                                  icon: const Icon(Icons.sort, size: 17),
+                                  label: Text(l10n.t('Sort')),
+                                ),
                               ],
                             ),
-                          ),
-                          Expanded(
-                            child: ListView.separated(
-                              controller: _savedListScrollController,
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                              itemCount:
-                                  searched.length +
-                                  (showLoadingMoreFooter ? 1 : 0),
-                              separatorBuilder: (_, _) =>
-                                  SizedBox(height: _compactMode ? 8 : 12),
-                              itemBuilder: (context, index) {
-                                if (index >= searched.length) {
-                                  return _CloudRecordsLoadMoreFooter(
-                                    isLoading: _isLoadingMoreRemote,
-                                  );
+                            if (hasReachedMobileLimit) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                l10n.t(
+                                  'Showing latest {count} records. Use the web app to view older records.',
+                                  params: {'count': '$latestRemoteLandsLimit'},
+                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: Colors.black45),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.separated(
+                          controller: _savedListScrollController,
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                          itemCount:
+                              searched.length + (showLoadingMoreFooter ? 1 : 0),
+                          separatorBuilder: (_, _) =>
+                              SizedBox(height: _compactMode ? 8 : 12),
+                          itemBuilder: (context, index) {
+                            if (index >= searched.length) {
+                              return _CloudRecordsLoadMoreFooter(
+                                isLoading: _isLoadingMoreRemote,
+                              );
+                            }
+                            final item = searched[index];
+                            final id = _selectionKey(item);
+                            final isSelected = _selectedIds.contains(id);
+                            final isRemote = _isRemoteItem(item);
+                            return _SavedLocationCard(
+                              id: id,
+                              name:
+                                  item['name']?.toString() ??
+                                  item['place']?.toString() ??
+                                  l10n.t('Saved location'),
+                              group: _groupOf(item),
+                              createdAt: item['createdAt']?.toString(),
+                              updatedAt: item['updatedAt']?.toString(),
+                              points: _pointsCount(item),
+                              section: _sectionOf(item),
+                              areaSquareMeters: _areaSquareMeters(item),
+                              distanceUnit: distanceUnit,
+                              isCloudSynced: _isCloudSynced(item),
+                              viewMode: _viewMode,
+                              compactMode: _compactMode,
+                              selectionMode: _selectionMode,
+                              isSelected: isSelected,
+                              onTap: () {
+                                if (_selectionMode) {
+                                  _toggleSelection(id);
+                                  return;
                                 }
-                                final item = searched[index];
-                                final id = _selectionKey(item);
-                                final isSelected = _selectedIds.contains(id);
-                                final isRemote = _isRemoteItem(item);
-                                return _SavedLocationCard(
-                                  id: id,
-                                  name:
-                                      item['name']?.toString() ??
-                                      item['place']?.toString() ??
-                                      'Saved location',
-                                  group: _groupOf(item),
-                                  createdAt: item['createdAt']?.toString(),
-                                  updatedAt: item['updatedAt']?.toString(),
-                                  points: _pointsCount(item),
-                                  isCloudSynced: _isCloudSynced(item),
-                                  viewMode: _viewMode,
-                                  compactMode: _compactMode,
-                                  selectionMode: _selectionMode,
-                                  isSelected: isSelected,
-                                  onTap: () {
-                                    if (_selectionMode) {
-                                      _toggleSelection(id);
-                                      return;
-                                    }
-                                    if (isRemote) {
-                                      final remoteLand = _remoteLandFromItem(
-                                        item,
-                                      );
-                                      if (remoteLand != null) {
-                                        _showRemoteLandDetails(remoteLand);
-                                        return;
-                                      }
-                                    }
-                                    final linkedCloudId = _linkedCloudId(item);
-                                    if (linkedCloudId != null && canUseCloud) {
-                                      _openCloudDetailsById(
-                                        linkedCloudId,
-                                        fallbackName:
-                                            item['name']?.toString() ??
-                                            'Cloud land',
-                                      );
-                                      return;
-                                    }
-                                    _showDetails(context, item);
-                                  },
-                                  onLongPress: () {
-                                    if (_selectionMode) {
-                                      _toggleSelection(id);
-                                      return;
-                                    }
-                                    _enterSelectionModeWith(id);
-                                  },
-                                  onMore: () {
-                                    if (_selectionMode) {
-                                      _toggleSelection(id);
-                                      return;
-                                    }
-                                    _showActions(
-                                      context,
-                                      id,
-                                      item,
-                                      isRemote: isRemote,
-                                    );
-                                  },
+                                if (isRemote) {
+                                  final remoteLand = _remoteLandFromItem(item);
+                                  if (remoteLand != null) {
+                                    _showRemoteLandDetails(remoteLand);
+                                    return;
+                                  }
+                                }
+                                final linkedCloudId = _linkedCloudId(item);
+                                if (linkedCloudId != null && canUseCloud) {
+                                  _openCloudDetailsById(
+                                    linkedCloudId,
+                                    fallbackName:
+                                        item['name']?.toString() ??
+                                        l10n.t('Cloud land'),
+                                  );
+                                  return;
+                                }
+                                _showDetails(context, item);
+                              },
+                              onLongPress: () {
+                                if (_selectionMode) {
+                                  _toggleSelection(id);
+                                  return;
+                                }
+                                _enterSelectionModeWith(id);
+                              },
+                              onMore: () {
+                                if (_selectionMode) {
+                                  _toggleSelection(id);
+                                  return;
+                                }
+                                _showActions(
+                                  context,
+                                  id,
+                                  item,
+                                  isRemote: isRemote,
                                 );
                               },
-                            ),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FloatingActionButton.extended(
+                heroTag: 'manual_coords_fab',
+                onPressed: _showManualCoordinateEntry,
+                backgroundColor: const Color(0xFF001F3F),
+                icon: const Icon(
+                  Icons.add_location_alt_outlined,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  l10n.t('Add manually'),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ],
-          ),
-        ),
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton.extended(
-            heroTag: 'manual_coords_fab',
-            onPressed: _showManualCoordinateEntry,
-            backgroundColor: const Color(0xFF001F3F),
-            icon: const Icon(
-              Icons.add_location_alt_outlined,
-              color: Colors.white,
-            ),
-            label: const Text(
-              'Add manually',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -891,6 +963,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           return points >= 3;
         case _SavedFilter.updatedOnly:
           return (item['updatedAt']?.toString().isNotEmpty ?? false);
+        case _SavedFilter.cloudOnly:
+          return _isCloudSynced(item);
       }
     }).toList();
 
@@ -1005,9 +1079,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   String _groupOf(Map<String, dynamic> item) {
-    if (_isRemoteItem(item)) {
-      return 'Cloud';
-    }
     final value = item['group']?.toString().trim() ?? '';
     return value.isEmpty ? 'General' : value;
   }
@@ -1060,6 +1131,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       'place': local?['place'] ?? remote.place,
       'phone': local?['phone'] ?? remote.phone,
       'description': local?['description'] ?? remote.description,
+      'group': local?['group'],
       'createdAt': remote.createdAt,
       'updatedAt': remote.updatedAt,
       'area': remote.area,
@@ -1087,6 +1159,45 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final lng = item['lng'];
     if (lat is num && lng is num) return 1;
     return (item['pointsCount'] as num?)?.toInt() ?? 0;
+  }
+
+  double? _areaSquareMeters(Map<String, dynamic> item) {
+    if (_sectionOf(item) != _SavedContentSection.fields) return null;
+    final stored = item['area'];
+    if (stored is num && stored > 0) return stored.toDouble();
+
+    final rawPoints = item['points'];
+    if (rawPoints is! List || rawPoints.length < 3) return null;
+    final coordinates = <(double, double)>[];
+    for (final raw in rawPoints) {
+      if (raw is! Map) return null;
+      final lat = double.tryParse((raw['lat'] ?? raw['y']).toString());
+      final lon = double.tryParse((raw['lng'] ?? raw['x']).toString());
+      if (lat == null || lon == null) return null;
+      coordinates.add((lat, lon));
+    }
+
+    // Match the local, small-field approximation used on the map page.
+    const radius = 6378137.0;
+    final lat0 =
+        coordinates.map((p) => p.$1).reduce((a, b) => a + b) /
+        coordinates.length;
+    final lon0 =
+        coordinates.map((p) => p.$2).reduce((a, b) => a + b) /
+        coordinates.length;
+    final lat0Radians = lat0 * pi / 180;
+    final xScale = radius * cos(lat0Radians) * pi / 180;
+    final yScale = radius * pi / 180;
+    var sum = 0.0;
+    for (var index = 0; index < coordinates.length; index++) {
+      final next = (index + 1) % coordinates.length;
+      final x1 = (coordinates[index].$2 - lon0) * xScale;
+      final y1 = (coordinates[index].$1 - lat0) * yScale;
+      final x2 = (coordinates[next].$2 - lon0) * xScale;
+      final y2 = (coordinates[next].$1 - lat0) * yScale;
+      sum += x1 * y2 - x2 * y1;
+    }
+    return sum.abs() / 2;
   }
 
   LandListItem? _remoteLandFromItem(Map<String, dynamic> item) {
@@ -1139,6 +1250,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         return '3+ points';
       case _SavedFilter.updatedOnly:
         return 'Updated only';
+      case _SavedFilter.cloudOnly:
+        return 'Cloud only';
     }
   }
 
@@ -1194,6 +1307,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               selected: _filter == _SavedFilter.updatedOnly,
               onTap: () {
                 setState(() => _filter = _SavedFilter.updatedOnly);
+                Navigator.pop(sheetContext);
+              },
+            ),
+            _FilterTile(
+              title: sheetContext.l10n.t('Cloud records only'),
+              selected: _filter == _SavedFilter.cloudOnly,
+              onTap: () {
+                setState(() => _filter = _SavedFilter.cloudOnly);
                 Navigator.pop(sheetContext);
               },
             ),
@@ -1321,7 +1442,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       builder: (dialogContext) => AlertDialog(
         title: Text(dialogContext.l10n.t('Delete all saved lands?')),
         content: Text(
-          dialogContext.l10n.t('Markers will be kept. This action cannot be undone.'),
+          dialogContext.l10n.t(
+            'Markers will be kept. This action cannot be undone.',
+          ),
         ),
         actions: [
           TextButton(
@@ -1397,9 +1520,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
     if (blocks.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.t('Nothing to share'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.t('Nothing to share'))),
+        );
       }
       return;
     }
@@ -1408,9 +1531,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       ShareParams(text: blocks.join('\n\n---\n\n')),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(context.l10n.t('Selected items shared'))));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.t('Selected items shared'))),
+    );
   }
 
   Future<void> _deleteSelectedItems() async {
@@ -1421,7 +1544,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       builder: (dialogContext) => AlertDialog(
         title: Text(dialogContext.l10n.t('Delete selected locations?')),
         content: Text(
-          'This will delete ${_selectedIds.length} selected item(s). This action cannot be undone.',
+          dialogContext.l10n.t(
+            'This will delete {count} selected items. This action cannot be undone.',
+            params: {'count': '${_selectedIds.length}'},
+          ),
         ),
         actions: [
           TextButton(
@@ -1459,7 +1585,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(context.l10n.t('Sign in again to delete cloud records.'))),
+                    SnackBar(
+                      content: Text(
+                        context.l10n.t(
+                          'Sign in again to delete cloud records.',
+                        ),
+                      ),
+                    ),
                   );
                 }
                 return;
@@ -1495,7 +1627,12 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'Deleted $selectedCount selected item${selectedCount == 1 ? '' : 's'}',
+                    context.l10n.t(
+                      selectedCount == 1
+                          ? 'Deleted {count} selected item'
+                          : 'Deleted {count} selected items',
+                      params: {'count': '$selectedCount'},
+                    ),
                   ),
                 ),
               );
@@ -1509,7 +1646,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   void _setGroupForSelectedItems() {
     if (_selectedIds.isEmpty) return;
-    final controller = TextEditingController(text: 'General');
+    final controller = TextEditingController(text: context.l10n.t('General'));
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1533,9 +1670,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final group = controller.text.trim().isEmpty
+              final input = controller.text.trim();
+              final group = input.isEmpty || input == context.l10n.t('General')
                   ? 'General'
-                  : controller.text.trim();
+                  : input;
               final now = DateTime.now().toIso8601String();
               final box = Hive.box('landbox');
               for (final id in _selectedIds) {
@@ -1549,7 +1687,11 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               if (!mounted) return;
               if (dialogContext.mounted) Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(context.l10n.t('Group updated for selected items'))),
+                SnackBar(
+                  content: Text(
+                    context.l10n.t('Group updated for selected items'),
+                  ),
+                ),
               );
             },
             child: Text(dialogContext.l10n.t('Save')),
@@ -1634,76 +1776,58 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     }
                   },
                 ),
-                if (isRemote)
-                  _ActionTile(
-                    icon: Icons.visibility_outlined,
-                    label: sheetContext.l10n.t('View details'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      final remoteLand = _remoteLandFromItem(item);
-                      if (remoteLand != null)
-                        _showRemoteLandDetails(remoteLand);
-                    },
-                  ),
-                if (isRemote &&
-                    _localItemForCloudId(item['id']?.toString() ?? '') != null)
-                  _ActionTile(
-                    icon: Icons.edit_outlined,
-                    label: sheetContext.l10n.t('Edit metadata'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      final detail = _cachedDetailForRemote(item);
-                      if (detail == null) return;
-                      showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => _EditRemoteLandSheet(
-                          land: detail,
-                          onSaved: () async {
-                            ref.invalidate(remoteLandDetailProvider(detail.id));
-                            await _fetchRemoteData();
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                if (!isRemote)
-                  _ActionTile(
-                    icon: Icons.edit,
-                    label: sheetContext.l10n.t('Rename'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
+                _ActionTile(
+                  icon: Icons.edit,
+                  label: sheetContext.l10n.t('Rename'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    if (isRemote) {
+                      unawaited(_editRemoteItem(context, item));
+                    } else {
                       _renameItem(context, id, item['name']?.toString() ?? '');
-                    },
-                  ),
-                if (!isRemote)
-                  _ActionTile(
-                    icon: Icons.copy,
-                    label: sheetContext.l10n.t('Copy coordinates'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _copyCoordinates(context, item);
-                    },
-                  ),
-                if (!isRemote)
-                  _ActionTile(
-                    icon: Icons.share,
-                    label: sheetContext.l10n.t('Share'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _shareItem(context, item);
-                    },
-                  ),
-                if (!isRemote)
-                  _ActionTile(
-                    icon: Icons.folder_outlined,
-                    label: sheetContext.l10n.t('Set group'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _setGroupForItem(context, id, item);
-                    },
-                  ),
+                    }
+                  },
+                ),
+                _ActionTile(
+                  icon: Icons.copy,
+                  label: sheetContext.l10n.t('Copy coordinates'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    unawaited(
+                      _withActionItem(context, item, isRemote, (data) {
+                        return _copyCoordinates(context, data);
+                      }),
+                    );
+                  },
+                ),
+                _ActionTile(
+                  icon: Icons.share,
+                  label: sheetContext.l10n.t('Share'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    unawaited(
+                      _withActionItem(context, item, isRemote, (data) {
+                        return _shareItem(context, data);
+                      }),
+                    );
+                  },
+                ),
+                _ActionTile(
+                  icon: Icons.folder_outlined,
+                  label: sheetContext.l10n.t('Set group'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    unawaited(
+                      _withActionItem(context, item, isRemote, (data) {
+                        _setGroupForItem(
+                          context,
+                          data['id']?.toString() ?? '',
+                          data,
+                        );
+                      }),
+                    );
+                  },
+                ),
                 _ActionTile(
                   icon: Icons.delete_outline,
                   label: sheetContext.l10n.t('Delete'),
@@ -1719,6 +1843,78 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         );
       },
     );
+  }
+
+  // The three-dot menu is identical for local and cloud records. Cloud-only
+  // records need their full coordinates before local-style actions can run.
+  Future<void> _withActionItem(
+    BuildContext context,
+    Map<String, dynamic> item,
+    bool isRemote,
+    FutureOr<void> Function(Map<String, dynamic>) action,
+  ) async {
+    try {
+      var data = item;
+      if (isRemote) {
+        final cloudId = item['id']?.toString() ?? '';
+        final local = _localItemForCloudId(cloudId);
+        if (local != null) {
+          data = local;
+        } else {
+          final detail = await ref.read(
+            remoteLandDetailProvider(cloudId).future,
+          );
+          await LandSyncService(Hive.box('landbox')).cacheCloudLand(detail);
+          data = _localItemForCloudId(cloudId)!;
+        }
+      }
+      if (!context.mounted) return;
+      await action(data);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.l10n.t('Something went wrong. Please try again.'),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _editRemoteItem(
+    BuildContext context,
+    Map<String, dynamic> item,
+  ) async {
+    try {
+      final cloudId = item['id']?.toString() ?? '';
+      final detail =
+          _cachedDetailForRemote(item) ??
+          await ref.read(remoteLandDetailProvider(cloudId).future);
+      if (detail == null) throw StateError('Cloud record not found');
+      if (!context.mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _EditRemoteLandSheet(
+          land: detail,
+          onSaved: () async {
+            ref.invalidate(remoteLandDetailProvider(detail.id));
+            await _fetchRemoteData();
+          },
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.l10n.t('Something went wrong. Please try again.'),
+          ),
+        ),
+      );
+    }
   }
 
   void _showDetails(BuildContext context, Map<String, dynamic> item) {
@@ -1759,7 +1955,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final id = item['id']?.toString();
     final name = item['name']?.toString().trim().isNotEmpty == true
         ? item['name'].toString().trim()
-        : 'Saved location';
+        : context.l10n.t('Saved location');
 
     ref
         .read(landMapProvider.notifier)
@@ -1789,10 +1985,11 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }) async {
     // Capture context-dependent objects before any async gap.
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
 
     if (cloudId.isEmpty) {
       messenger.showSnackBar(
-        SnackBar(content: Text(context.l10n.t('No cloud ID found for this record.'))),
+        SnackBar(content: Text(l10n.t('No cloud ID found for this record.'))),
       );
       return;
     }
@@ -1801,7 +1998,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (!session.isLoggedIn || !session.isVerified) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(context.l10n.t('Sign in required to load cloud coordinates.')),
+          content: Text(
+            context.l10n.t('Sign in required to load cloud coordinates.'),
+          ),
         ),
       );
       return;
@@ -1839,7 +2038,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       if (detail.points.isEmpty) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(context.l10n.t('This record has no coordinates available.')),
+            content: Text(l10n.t('This record has no coordinates available.')),
           ),
         );
         return;
@@ -1878,9 +2077,11 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       if (!mounted) return;
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Failed to load coordinates. Check your connection and try again.',
+            context.l10n.t(
+              'Failed to load coordinates. Check your connection and try again.',
+            ),
           ),
         ),
       );
@@ -1958,7 +2159,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final representative = _representativePoint(points);
     final label = item['name']?.toString().trim().isNotEmpty == true
         ? item['name'].toString().trim()
-        : 'Saved location';
+        : context.l10n.t('Saved location');
     final kind = item['entityType']?.toString().trim().isNotEmpty == true
         ? item['entityType'].toString().trim()
         : item['type']?.toString().trim().isNotEmpty == true
@@ -1991,7 +2192,12 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     String id,
     Map<String, dynamic> item,
   ) {
-    final controller = TextEditingController(text: _groupOf(item));
+    final currentGroup = _groupOf(item);
+    final controller = TextEditingController(
+      text: currentGroup == 'General'
+          ? context.l10n.t('General')
+          : currentGroup,
+    );
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -2010,9 +2216,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final group = controller.text.trim().isEmpty
+              final input = controller.text.trim();
+              final group = input.isEmpty || input == context.l10n.t('General')
                   ? 'General'
-                  : controller.text.trim();
+                  : input;
               final box = Hive.box('landbox');
               final raw = box.get(id);
               if (raw is! Map) return;
@@ -2217,7 +2424,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final token = session.token.trim();
     final landId = item['id']?.toString().trim() ?? '';
     if (token.isEmpty || landId.isEmpty) {
-      throw Exception('Cloud deletion requires a valid session and land id.');
+      throw Exception(
+        context.l10n.t('Cloud deletion requires a valid session and land id.'),
+      );
     }
 
     await ref.read(landCloudServiceProvider).deleteLand(token, landId);
@@ -2244,7 +2453,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.t('Land deleted from cloud and app'))),
+      SnackBar(
+        content: Text(context.l10n.t('Land deleted from cloud and app')),
+      ),
     );
   }
 
@@ -2256,9 +2467,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (text.trim().isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.t('Coordinates copied'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.t('Coordinates copied'))),
+      );
     }
   }
 
@@ -2271,9 +2482,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   String _formatDate(String? iso) {
-    if (iso == null || iso.isEmpty) return 'Unknown';
+    if (iso == null || iso.isEmpty) return context.l10n.t('Unknown');
     final parsed = DateTime.tryParse(iso);
-    if (parsed == null) return 'Unknown';
+    if (parsed == null) return context.l10n.t('Unknown');
     final yyyy = parsed.year.toString().padLeft(4, '0');
     final mm = parsed.month.toString().padLeft(2, '0');
     final dd = parsed.day.toString().padLeft(2, '0');
@@ -2319,8 +2530,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     Map<String, dynamic> item, {
     bool includeHeader = true,
   }) {
+    final l10n = context.l10n;
     final pointsRaw = (item['points'] as List?) ?? const [];
-    final name = item['name']?.toString() ?? 'Saved location';
+    final name = item['name']?.toString() ?? l10n.t('Saved location');
     final group = _groupOf(item);
     final createdAt = _formatDate(item['createdAt']?.toString());
     final updatedAt = _formatDate(item['updatedAt']?.toString());
@@ -2331,10 +2543,12 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (includeHeader) {
       buffer
         ..writeln(name)
-        ..writeln('Group: $group')
-        ..writeln('Points: ${pointsRaw.length}')
-        ..writeln('Created: $createdAt')
-        ..writeln(hasUpdated ? 'Updated: $updatedAt' : 'Updated: -')
+        ..writeln(
+          '${l10n.t('Group')}: ${group == 'General' ? l10n.t('General') : group}',
+        )
+        ..writeln('${l10n.t('Points')}: ${pointsRaw.length}')
+        ..writeln('${l10n.t('Created')}: $createdAt')
+        ..writeln('${l10n.t('Updated')}: ${hasUpdated ? updatedAt : '—'}')
         ..writeln('');
     }
 
@@ -2354,7 +2568,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final zone = computed?.zone;
       buffer.writeln(
         _formatPointShareBlock(
-          title: 'Point ${i + 1}',
+          title: l10n.t('Point {count}', params: {'count': '${i + 1}'}),
           latitude: lat,
           longitude: lng,
           easting: easting,
@@ -2372,18 +2586,17 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 
   String _buildRemoteShareText(LandDetail detail) {
+    final l10n = context.l10n;
     final points = detail.points;
     final pointLabels = _extractRemotePointLabels(points, points.length);
     final ellipsoid = ref.read(referenceEllipsoidProvider);
     final buffer = StringBuffer()
-      ..writeln(detail.name.isNotEmpty ? detail.name : 'Saved location')
-      ..writeln('Group: Cloud')
-      ..writeln('Points: ${points.length}')
-      ..writeln('Created: ${_formatDate(detail.createdAt)}')
+      ..writeln(detail.name.isNotEmpty ? detail.name : l10n.t('Saved location'))
+      ..writeln('${l10n.t('Source')}: ${l10n.t('Cloud')}')
+      ..writeln('${l10n.t('Points')}: ${points.length}')
+      ..writeln('${l10n.t('Created')}: ${_formatDate(detail.createdAt)}')
       ..writeln(
-        detail.updatedAt?.toString().isNotEmpty ?? false
-            ? 'Updated: ${_formatDate(detail.updatedAt)}'
-            : 'Updated: -',
+        '${l10n.t('Updated')}: ${detail.updatedAt?.toString().isNotEmpty ?? false ? _formatDate(detail.updatedAt) : '—'}',
       )
       ..writeln('');
 
@@ -2407,7 +2620,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final northing = computed?.northing;
       buffer.writeln(
         _formatPointShareBlock(
-          title: 'Point ${pointLabels[i]}',
+          title: l10n.t('Point {count}', params: {'count': pointLabels[i]}),
           latitude: lat,
           longitude: lng,
           easting: easting,
@@ -2433,21 +2646,22 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     String? zone,
     ReferenceEllipsoid? ellipsoid,
   }) {
+    final l10n = context.l10n;
     final buffer = StringBuffer()
       ..writeln(title)
       ..writeln(
-        'Lat/Long: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
+        '${l10n.t('Lat/Long')}: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}',
       );
 
     if (easting != null && northing != null) {
       buffer.writeln(
-        'E/N: ${easting.toStringAsFixed(2)}, ${northing.toStringAsFixed(2)}',
+        '${l10n.t('E/N')}: ${easting.toStringAsFixed(2)}, ${northing.toStringAsFixed(2)}',
       );
       if (zone != null && zone.isNotEmpty) {
         final ellipsoidSuffix = ellipsoid != null
             ? ' ${ref.read(selectedReferenceNameProvider)}'
             : '';
-        buffer.writeln('Zone: $zone$ellipsoidSuffix');
+        buffer.writeln('${l10n.t('Zone')}: $zone$ellipsoidSuffix');
       }
     }
 
@@ -2557,7 +2771,7 @@ class _CloudRecordsLoadingBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Updating cloud records...',
+              context.l10n.t('Updating cloud records...'),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: Colors.black87,
                 fontWeight: FontWeight.w600,
@@ -2598,8 +2812,8 @@ class _CloudRecordsLoadMoreFooter extends StatelessWidget {
               ),
               const SizedBox(width: 10),
             ],
-            const Text(
-              'Loading more records...',
+            Text(
+              context.l10n.t('Loading more records...'),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -2620,6 +2834,9 @@ class _SavedLocationCard extends StatelessWidget {
   final String? createdAt;
   final String? updatedAt;
   final int points;
+  final _SavedContentSection section;
+  final double? areaSquareMeters;
+  final DistanceUnit distanceUnit;
   final bool isCloudSynced;
   final _ViewMode viewMode;
   final bool compactMode;
@@ -2636,6 +2853,9 @@ class _SavedLocationCard extends StatelessWidget {
     required this.createdAt,
     required this.updatedAt,
     required this.points,
+    required this.section,
+    required this.areaSquareMeters,
+    required this.distanceUnit,
     required this.isCloudSynced,
     required this.viewMode,
     required this.compactMode,
@@ -2646,19 +2866,48 @@ class _SavedLocationCard extends StatelessWidget {
     required this.onMore,
   });
 
+  String get _kindLabel => switch (section) {
+    _SavedContentSection.markers => 'Point',
+    _SavedContentSection.fields => 'Area',
+    _SavedContentSection.distances => 'Route',
+    _SavedContentSection.all => 'Location',
+  };
+
+  IconData get _kindIcon => switch (section) {
+    _SavedContentSection.markers => Icons.place_outlined,
+    _SavedContentSection.fields => Icons.crop_square_outlined,
+    _SavedContentSection.distances => Icons.route_outlined,
+    _SavedContentSection.all => Icons.place_outlined,
+  };
+
+  String _measurementLabel(AppLocalizations l10n) =>
+      section == _SavedContentSection.fields &&
+          areaSquareMeters != null &&
+          areaSquareMeters! > 0
+      ? MeasurementFormatter.area(areaSquareMeters!, distanceUnit)
+      : l10n.t(
+          points == 1 ? '{count} point' : '{count} points',
+          params: {'count': '$points'},
+        );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateText = _formatDate(createdAt);
-    final updatedText = _formatDate(updatedAt);
-    final hasUpdated = (updatedAt ?? '').isNotEmpty;
+    final l10n = context.l10n;
+    final dateText = _formatDate(createdAt, l10n);
+    final updatedText = _formatDate(updatedAt, l10n);
+    final createdTime = DateTime.tryParse(createdAt ?? '');
+    final updatedTime = DateTime.tryParse(updatedAt ?? '');
+    final hasUpdated =
+        updatedTime != null &&
+        (createdTime == null || updatedTime.isAfter(createdTime));
 
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: EdgeInsets.all(compactMode ? 12 : 16),
+        padding: EdgeInsets.all(compactMode ? 12 : 14),
         decoration: BoxDecoration(
           color: isSelected
               ? theme.colorScheme.primary.withValues(alpha: 0.08)
@@ -2677,12 +2926,13 @@ class _SavedLocationCard extends StatelessWidget {
             ),
           ],
         ),
-        child: _buildContent(theme, dateText, hasUpdated, updatedText),
+        child: _buildContent(context, theme, dateText, hasUpdated, updatedText),
       ),
     );
   }
 
   Widget _buildContent(
+    BuildContext context,
     ThemeData theme,
     String dateText,
     bool hasUpdated,
@@ -2690,25 +2940,34 @@ class _SavedLocationCard extends StatelessWidget {
   ) {
     switch (viewMode) {
       case _ViewMode.basic:
-        return _buildBasic(theme, dateText);
+        return _buildBasic(context, theme, dateText);
       case _ViewMode.text:
-        return _buildText(theme, dateText);
+        return _buildText(context, theme, dateText);
       case _ViewMode.photo:
-        return _buildPhoto(theme, dateText);
+        return _buildPhoto(context, theme, dateText);
       case _ViewMode.combined:
-        return _buildCombined(theme, dateText, hasUpdated, updatedText);
+        return _buildCombined(
+          context,
+          theme,
+          dateText,
+          hasUpdated,
+          updatedText,
+        );
     }
   }
 
   Widget _buildCombined(
+    BuildContext context,
     ThemeData theme,
     String dateText,
     bool hasUpdated,
     String updatedText,
   ) {
-    final subtitle = hasUpdated
-        ? '$points points · Updated $updatedText'
-        : '$points points · Created $dateText';
+    final l10n = context.l10n;
+    final subtitle = '${l10n.t(_kindLabel)} · ${_measurementLabel(l10n)}';
+    final dateLabel = hasUpdated
+        ? l10n.t('Updated {date}', params: {'date': updatedText})
+        : l10n.t('Saved {date}', params: {'date': dateText});
     return Row(
       children: [
         if (selectionMode) ...[
@@ -2719,13 +2978,13 @@ class _SavedLocationCard extends StatelessWidget {
           SizedBox(width: compactMode ? 8 : 10),
         ],
         Container(
-          width: compactMode ? 40 : 48,
-          height: compactMode ? 40 : 48,
+          width: compactMode ? 40 : 44,
+          height: compactMode ? 40 : 44,
           decoration: BoxDecoration(
             color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(Icons.place, color: theme.colorScheme.primary),
+          child: Icon(_kindIcon, color: theme.colorScheme.primary),
         ),
         SizedBox(width: compactMode ? 10 : 12),
         Expanded(
@@ -2751,10 +3010,11 @@ class _SavedLocationCard extends StatelessWidget {
               ),
               SizedBox(height: compactMode ? 0 : 2),
               Text(
-                group,
+                group == 'General' ? dateLabel : '$group · $dateLabel',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w700,
+                  color: Colors.black54,
                 ),
               ),
             ],
@@ -2763,19 +3023,27 @@ class _SavedLocationCard extends StatelessWidget {
         if (isCloudSynced)
           Padding(
             padding: const EdgeInsets.only(right: 2),
-            child: Icon(
-              Icons.cloud_done,
-              size: 18,
-              color: theme.colorScheme.primary,
+            child: Tooltip(
+              message: l10n.t('Saved to cloud'),
+              child: Icon(
+                Icons.cloud_done,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
             ),
           ),
         if (!selectionMode)
-          IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+          IconButton(
+            onPressed: onMore,
+            tooltip: l10n.t('Actions for {name}', params: {'name': name}),
+            icon: const Icon(Icons.more_vert),
+          ),
       ],
     );
   }
 
-  Widget _buildBasic(ThemeData theme, String dateText) {
+  Widget _buildBasic(BuildContext context, ThemeData theme, String dateText) {
+    final l10n = context.l10n;
     return Row(
       children: [
         if (selectionMode) ...[
@@ -2785,7 +3053,7 @@ class _SavedLocationCard extends StatelessWidget {
           ),
           SizedBox(width: compactMode ? 8 : 10),
         ],
-        Icon(Icons.place, color: theme.colorScheme.primary),
+        Icon(_kindIcon, color: theme.colorScheme.primary),
         SizedBox(width: compactMode ? 8 : 10),
         Expanded(
           child: Column(
@@ -2801,7 +3069,7 @@ class _SavedLocationCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '$points pts · $group',
+                '${l10n.t(_kindLabel)} · ${_measurementLabel(l10n)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -2830,15 +3098,24 @@ class _SavedLocationCard extends StatelessWidget {
           ),
         if (!selectionMode) ...[
           SizedBox(width: compactMode ? 2 : 6),
-          IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+          IconButton(
+            onPressed: onMore,
+            tooltip: l10n.t('Actions for {name}', params: {'name': name}),
+            icon: const Icon(Icons.more_vert),
+          ),
         ],
       ],
     );
   }
 
-  Widget _buildText(ThemeData theme, String dateText) {
-    final updatedText = _formatDate(updatedAt);
-    final hasUpdated = (updatedAt ?? '').isNotEmpty;
+  Widget _buildText(BuildContext context, ThemeData theme, String dateText) {
+    final l10n = context.l10n;
+    final updatedText = _formatDate(updatedAt, l10n);
+    final createdTime = DateTime.tryParse(createdAt ?? '');
+    final updatedTime = DateTime.tryParse(updatedAt ?? '');
+    final hasUpdated =
+        updatedTime != null &&
+        (createdTime == null || updatedTime.isAfter(createdTime));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2869,37 +3146,44 @@ class _SavedLocationCard extends StatelessWidget {
                 ),
               ),
             if (!selectionMode)
-              IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+              IconButton(
+                onPressed: onMore,
+                tooltip: l10n.t('Actions for {name}', params: {'name': name}),
+                icon: const Icon(Icons.more_vert),
+              ),
           ],
         ),
         SizedBox(height: compactMode ? 4 : 6),
         Text(
-          'Points: $points',
+          '${l10n.t(_kindLabel)} · ${_measurementLabel(l10n)}',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
-        const SizedBox(height: 2),
-        Text(
-          'Group: $group',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.primary,
-            fontWeight: FontWeight.w700,
+        if (group != 'General') ...[
+          const SizedBox(height: 2),
+          Text(
+            '${l10n.t('Group')}: $group',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 2),
         Text(
-          'Created: $dateText',
+          '${l10n.t('Created')}: $dateText',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
         const SizedBox(height: 2),
         Text(
-          hasUpdated ? 'Updated: $updatedText' : 'Updated: -',
+          '${l10n.t('Updated')}: ${hasUpdated ? updatedText : '—'}',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
       ],
     );
   }
 
-  Widget _buildPhoto(ThemeData theme, String dateText) {
+  Widget _buildPhoto(BuildContext context, ThemeData theme, String dateText) {
+    final l10n = context.l10n;
     final topHeight = compactMode ? 92.0 : 120.0;
     final iconSize = compactMode ? 26.0 : 32.0;
     return Column(
@@ -2923,7 +3207,7 @@ class _SavedLocationCard extends StatelessWidget {
             children: [
               Center(
                 child: Icon(
-                  Icons.landscape_rounded,
+                  _kindIcon,
                   size: iconSize,
                   color: theme.colorScheme.primary.withValues(alpha: 0.7),
                 ),
@@ -2941,7 +3225,7 @@ class _SavedLocationCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
-                    '$points pts',
+                    '${l10n.t(_kindLabel)} · ${_measurementLabel(l10n)}',
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -2981,22 +3265,26 @@ class _SavedLocationCard extends StatelessWidget {
                 ),
               ),
             if (!selectionMode)
-              IconButton(onPressed: onMore, icon: const Icon(Icons.more_vert)),
+              IconButton(
+                onPressed: onMore,
+                tooltip: l10n.t('Actions for {name}', params: {'name': name}),
+                icon: const Icon(Icons.more_vert),
+              ),
           ],
         ),
         const SizedBox(height: 2),
         Text(
-          '$group · $dateText',
+          group == 'General' ? dateText : '$group · $dateText',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
       ],
     );
   }
 
-  String _formatDate(String? iso) {
-    if (iso == null || iso.isEmpty) return 'Unknown';
+  String _formatDate(String? iso, AppLocalizations l10n) {
+    if (iso == null || iso.isEmpty) return l10n.t('Unknown');
     final parsed = DateTime.tryParse(iso);
-    if (parsed == null) return 'Unknown';
+    if (parsed == null) return l10n.t('Unknown');
     final yyyy = parsed.year.toString().padLeft(4, '0');
     final mm = parsed.month.toString().padLeft(2, '0');
     final dd = parsed.day.toString().padLeft(2, '0');
@@ -3059,7 +3347,11 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.t('Changes saved. They will sync when connected.'))),
+        SnackBar(
+          content: Text(
+            context.l10n.t('Changes saved. They will sync when connected.'),
+          ),
+        ),
       );
       unawaited(_syncAndRefresh(syncService));
     } catch (error) {
@@ -3124,27 +3416,35 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
                   const SizedBox(height: 18),
                   TextFormField(
                     controller: _nameController,
-                    decoration: InputDecoration(labelText: context.l10n.t('Name')),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.t('Name'),
+                    ),
                     validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Name is required'
+                        ? context.l10n.t('Name is required')
                         : null,
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _placeController,
-                    decoration: InputDecoration(labelText: context.l10n.t('Place')),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.t('Place'),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _phoneController,
-                    decoration: InputDecoration(labelText: context.l10n.t('Phone')),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.t('Phone'),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _descriptionController,
                     minLines: 2,
                     maxLines: 4,
-                    decoration: InputDecoration(labelText: context.l10n.t('Description')),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.t('Description'),
+                    ),
                   ),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -3243,7 +3543,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            title,
+            context.l10n.t(title),
             style: theme.textTheme.titleMedium?.copyWith(
               color: Colors.black54,
               fontWeight: FontWeight.w600,
@@ -3251,7 +3551,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            subtitle,
+            context.l10n.t(subtitle),
             style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
           ),
         ],
@@ -3429,7 +3729,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
     // Determine values from either local or cloud
     final name = widget.isCloud
         ? widget.cloudItem!.name
-        : widget.localItem!['name']?.toString() ?? 'Saved location';
+        : widget.localItem!['name']?.toString() ??
+              context.l10n.t('Saved location');
     final type = widget.isCloud
         ? (_cloudDetail?.type ?? widget.cloudItem!.type)
         : (widget.localItem!['entityType']?.toString() ??
@@ -3505,7 +3806,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                                   ),
                                 ),
                                 child: Text(
-                                  _typeBadgeLabel(type),
+                                  context.l10n.t(_typeBadgeLabel(type)),
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
@@ -3753,7 +4054,10 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          _InfoRow(label: context.l10n.t('Type'), value: _typeBadgeLabel(type)),
+          _InfoRow(
+            label: context.l10n.t('Type'),
+            value: context.l10n.t(_typeBadgeLabel(type)),
+          ),
           if (place?.trim().isNotEmpty == true)
             _InfoRow(label: context.l10n.t('Place'), value: place!),
           if (phone?.trim().isNotEmpty == true)
@@ -3762,10 +4066,17 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             _InfoRow(label: context.l10n.t('Description'), value: description!),
           if (perimeterText != null)
             _InfoRow(label: context.l10n.t('Perimeter'), value: perimeterText),
-          if (areaText != null) _InfoRow(label: context.l10n.t('Area'), value: areaText),
-          _InfoRow(label: context.l10n.t('Created'), value: _formatDate(createdAt)),
+          if (areaText != null)
+            _InfoRow(label: context.l10n.t('Area'), value: areaText),
+          _InfoRow(
+            label: context.l10n.t('Created'),
+            value: _formatDate(createdAt),
+          ),
           if (updatedAt?.trim().isNotEmpty == true)
-            _InfoRow(label: context.l10n.t('Updated'), value: _formatDate(updatedAt)),
+            _InfoRow(
+              label: context.l10n.t('Updated'),
+              value: _formatDate(updatedAt),
+            ),
         ],
       ),
     );
@@ -3837,7 +4148,10 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               Icon(Icons.place_outlined, size: 16, color: Colors.grey.shade500),
               const SizedBox(width: 6),
               Text(
-                'Points (${points.length})',
+                context.l10n.t(
+                  'Points ({count})',
+                  params: {'count': '${points.length}'},
+                ),
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -3941,7 +4255,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                               return const SizedBox.shrink();
                             }
                             return Text(
-                              'E ${utm.easting.toStringAsFixed(2)}  N ${utm.northing.toStringAsFixed(2)}  Zone ${utm.zoneNumber}${utm.zoneLetter}',
+                              '${context.l10n.t('E')} ${utm.easting.toStringAsFixed(2)}  ${context.l10n.t('N')} ${utm.northing.toStringAsFixed(2)}  ${context.l10n.t('Zone')} ${utm.zoneNumber}${utm.zoneLetter}',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.grey.shade400,
@@ -3961,8 +4275,11 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               onPressed: () => setState(() => _showAllPoints = !_showAllPoints),
               child: Text(
                 _showAllPoints
-                    ? 'Show less'
-                    : 'Show all ${points.length} points',
+                    ? context.l10n.t('Show less')
+                    : context.l10n.t(
+                        'Show all {count} points',
+                        params: {'count': '${points.length}'},
+                      ),
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -4023,34 +4340,30 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                   }
                 }
               } else {
-                // Local item — coordinates are available directly.
                 final points = _localPoints;
                 if (points.isNotEmpty) {
                   final item = widget.localItem!;
                   final name =
                       item['name']?.toString().trim().isNotEmpty == true
                       ? item['name'].toString().trim()
-                      : 'Saved location';
+                      : context.l10n.t('Saved location');
                   final type =
                       item['entityType']?.toString().trim().isNotEmpty == true
                       ? item['entityType'].toString().trim()
                       : item['type']?.toString().trim() ?? 'polygon';
-
-                  // Extract per-point labels from the raw points list.
                   final rawPts = (item['points'] as List?) ?? const [];
                   final topLabels = (item['labels'] as List?) ?? const [];
                   final pointLabels = List<String>.generate(points.length, (i) {
                     if (i < rawPts.length && rawPts[i] is Map) {
-                      final l = rawPts[i]['label']?.toString().trim() ?? '';
-                      if (l.isNotEmpty) return l;
+                      final label = rawPts[i]['label']?.toString().trim() ?? '';
+                      if (label.isNotEmpty) return label;
                     }
                     if (i < topLabels.length) {
-                      final l = topLabels[i]?.toString().trim() ?? '';
-                      if (l.isNotEmpty) return l;
+                      final label = topLabels[i]?.toString().trim() ?? '';
+                      if (label.isNotEmpty) return label;
                     }
                     return '${i + 1}';
                   });
-
                   final target = LandNavigationTarget(
                     point: _representativePoint(points),
                     points: points,
@@ -4076,7 +4389,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               if (points.isEmpty) return;
               final name = widget.isCloud
                   ? widget.cloudItem!.name
-                  : widget.localItem!['name']?.toString() ?? 'Saved location';
+                  : widget.localItem!['name']?.toString() ??
+                        context.l10n.t('Saved location');
               String? id;
               if (widget.isCloud) {
                 final detail = _cloudDetail;
@@ -4128,7 +4442,9 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             const Divider(height: 1, indent: 56),
             _ActionRow(
               icon: Icons.delete_outline,
-              label: _isDeleting ? context.l10n.t('Deleting...') : context.l10n.t('Delete land'),
+              label: _isDeleting
+                  ? context.l10n.t('Deleting...')
+                  : context.l10n.t('Delete land'),
               color: Colors.red,
               onTap: _isDeleting ? null : () => _deleteCloudLand(context),
             ),
@@ -4138,7 +4454,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               label: context.l10n.t('Rename'),
               onTap: () {
                 Navigator.of(context).pop();
-                // Caller handles rename
+                // Caller handles rename.
               },
             ),
             const Divider(height: 1, indent: 56),
@@ -4185,7 +4501,10 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       builder: (ctx) => AlertDialog(
         title: Text(ctx.l10n.t('Delete cloud land?')),
         content: Text(
-          'This will delete "${widget.cloudItem!.name}" from the server.',
+          ctx.l10n.t(
+            'This will delete "{name}" from the server.',
+            params: {'name': widget.cloudItem!.name},
+          ),
         ),
         actions: [
           TextButton(
@@ -4210,9 +4529,9 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       await widget.onRemoteChanged?.call();
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.t('Land deleted from cloud'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.t('Land deleted from cloud'))),
+      );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(
@@ -4452,7 +4771,11 @@ class _ManualCoordinateEntrySheetState
         _lngController.clear();
         _latLngLabelController.clear();
       });
-      _setFeedback('Point ${_points.length} added.', isError: false);
+      _setFeedback(
+        'Point {count} added.',
+        params: {'count': '${_points.length}'},
+        isError: false,
+      );
     } else {
       final easting = double.tryParse(_eastingController.text.trim());
       final northing = double.tryParse(_northingController.text.trim());
@@ -4556,7 +4879,11 @@ class _ManualCoordinateEntrySheetState
         _bandController.clear();
         _utmLabelController.clear();
       });
-      _setFeedback('Point ${_points.length} added.', isError: false);
+      _setFeedback(
+        'Point {count} added.',
+        params: {'count': '${_points.length}'},
+        isError: false,
+      );
     }
   }
 
@@ -4564,9 +4891,13 @@ class _ManualCoordinateEntrySheetState
     setState(() => _points.removeAt(index));
   }
 
-  void _setFeedback(String message, {required bool isError}) {
+  void _setFeedback(
+    String message, {
+    required bool isError,
+    Map<String, String> params = const {},
+  }) {
     setState(() {
-      _feedbackMessage = message;
+      _feedbackMessage = context.l10n.t(message, params: params);
       _feedbackIsError = isError;
     });
   }
@@ -4686,7 +5017,8 @@ class _ManualCoordinateEntrySheetState
         } catch (e) {
           if (!mounted) return;
           _setFeedback(
-            'Saved locally. Cloud sync failed: ${e.toString()}',
+            'Saved locally. Cloud sync failed: {error}',
+            params: {'error': e.toString()},
             isError: false,
           );
         }
@@ -4702,7 +5034,11 @@ class _ManualCoordinateEntrySheetState
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
-      _setFeedback('Failed to save: ${e.toString()}', isError: true);
+      _setFeedback(
+        'Failed to save: {error}',
+        params: {'error': e.toString()},
+        isError: true,
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -4867,7 +5203,9 @@ class _ManualCoordinateEntrySheetState
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(
-                        l10n.t('Type is determined by point count: 1 = Point, 2 = Distance, 3+ = Area'),
+                        l10n.t(
+                          'Type is determined by point count: 1 = Point, 2 = Distance, 3+ = Area',
+                        ),
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade500,
@@ -4881,7 +5219,9 @@ class _ManualCoordinateEntrySheetState
                   _SectionHeader(title: l10n.t('Add coordinate points')),
                   const SizedBox(height: 8),
                   Text(
-                    l10n.t('Choose your preferred coordinate format to add points one by one.'),
+                    l10n.t(
+                      'Choose your preferred coordinate format to add points one by one.',
+                    ),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.grey.shade500,
                     ),
@@ -4923,7 +5263,7 @@ class _ManualCoordinateEntrySheetState
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    'Lat / Lng',
+                                    l10n.t('Lat / Lng'),
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w700,
@@ -4964,7 +5304,7 @@ class _ManualCoordinateEntrySheetState
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    'UTM',
+                                    l10n.t('UTM'),
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w700,
@@ -5061,7 +5401,9 @@ class _ManualCoordinateEntrySheetState
                   // ── Points list ────────────────────────
                   if (_points.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    _SectionHeader(title: '${l10n.t('Added points')} (${_points.length})'),
+                    _SectionHeader(
+                      title: '${l10n.t('Added points')} (${_points.length})',
+                    ),
                     const SizedBox(height: 8),
                     Container(
                       decoration: BoxDecoration(
@@ -5132,7 +5474,7 @@ class _ManualCoordinateEntrySheetState
                                           if (point.easting != null &&
                                               point.northing != null)
                                             Text(
-                                              'E ${point.easting!.toStringAsFixed(2)}  N ${point.northing!.toStringAsFixed(2)}  Zone ${point.zone ?? '—'}${point.band ?? ''}',
+                                              '${l10n.t('E')} ${point.easting!.toStringAsFixed(2)}  ${l10n.t('N')} ${point.northing!.toStringAsFixed(2)}  ${l10n.t('Zone')} ${point.zone ?? '—'}${point.band ?? ''}',
                                               style: TextStyle(
                                                 fontSize: 10,
                                                 color: Colors.grey.shade400,
@@ -5191,8 +5533,8 @@ class _ManualCoordinateEntrySheetState
                                 color: Colors.white,
                               ),
                             )
-                          : const Text(
-                              'Save location',
+                          : Text(
+                              l10n.t('Save location'),
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
