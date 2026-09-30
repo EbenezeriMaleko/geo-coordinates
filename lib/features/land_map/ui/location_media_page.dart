@@ -64,7 +64,7 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
       final result = await _service.listMedia(
         session.token,
         type: _filterType,
-        perPage: 50,
+        perPage: 48,
       );
       if (!mounted) return;
       setState(() {

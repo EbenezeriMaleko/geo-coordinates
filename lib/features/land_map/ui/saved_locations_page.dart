@@ -2539,6 +2539,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
     final ellipsoid = ref.read(referenceEllipsoidProvider);
     final buffer = StringBuffer();
+    LatLng? mapPoint;
+    int? mapPointNumber;
 
     if (includeHeader) {
       buffer
@@ -2558,6 +2560,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final lat = _toDouble(point['lat']) ?? _toDouble(point['latitude']);
       final lng = _toDouble(point['lng']) ?? _toDouble(point['longitude']);
       if (lat == null || lng == null) continue;
+      if (mapPoint == null && _isValidMapCoordinate(lat, lng)) {
+        mapPoint = LatLng(lat, lng);
+        mapPointNumber = i + 1;
+      }
       final computed = CoordinateConverter.deriveDisplayCoordinate(
         LatLng(lat, lng),
         ellipsoid,
@@ -2582,6 +2588,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       }
     }
 
+    if (includeHeader && mapPoint != null) {
+      buffer
+        ..writeln()
+        ..writeln(
+          '${l10n.t('Point {count}', params: {'count': '$mapPointNumber'})} — ${l10n.t('View on map')}: ${_shareMapUrl(mapPoint)}',
+        );
+    }
+
     return buffer.toString().trimRight();
   }
 
@@ -2590,6 +2604,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final points = detail.points;
     final pointLabels = _extractRemotePointLabels(points, points.length);
     final ellipsoid = ref.read(referenceEllipsoidProvider);
+    LatLng? mapPoint;
+    String? mapPointLabel;
     final buffer = StringBuffer()
       ..writeln(detail.name.isNotEmpty ? detail.name : l10n.t('Saved location'))
       ..writeln('${l10n.t('Source')}: ${l10n.t('Cloud')}')
@@ -2611,6 +2627,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           _toDouble(point.raw['lng']) ??
           _toDouble(point.raw['longitude']);
       if (lat == null || lng == null) continue;
+      if (mapPoint == null && _isValidMapCoordinate(lat, lng)) {
+        mapPoint = LatLng(lat, lng);
+        mapPointLabel = pointLabels[i];
+      }
       final computed = CoordinateConverter.deriveDisplayCoordinate(
         LatLng(lat, lng),
         ellipsoid,
@@ -2634,8 +2654,32 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       }
     }
 
+    if (mapPoint != null) {
+      buffer
+        ..writeln()
+        ..writeln(
+          '${l10n.t('Point {count}', params: {'count': mapPointLabel!})} — ${l10n.t('View on map')}: ${_shareMapUrl(mapPoint)}',
+        );
+    }
+
     return buffer.toString().trimRight();
   }
+
+  bool _isValidMapCoordinate(double latitude, double longitude) =>
+      latitude.isFinite &&
+      longitude.isFinite &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180;
+
+  String _shareMapUrl(
+    LatLng point,
+  ) => Uri.https('www.google.com', '/maps/search/', {
+    'api': '1',
+    'query':
+        '${point.latitude.toStringAsFixed(8)},${point.longitude.toStringAsFixed(8)}',
+  }).toString();
 
   String _formatPointShareBlock({
     required String title,
