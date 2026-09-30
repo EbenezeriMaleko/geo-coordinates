@@ -18,7 +18,10 @@ import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
 import '../services/utm_converter.dart';
+import '../services/coordinate_converter.dart';
 import '../services/land_sync_service.dart';
+import '../services/survey_invitation.dart';
+import 'user_survey_page.dart';
 import 'package:uuid/uuid.dart';
 
 enum _ViewMode { combined, basic, text, photo }
@@ -84,6 +87,7 @@ String _navigationKind(String rawKind, int pointsCount) {
 }
 
 class SavedLocationsPage extends ConsumerStatefulWidget {
+  final bool isActive;
   final VoidCallback? onOpenMapRequested;
   final VoidCallback? onToolbarStateChanged;
   final bool showEmbeddedToolbar;
@@ -95,6 +99,7 @@ class SavedLocationsPage extends ConsumerStatefulWidget {
     this.onToolbarStateChanged,
     this.toolbarController,
     this.showEmbeddedToolbar = true,
+    this.isActive = false,
   });
 
   @override
@@ -120,6 +125,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   String _groupFilter = 'All groups';
   bool _compactMode = false;
   bool _isLoadingMoreRemote = false;
+  bool _showSurveyInvitation = false;
+  bool _previewSurveyInvitation = false;
+  bool _checkingSurveyInvitation = false;
   ProviderSubscription<AuthSession>? _authSubscription;
 
   @override
@@ -136,6 +144,19 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     });
 
     Future.microtask(_fetchRemoteData);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isActive) _considerSurveyInvitation();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant SavedLocationsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _considerSurveyInvitation();
+      });
+    }
   }
 
   @override
@@ -155,6 +176,70 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .read(remoteLandsProvider.notifier)
         .fetch(search: _searchQuery.isEmpty ? null : _searchQuery);
     await ref.read(remoteLandSummaryProvider.notifier).fetch();
+    if (mounted && widget.isActive) _considerSurveyInvitation();
+  }
+
+  Future<void> _considerSurveyInvitation() async {
+    if (!mounted || !widget.isActive || _checkingSurveyInvitation) return;
+    _checkingSurveyInvitation = true;
+    try {
+      final box = Hive.box('landbox');
+      final localCount = box.values.whereType<Map>().where((record) {
+        final type = record['entityType']?.toString() ?? '';
+        return type == 'land' ||
+            type == 'polygon' ||
+            type == 'polyline' ||
+            type == 'point';
+      }).length;
+      final remoteCount =
+          ref.read(remoteLandsProvider).asData?.value?.total ?? 0;
+      final invitation = SurveyInvitation(box);
+      final preview =
+          _previewSurveyInvitation || await invitation.consumeDebugPreview();
+      final show =
+          preview ||
+          await invitation.shouldShow(
+            savedRecordCount: max(localCount, remoteCount),
+          );
+      if (mounted &&
+          widget.isActive &&
+          (_showSurveyInvitation != show ||
+              _previewSurveyInvitation != preview)) {
+        setState(() {
+          _previewSurveyInvitation = preview;
+          _showSurveyInvitation = show;
+        });
+      }
+    } finally {
+      _checkingSurveyInvitation = false;
+    }
+  }
+
+  Future<void> _dismissSurveyInvitation() async {
+    if (!_previewSurveyInvitation) {
+      await SurveyInvitation(Hive.box('landbox')).dismiss();
+    }
+    if (mounted) {
+      setState(() {
+        _previewSurveyInvitation = false;
+        _showSurveyInvitation = false;
+      });
+    }
+  }
+
+  Future<void> _openSurveyFromInvitation() async {
+    final saved = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const UserSurveyPage()));
+    if (!mounted) return;
+    if (saved == true) {
+      setState(() => _showSurveyInvitation = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Response saved. It will sync automatically.'),
+        ),
+      );
+    }
   }
 
   Future<void> _loadMoreRemoteData() async {
@@ -325,6 +410,66 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         ),
                       ],
                     ],
+                  ),
+                ),
+              if (_showSurveyInvitation && widget.isActive && !_selectionMode)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF1F7),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFCFDDEB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              color: Color(0xFF001F3F),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Help us improve TaREF',
+                                style: TextStyle(
+                                  color: Color(0xFF001F3F),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Not now',
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: _dismissSurveyInvitation,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ],
+                        ),
+                        const Text(
+                          'Tell us what is working and what is difficult. '
+                          'It takes about a minute.',
+                          style: TextStyle(
+                            color: Color(0xFF374151),
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: _openSurveyFromInvitation,
+                            child: const Text('Share feedback'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               const SizedBox(height: 10),
@@ -2184,7 +2329,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final createdAt = _formatDate(item['createdAt']?.toString());
     final updatedAt = _formatDate(item['updatedAt']?.toString());
     final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
-    final ellipsoid = _referenceEllipsoidForItem(item);
+    final ellipsoid = ref.read(referenceEllipsoidProvider);
     final buffer = StringBuffer();
 
     if (includeHeader) {
@@ -2203,14 +2348,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final lat = _toDouble(point['lat']) ?? _toDouble(point['latitude']);
       final lng = _toDouble(point['lng']) ?? _toDouble(point['longitude']);
       if (lat == null || lng == null) continue;
-      final computed = UtmConverter.fromLatLng(lat, lng, ellipsoid);
-      final easting = _toDouble(point['easting']) ?? computed?.easting;
-      final northing = _toDouble(point['northing']) ?? computed?.northing;
-      final band = point['band']?.toString().trim() ?? '';
-      final rawZone = point['zone']?.toString().trim() ?? '';
-      final zone = rawZone.isNotEmpty
-          ? (band.isNotEmpty ? '$rawZone$band' : rawZone)
-          : null;
+      final computed = CoordinateConverter.deriveDisplayCoordinate(
+        LatLng(lat, lng),
+        ellipsoid,
+        ref.read(selectedDatumProvider),
+      ).utm;
+      final easting = computed?.easting;
+      final northing = computed?.northing;
+      final zone = computed?.zone;
       buffer.writeln(
         _formatPointShareBlock(
           title: 'Point ${i + 1}',
@@ -2257,9 +2402,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           _toDouble(point.raw['lng']) ??
           _toDouble(point.raw['longitude']);
       if (lat == null || lng == null) continue;
-      final computed = UtmConverter.fromLatLng(lat, lng, ellipsoid);
-      final easting = point.easting ?? computed?.easting;
-      final northing = point.northing ?? computed?.northing;
+      final computed = CoordinateConverter.deriveDisplayCoordinate(
+        LatLng(lat, lng),
+        ellipsoid,
+        ref.read(selectedDatumProvider),
+      ).utm;
+      final easting = computed?.easting;
+      final northing = computed?.northing;
       buffer.writeln(
         _formatPointShareBlock(
           title: 'Point ${pointLabels[i]}',
@@ -2267,11 +2416,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           longitude: lng,
           easting: easting,
           northing: northing,
-          zone:
-              (point.zone != null &&
-                  (point.raw['band']?.toString().trim() ?? '').isNotEmpty)
-              ? '${point.zone}${point.raw['band'].toString().trim()}'
-              : point.zone,
+          zone: computed?.zone,
           ellipsoid: ellipsoid,
         ),
       );
@@ -2304,21 +2449,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       );
       if (zone != null && zone.isNotEmpty) {
         final ellipsoidSuffix = ellipsoid != null
-            ? ' ${ellipsoid.displayName}'
+            ? ' ${ref.read(selectedReferenceNameProvider)}'
             : '';
         buffer.writeln('Zone: $zone$ellipsoidSuffix');
       }
     }
 
     return buffer.toString().trimRight();
-  }
-
-  ReferenceEllipsoid _referenceEllipsoidForItem(Map<String, dynamic> item) {
-    final raw = item['referenceEllipsoid']?.toString().trim() ?? '';
-    for (final ellipsoid in ReferenceEllipsoid.values) {
-      if (ellipsoid.name == raw) return ellipsoid;
-    }
-    return ref.read(referenceEllipsoidProvider);
   }
 
   double? _toDouble(dynamic value) {

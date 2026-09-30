@@ -51,6 +51,15 @@ final selectedDatumProvider =
       SelectedDatumNotifier.new,
     );
 
+/// Name of the reference used for derived display coordinates.
+final selectedReferenceNameProvider = Provider<String>((ref) {
+  final ellipsoid = ref.watch(referenceEllipsoidProvider);
+  final datum = ref.watch(selectedDatumProvider);
+  return datum?.parentEllipsoid == ellipsoid
+      ? datum!.displayName
+      : ellipsoid.displayName;
+});
+
 final compassNorthTypeProvider =
     NotifierProvider<CompassNorthTypeNotifier, CompassNorthType>(
       CompassNorthTypeNotifier.new,

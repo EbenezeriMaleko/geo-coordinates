@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:video_player/video_player.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:share_plus/share_plus.dart';
@@ -12,8 +13,9 @@ import '../../auth/ui/login_page.dart';
 import '../models/coordinate_format.dart';
 import '../models/location_media_models.dart';
 import '../models/reference_ellipsoid.dart';
+import '../models/geodetic_datum.dart';
 import '../services/location_media_service.dart';
-import '../services/utm_converter.dart';
+import '../services/coordinate_converter.dart';
 import '../state/settings_provider.dart';
 
 class LocationMediaPage extends ConsumerStatefulWidget {
@@ -546,7 +548,11 @@ class _LocationMediaViewerPageState
     final placeText = _cloudPlaceText(item);
     final addressText = _cloudAddressText(item);
     final coordinateText = _cloudCoordinateText(item, coordinateFormat);
-    final utmText = _cloudUtmText(item, referenceEllipsoid);
+    final utmText = _cloudUtmText(
+      item,
+      referenceEllipsoid,
+      ref.watch(selectedDatumProvider),
+    );
     final titleText = placeText == '—' ? 'Saved location' : placeText;
     final subtitleText = coordinateText == '—'
         ? 'Coordinates unavailable'
@@ -718,7 +724,10 @@ class _LocationMediaViewerPageState
               children: [
                 _detailRow('Lat/Lon', coordinateText),
                 _detailRow('UTM', utmText),
-                _detailRow('Ellipsoid', referenceEllipsoid.displayName),
+                _detailRow(
+                  'Display datum',
+                  ref.watch(selectedReferenceNameProvider),
+                ),
                 _detailRow('Format', coordinateFormat.displayName),
               ],
             ),
@@ -907,11 +916,16 @@ String _cloudCoordinateText(
 String _cloudUtmText(
   LocationMediaItem item,
   ReferenceEllipsoid referenceEllipsoid,
+  GeodeticDatum? datum,
 ) {
   final latitude = item.location?.latitude;
   final longitude = item.location?.longitude;
   if (latitude == null || longitude == null) return '—';
-  final utm = UtmConverter.fromLatLng(latitude, longitude, referenceEllipsoid);
+  final utm = CoordinateConverter.deriveDisplayCoordinate(
+    LatLng(latitude, longitude),
+    referenceEllipsoid,
+    datum,
+  ).utm;
   return utm?.toDisplayString() ?? 'UTM unavailable for this latitude';
 }
 

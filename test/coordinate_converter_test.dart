@@ -7,6 +7,47 @@ import 'package:taref_gps/features/land_map/services/coordinate_converter.dart';
 void main() {
   tearDown(CoordinateConverter.clearCache);
 
+  test(
+    'Minna selection is available in Nigeria and preserves canonical GPS',
+    () {
+      const canonical = LatLng(9.0765, 7.3986);
+      const datum = GeodeticDatumRegistry.minnaNigeria;
+      expect(GeodeticDatumRegistry.byId('epsg_4263_1168'), same(datum));
+      expect(
+        GeodeticDatumRegistry.orderedForLocation(
+          ReferenceEllipsoid.clarke1880,
+          canonical,
+        ).first,
+        same(datum),
+      );
+      expect(datum.isValidAt(const LatLng(-6.8, 39.2833)), isFalse);
+      final first = CoordinateConverter.deriveDisplayCoordinate(
+        canonical,
+        ReferenceEllipsoid.clarke1880,
+        datum,
+      );
+      CoordinateConverter.deriveDisplayCoordinate(
+        canonical,
+        ReferenceEllipsoid.wgs84,
+        null,
+      );
+      final second = CoordinateConverter.deriveDisplayCoordinate(
+        canonical,
+        ReferenceEllipsoid.clarke1880,
+        datum,
+      );
+      expect(first.canonicalWgs84, same(canonical));
+      expect(second.canonicalWgs84, same(canonical));
+      expect(
+        first.geodeticOnSelectedDatum.longitude,
+        greaterThan(canonical.longitude),
+      );
+      expect(first.utm, isNotNull);
+      expect(second.utm!.easting, first.utm!.easting);
+      expect(second.utm!.northing, first.utm!.northing);
+    },
+  );
+
   test('registry exposes EPSG-sourced worldwide datum operations', () {
     expect(
       GeodeticDatumRegistry.forEllipsoid(ReferenceEllipsoid.clarke1880),

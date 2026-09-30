@@ -12,7 +12,10 @@ import 'land_map_page.dart';
 import 'my_location_page.dart';
 import 'saved_locations_page.dart';
 import '../services/land_sync_service.dart';
-import '../services/utm_converter.dart';
+import '../services/app_review_service.dart';
+import '../services/survey_sync_service.dart';
+import '../services/coordinate_converter.dart';
+import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
 import 'settings_page.dart';
 import '../state/land_map_notifier.dart';
@@ -279,7 +282,13 @@ class _MainNavigationState extends State<MainNavigation> {
       final service = LandSyncService(Hive.box('landbox'));
       await service.syncPendingLands(limit: 10);
     } finally {
-      _syncInProgress = false;
+      // Survey answers are anonymous and should retry even when land sync
+      // cannot run (for example, when the user is signed out).
+      try {
+        await SurveySyncService(Hive.box('landbox')).syncPending();
+      } finally {
+        _syncInProgress = false;
+      }
     }
   }
 
@@ -357,6 +366,7 @@ class _MainNavigationState extends State<MainNavigation> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Location saved')));
+        unawaited(AppReviewService(box).recordSuccessfulSave());
         await _runBackgroundSync();
         return;
 
@@ -368,6 +378,7 @@ class _MainNavigationState extends State<MainNavigation> {
             current: current,
             accuracy: container.read(landMapProvider).accuracyMeters,
             referenceEllipsoid: ellipsoid,
+            datum: container.read(selectedDatumProvider),
           ),
           'Coordinates',
         );
@@ -382,6 +393,7 @@ class _MainNavigationState extends State<MainNavigation> {
               current: current,
               accuracy: accuracy,
               referenceEllipsoid: ellipsoid,
+              datum: container.read(selectedDatumProvider),
             ),
           ),
         );
@@ -423,12 +435,13 @@ class _MainNavigationState extends State<MainNavigation> {
     required LatLng current,
     required double? accuracy,
     required ReferenceEllipsoid referenceEllipsoid,
+    GeodeticDatum? datum,
   }) {
-    final utm = UtmConverter.fromLatLng(
-      current.latitude,
-      current.longitude,
+    final utm = CoordinateConverter.deriveDisplayCoordinate(
+      current,
       referenceEllipsoid,
-    );
+      datum,
+    ).utm;
     final buffer = StringBuffer()
       ..writeln('My current location')
       ..writeln(
@@ -438,7 +451,7 @@ class _MainNavigationState extends State<MainNavigation> {
         'E/N: ${utm?.easting.toStringAsFixed(2) ?? '—'}, ${utm?.northing.toStringAsFixed(2) ?? '—'}',
       )
       ..writeln(
-        'UTM Zone: ${utm?.zone ?? '—'} ${referenceEllipsoid.displayName}',
+        'UTM Zone: ${utm?.zone ?? '—'} ${datum?.displayName ?? referenceEllipsoid.displayName}',
       )
       ..writeln(
         'Accuracy: ${accuracy == null ? '—' : '${accuracy.toStringAsFixed(1)} m'}',
@@ -546,6 +559,7 @@ class _MainNavigationState extends State<MainNavigation> {
         onMenuAction: _handleMyLocationMenu,
       ),
       SavedLocationsPage(
+        isActive: _currentIndex == 2,
         toolbarController: _savedLocationsToolbarController,
         onOpenMapRequested: () => _navigateToPage(0),
         onToolbarStateChanged: () {
