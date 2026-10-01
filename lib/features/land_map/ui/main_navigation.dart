@@ -397,14 +397,21 @@ class _MainNavigationState extends State<MainNavigation> {
         if (current == null) return;
         final ellipsoid = container.read(referenceEllipsoidProvider);
         final accuracy = container.read(landMapProvider).accuracyMeters;
+        final details = _buildMyLocationPayload(
+          current: current,
+          accuracy: accuracy,
+          referenceEllipsoid: ellipsoid,
+          datum: container.read(selectedDatumProvider),
+        );
+        final mapUrl = Uri.https('www.google.com', '/maps/search/', {
+          'api': '1',
+          'query':
+              '${current.latitude.toStringAsFixed(8)},${current.longitude.toStringAsFixed(8)}',
+        });
         await SharePlus.instance.share(
           ShareParams(
-            text: _buildMyLocationPayload(
-              current: current,
-              accuracy: accuracy,
-              referenceEllipsoid: ellipsoid,
-              datum: container.read(selectedDatumProvider),
-            ),
+            text:
+                '${details.trimRight()}\n\n${context.l10n.t('View on map')}: $mapUrl',
           ),
         );
         return;

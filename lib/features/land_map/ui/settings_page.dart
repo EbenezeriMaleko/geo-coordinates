@@ -310,7 +310,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   String _languageLabel(Locale? locale, AppLocalizations l10n) {
-    if (locale == null) return 'System default';
+    if (locale == null) return l10n.t('System default');
     if (locale.languageCode == 'fr') return l10n.t('French');
     if (locale.languageCode == 'ar') return l10n.t('Arabic');
     return l10n.t('English');
@@ -707,7 +707,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
     final datumlessEllipsoids = ReferenceEllipsoid.values
         .where(
-          (ellipsoid) => GeodeticDatumRegistry.forEllipsoid(ellipsoid).isEmpty,
+          (ellipsoid) =>
+              ellipsoid != ReferenceEllipsoid.wgs84 &&
+              GeodeticDatumRegistry.forEllipsoid(ellipsoid).isEmpty,
         )
         .toList();
 
@@ -740,6 +742,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               Expanded(
                 child: ListView(
                   children: [
+                    ListTile(
+                      title: Text(ReferenceEllipsoid.wgs84.displayName),
+                      subtitle: const Text(
+                        'WGS 84 ellipsoid • Global reference system '
+                        '(default; valid everywhere)',
+                      ),
+                      trailing:
+                          currentDatum == null &&
+                              currentEllipsoid == ReferenceEllipsoid.wgs84
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: Color(0xFF0C8A8C),
+                            )
+                          : const Icon(
+                              Icons.near_me,
+                              color: Color(0xFF0C8A8C),
+                            ),
+                      onTap: () async {
+                        Navigator.of(sheetContext).pop();
+                        await _handleEllipsoidOrDatumChange(
+                          ReferenceEllipsoid.wgs84,
+                          null,
+                        );
+                      },
+                    ),
                     ...datums.map((datum) {
                       final isSelected = currentDatum?.id == datum.id;
                       final validHere =
@@ -792,16 +819,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         final isSelected =
                             currentDatum == null &&
                             currentEllipsoid == ellipsoid;
-                        final isWgs84 = ellipsoid == ReferenceEllipsoid.wgs84;
                         return ListTile(
                           title: Text(ellipsoid.displayName),
                           subtitle: Text(
-                            isWgs84
-                                ? '${ellipsoid.displayName} ellipsoid • '
-                                      'Global reference system'
-                                : '${ellipsoid.displayName} ellipsoid • '
-                                      'No verified datum transformation; '
-                                      'ellipsoid-shape-only conversion',
+                            '${ellipsoid.displayName} ellipsoid • '
+                            'No verified datum transformation; '
+                            'ellipsoid-shape-only conversion',
                           ),
                           trailing: isSelected
                               ? const Icon(
