@@ -355,9 +355,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final distanceUnit = ref.watch(distanceUnitProvider);
     final canUseCloud = authSession.isLoggedIn && authSession.isVerified;
 
-    return Container(
-      color: Colors.white70,
-      child: Column(
+    return Scaffold(
+      backgroundColor: Colors.white70,
+      body: Column(
         children: [
           if (widget.showEmbeddedToolbar)
             Padding(
@@ -804,7 +804,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       Expanded(
                         child: ListView.separated(
                           controller: _savedListScrollController,
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
                           itemCount:
                               searched.length + (showLoadingMoreFooter ? 1 : 0),
                           separatorBuilder: (_, _) =>
@@ -890,29 +890,20 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FloatingActionButton.extended(
-                heroTag: 'manual_coords_fab',
-                onPressed: _showManualCoordinateEntry,
-                backgroundColor: const Color(0xFF001F3F),
-                icon: const Icon(
-                  Icons.add_location_alt_outlined,
-                  color: Colors.white,
-                ),
-                label: Text(
-                  l10n.t('Add manually'),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'manual_coords_fab',
+        onPressed: _showManualCoordinateEntry,
+        backgroundColor: const Color(0xFF001F3F),
+        icon: const Icon(Icons.add_location_alt_outlined, color: Colors.white),
+        label: Text(
+          l10n.t('Add manually'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }
@@ -2539,8 +2530,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final hasUpdated = item['updatedAt']?.toString().isNotEmpty ?? false;
     final ellipsoid = ref.read(referenceEllipsoidProvider);
     final buffer = StringBuffer();
-    LatLng? mapPoint;
-    int? mapPointNumber;
 
     if (includeHeader) {
       buffer
@@ -2560,10 +2549,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       final lat = _toDouble(point['lat']) ?? _toDouble(point['latitude']);
       final lng = _toDouble(point['lng']) ?? _toDouble(point['longitude']);
       if (lat == null || lng == null) continue;
-      if (mapPoint == null && _isValidMapCoordinate(lat, lng)) {
-        mapPoint = LatLng(lat, lng);
-        mapPointNumber = i + 1;
-      }
       final computed = CoordinateConverter.deriveDisplayCoordinate(
         LatLng(lat, lng),
         ellipsoid,
@@ -2588,14 +2573,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       }
     }
 
-    if (includeHeader && mapPoint != null) {
-      buffer
-        ..writeln()
-        ..writeln(
-          '${l10n.t('Point {count}', params: {'count': '$mapPointNumber'})} — ${l10n.t('View on map')}: ${_shareMapUrl(mapPoint)}',
-        );
-    }
-
     return buffer.toString().trimRight();
   }
 
@@ -2604,8 +2581,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final points = detail.points;
     final pointLabels = _extractRemotePointLabels(points, points.length);
     final ellipsoid = ref.read(referenceEllipsoidProvider);
-    LatLng? mapPoint;
-    String? mapPointLabel;
     final buffer = StringBuffer()
       ..writeln(detail.name.isNotEmpty ? detail.name : l10n.t('Saved location'))
       ..writeln('${l10n.t('Source')}: ${l10n.t('Cloud')}')
@@ -2627,10 +2602,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           _toDouble(point.raw['lng']) ??
           _toDouble(point.raw['longitude']);
       if (lat == null || lng == null) continue;
-      if (mapPoint == null && _isValidMapCoordinate(lat, lng)) {
-        mapPoint = LatLng(lat, lng);
-        mapPointLabel = pointLabels[i];
-      }
       final computed = CoordinateConverter.deriveDisplayCoordinate(
         LatLng(lat, lng),
         ellipsoid,
@@ -2654,32 +2625,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       }
     }
 
-    if (mapPoint != null) {
-      buffer
-        ..writeln()
-        ..writeln(
-          '${l10n.t('Point {count}', params: {'count': mapPointLabel!})} — ${l10n.t('View on map')}: ${_shareMapUrl(mapPoint)}',
-        );
-    }
-
     return buffer.toString().trimRight();
   }
-
-  bool _isValidMapCoordinate(double latitude, double longitude) =>
-      latitude.isFinite &&
-      longitude.isFinite &&
-      latitude >= -90 &&
-      latitude <= 90 &&
-      longitude >= -180 &&
-      longitude <= 180;
-
-  String _shareMapUrl(
-    LatLng point,
-  ) => Uri.https('www.google.com', '/maps/search/', {
-    'api': '1',
-    'query':
-        '${point.latitude.toStringAsFixed(8)},${point.longitude.toStringAsFixed(8)}',
-  }).toString();
 
   String _formatPointShareBlock({
     required String title,
