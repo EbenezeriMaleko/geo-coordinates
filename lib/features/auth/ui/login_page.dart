@@ -60,13 +60,14 @@ class _LoginPageState extends ConsumerState<LoginPage>
         return;
       }
 
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).pushAndRemoveUntil(
         PageRouteBuilder<void>(
           pageBuilder: (context, animation, _) => const MainNavigation(),
           transitionsBuilder: (context, animation, _, child) =>
               FadeTransition(opacity: animation, child: child),
           transitionDuration: const Duration(milliseconds: 450),
         ),
+        (_) => false,
       );
     }
   }
@@ -235,17 +236,24 @@ class _LoginPageState extends ConsumerState<LoginPage>
               },
             ),
             SizedBox(height: isCompact ? 22 : 32),
-            SizedBox(
-              height: isCompact ? 50 : 54,
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: isCompact ? 50 : 54),
               child: ElevatedButton(
                 onPressed: isLoading ? null : _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF001F3F),
+                  disabledBackgroundColor: const Color(0xFF001F3F),
                   foregroundColor: Colors.white,
+                  disabledForegroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  elevation: isLoading ? 0 : 2,
+                ).copyWith(
+                  elevation: const WidgetStatePropertyAll(2),
                 ),
                 child: isLoading
                     ? const SizedBox(

@@ -585,6 +585,7 @@ class _MainNavigationState extends State<MainNavigation> {
       appBar: _currentIndex == 0 || _currentIndex == 1
           ? null
           : AppBar(
+              automaticallyImplyLeading: false,
               title: Text(
                 _appBarTitleText(),
                 style: const TextStyle(
@@ -690,7 +691,7 @@ class _BottomNavItem extends StatelessWidget {
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
-                  width: 46,
+                  width: isSelected ? 68 : 46,
                   height: 30,
                   decoration: BoxDecoration(
                     color: isSelected ? selectedColor : Colors.transparent,

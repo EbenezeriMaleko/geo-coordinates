@@ -68,7 +68,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           _sectionDivider(),
 
-          _sectionHeader(l10n.t('Language'), theme),
           _item(
             title: l10n.t('Language'),
             subtitle: _languageLabel(ref.watch(localeProvider), l10n),
@@ -101,7 +100,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
           _sectionDivider(),
 
-          _sectionHeader(l10n.t('Units'), theme),
           _item(
             title: l10n.t('Units'),
             subtitle: l10n.t(unitLabel),

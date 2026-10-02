@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive/hive.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
@@ -1911,7 +1912,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
+                    icon: HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01),
                     color: const Color(0xFF18212F),
                   ),
                   const Spacer(),

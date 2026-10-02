@@ -356,7 +356,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final canUseCloud = authSession.isLoggedIn && authSession.isVerified;
 
     return Scaffold(
-      backgroundColor: Colors.white70,
+      backgroundColor: Colors.white,
       body: Column(
         children: [
           if (widget.showEmbeddedToolbar)
@@ -406,14 +406,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       tooltip: l10n.t('Exit selection'),
                     ),
                   if (!_selectionMode) ...[
-                    IconButton(
-                      onPressed: _showFilterSheet,
-                      icon: const Icon(Icons.tune, size: 20),
-                    ),
-                    IconButton(
-                      onPressed: _showSortSheet,
-                      icon: const Icon(Icons.sort, size: 20),
-                    ),
                     IconButton(
                       onPressed: _showPageMenu,
                       icon: const Icon(Icons.more_vert, size: 20),
@@ -486,35 +478,83 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           const SizedBox(height: 4),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() => _searchQuery = value.trim());
-                if (canUseCloud) {
-                  _fetchRemoteData();
-                }
-              },
-              decoration: InputDecoration(
-                hintText: l10n.t('Search saved locations'),
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                          if (canUseCloud) {
-                            _fetchRemoteData();
-                          }
-                        },
-                        icon: const Icon(Icons.close),
-                      )
-                    : null,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) {
+                        setState(() => _searchQuery = value.trim());
+                        if (canUseCloud) {
+                          _fetchRemoteData();
+                        }
+                      },
+                      decoration: InputDecoration(
+                        hintText: l10n.t('Search saved locations'),
+                        hintStyle: const TextStyle(fontSize: 14),
+                        prefixIcon: const Icon(Icons.search, size: 21),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                tooltip: l10n.t('Clear'),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                  if (canUseCloud) {
+                                    _fetchRemoteData();
+                                  }
+                                },
+                                icon: const Icon(Icons.close, size: 19),
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 18,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF001F3F),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _HeaderActionButton(
+                  icon: Icons.tune_rounded,
+                  tooltip: l10n.t('Filter'),
+                  active: _filter != _SavedFilter.all,
+                  onPressed: _showFilterSheet,
+                ),
+                const SizedBox(width: 8),
+                _HeaderActionButton(
+                  icon: Icons.sort_rounded,
+                  tooltip: l10n.t('Sort'),
+                  active: _sort != _SavedSort.newest,
+                  onPressed: _showSortSheet,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
-          if (_searchQuery.isNotEmpty ||
-              _filter != _SavedFilter.all ||
+          if (_filter != _SavedFilter.all ||
               _sort != _SavedSort.newest ||
               _groupFilter != 'All groups')
             Padding(
@@ -523,17 +563,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (_searchQuery.isNotEmpty)
-                    _ActiveTag(
-                      label: '${l10n.t('Search')}: $_searchQuery',
-                      onClear: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                        if (canUseCloud) {
-                          _fetchRemoteData();
-                        }
-                      },
-                    ),
                   if (_filter != _SavedFilter.all)
                     _ActiveTag(
                       label:
@@ -593,9 +622,66 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
                 return Column(
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _SectionChip(
+                              label: l10n.t('All'),
+                              count: items.length,
+                              selected:
+                                  _contentSection == _SavedContentSection.all,
+                              onTap: () => setState(
+                                () =>
+                                    _contentSection = _SavedContentSection.all,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            _SectionChip(
+                              label: l10n.t('Points'),
+                              count: counts.markers,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.markers,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.markers,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            _SectionChip(
+                              label: l10n.t('Area'),
+                              count: counts.fields,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.fields,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.fields,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            _SectionChip(
+                              label: l10n.t('Route'),
+                              count: counts.distances,
+                              selected:
+                                  _contentSection ==
+                                  _SavedContentSection.distances,
+                              onTap: () => setState(
+                                () => _contentSection =
+                                    _SavedContentSection.distances,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     if (groups.any(
                       (group) => group != 'All groups' && group != 'General',
-                    ))
+                    )) ...[
+                      const SizedBox(height: 10),
                       SizedBox(
                         height: 40,
                         child: ListView.separated(
@@ -618,67 +704,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                           },
                         ),
                       ),
-                    if (groups.any(
-                      (group) => group != 'All groups' && group != 'General',
-                    ))
-                      const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _SectionChip(
-                              label: l10n.t('All'),
-                              count: items.length,
-                              selected:
-                                  _contentSection == _SavedContentSection.all,
-                              onTap: () => setState(
-                                () =>
-                                    _contentSection = _SavedContentSection.all,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _SectionChip(
-                              label: l10n.t('Points'),
-                              count: counts.markers,
-                              selected:
-                                  _contentSection ==
-                                  _SavedContentSection.markers,
-                              onTap: () => setState(
-                                () => _contentSection =
-                                    _SavedContentSection.markers,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _SectionChip(
-                              label: l10n.t('Area'),
-                              count: counts.fields,
-                              selected:
-                                  _contentSection ==
-                                  _SavedContentSection.fields,
-                              onTap: () => setState(
-                                () => _contentSection =
-                                    _SavedContentSection.fields,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _SectionChip(
-                              label: l10n.t('Route'),
-                              count: counts.distances,
-                              selected:
-                                  _contentSection ==
-                                  _SavedContentSection.distances,
-                              onTap: () => setState(
-                                () => _contentSection =
-                                    _SavedContentSection.distances,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
+                    ],
+                    const SizedBox(height: 8),
                     if (canUseCloud && remoteLandsState.isLoading) ...[
                       const Padding(
                         padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -689,35 +716,6 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       Expanded(
                         child: Column(
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(18, 0, 12, 2),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      l10n.t(
-                                        '{count} results',
-                                        params: {'count': '0'},
-                                      ),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(color: Colors.black54),
-                                    ),
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: _showFilterSheet,
-                                    icon: const Icon(Icons.tune, size: 17),
-                                    label: Text(l10n.t('Filter')),
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: _showSortSheet,
-                                    icon: const Icon(Icons.sort, size: 17),
-                                    label: Text(l10n.t('Sort')),
-                                  ),
-                                ],
-                              ),
-                            ),
                             Expanded(
                               child:
                                   _searchQuery.isNotEmpty ||
@@ -749,58 +747,18 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                         ),
                       )
                     else ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 0, 12, 2),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    l10n.t(
-                                      searched.length == 1
-                                          ? '{count} result'
-                                          : '{count} results',
-                                      params: {'count': '${searched.length}'},
-                                    ),
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: Colors.black54,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: _showFilterSheet,
-                                  icon: const Icon(Icons.tune, size: 17),
-                                  label: Text(
-                                    _filter == _SavedFilter.all
-                                        ? l10n.t('Filter')
-                                        : l10n.t(_filterLabel(_filter)),
-                                  ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: _showSortSheet,
-                                  icon: const Icon(Icons.sort, size: 17),
-                                  label: Text(l10n.t('Sort')),
-                                ),
-                              ],
+                      if (hasReachedMobileLimit)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                          child: Text(
+                            l10n.t(
+                              'Showing latest {count} records. Use the web app to view older records.',
+                              params: {'count': '$latestRemoteLandsLimit'},
                             ),
-                            if (hasReachedMobileLimit) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                l10n.t(
-                                  'Showing latest {count} records. Use the web app to view older records.',
-                                  params: {'count': '$latestRemoteLandsLimit'},
-                                ),
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: Colors.black45),
-                              ),
-                            ],
-                          ],
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.black45),
+                          ),
                         ),
-                      ),
                       Expanded(
                         child: ListView.separated(
                           controller: _savedListScrollController,
@@ -2667,6 +2625,40 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   }
 }
 
+class _HeaderActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool active;
+  final VoidCallback onPressed;
+
+  const _HeaderActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.active,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const primary = Color(0xFF001F3F);
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFEAF1F7) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: active ? primary : const Color(0xFFE2E8F0)),
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, color: primary, size: 20),
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+}
+
 class _SectionChip extends StatelessWidget {
   final String label;
   final int count;
@@ -2682,23 +2674,21 @@ class _SectionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bg = selected
-        ? theme.colorScheme.primary.withValues(alpha: 0.12)
-        : Colors.white;
-    final borderColor = selected
-        ? theme.colorScheme.primary
-        : Colors.grey.withValues(alpha: 0.18);
-
+    const primary = Color(0xFF001F3F);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: borderColor),
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? primary : Colors.transparent,
+              width: 2,
+            ),
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2706,27 +2696,18 @@ class _SectionChip extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: selected ? theme.colorScheme.primary : Colors.black87,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? primary : const Color(0xFF59636E),
               ),
             ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: selected
-                    ? theme.colorScheme.primary.withValues(alpha: 0.18)
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? theme.colorScheme.primary : Colors.black54,
-                ),
+            const SizedBox(width: 5),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? primary : const Color(0xFF89929C),
               ),
             ),
           ],
