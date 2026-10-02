@@ -76,7 +76,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
     final l10n = context.l10n;
     final authState = ref.watch(loginProvider);
     final isLoading = authState.isLoading;
-    final errorMsg = authState.hasError ? authState.error.toString() : null;
+    final errorMsg = authState.hasError
+        ? l10n.t(authState.error.toString())
+        : null;
     final isCompact = MediaQuery.of(context).size.width < 700;
 
     return Scaffold(
@@ -86,7 +88,10 @@ class _LoginPageState extends ConsumerState<LoginPage>
           opacity: _fadeAnim,
           child: Center(
             child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: isCompact ? 16 : 32),
+              padding: EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: isCompact ? 16 : 32,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -105,45 +110,45 @@ class _LoginPageState extends ConsumerState<LoginPage>
   }
 
   Widget _buildHeader(bool isCompact, AppLocalizations l10n) {
-  return Column(
-    children: [
-      Container(
-        width: isCompact ? 56 : 80,
-        height: isCompact ? 56 : 80,
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.15),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.black.withValues(alpha: 0.3),
-            width: 2,
+    return Column(
+      children: [
+        Container(
+          width: isCompact ? 56 : 80,
+          height: isCompact ? 56 : 80,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.black.withValues(alpha: 0.3),
+              width: 2,
+            ),
+          ),
+          child: Image.asset('lib/assets/databenki_latest_logo.png'),
+        ),
+        SizedBox(height: isCompact ? 12 : 20),
+        Text(
+          l10n.t('TaREF GPS-Coordinates'),
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            fontSize: isCompact ? 22 : 30,
+            fontWeight: FontWeight.w800,
+            color: Colors.black,
+            letterSpacing: -0.5,
+            height: 1.1,
           ),
         ),
-        child: Image.asset('lib/assets/databenki_latest_logo.png'),
-      ),
-      SizedBox(height: isCompact ? 12 : 20),
-      Text(
-        'TaREF GPS-Coordinates',
-        textAlign: TextAlign.center,
-        style: GoogleFonts.inter(
-          fontSize: isCompact ? 22 : 30,
-          fontWeight: FontWeight.w800,
-          color: Colors.black,
-          letterSpacing: -0.5,
-          height: 1.1,
+        SizedBox(height: isCompact ? 4 : 8),
+        Text(
+          l10n.t('Sign in to your account'),
+          style: GoogleFonts.inter(
+            fontSize: isCompact ? 13 : 15,
+            color: Colors.black.withValues(alpha: 0.75),
+            fontWeight: FontWeight.w400,
+          ),
         ),
-      ),
-      SizedBox(height: isCompact ? 4 : 8),
-      Text(
-        l10n.t('Sign in to your account'),
-        style: GoogleFonts.inter(
-          fontSize: isCompact ? 13 : 15,
-          color: Colors.black.withValues(alpha: 0.75),
-          fontWeight: FontWeight.w400,
-        ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   Widget _buildCard(
     bool isLoading,
@@ -151,139 +156,143 @@ class _LoginPageState extends ConsumerState<LoginPage>
     bool isCompact,
     AppLocalizations l10n,
   ) {
-  return Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.18),
-          blurRadius: 32,
-          offset: const Offset(0, 12),
-        ),
-      ],
-    ),
-    padding: EdgeInsets.all(isCompact ? 20 : 28),
-    child: Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (errorMsg != null) ...[
-            _buildErrorBanner(errorMsg),
-            SizedBox(height: isCompact ? 14 : 20),
-          ],
-          _buildLabel(l10n.t('Email address')),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            enabled: !isLoading,
-            decoration: _inputDecoration(
-              hint: context.l10n.t('you@example.com'),
-              icon: Icons.email_outlined,
-            ),
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Email is required';
-              final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
-              if (!emailRegex.hasMatch(v.trim())) {
-                return 'Enter a valid email';
-              }
-              return null;
-            },
-          ),
-          SizedBox(height: isCompact ? 14 : 20),
-          _buildLabel(l10n.t('Password')),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            textInputAction: TextInputAction.done,
-            enabled: !isLoading,
-            onFieldSubmitted: (_) => _submit(),
-            decoration: _inputDecoration(
-              hint: context.l10n.t('Enter your password'),
-              icon: Icons.lock_outline_rounded,
-              suffix: IconButton(
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                  color: Colors.grey.shade500,
-                  size: 22,
-                ),
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
-              ),
-            ),
-            validator: (v) {
-              if (v == null || v.isEmpty) return 'Password is required';
-              if (v.length < 6) {
-                return 'Password must be at least 6 characters';
-              }
-              return null;
-            },
-          ),
-          SizedBox(height: isCompact ? 22 : 32),
-          SizedBox(
-            height: isCompact ? 50 : 54,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF001F3F),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: isLoading ? 0 : 2,
-              ),
-              child: isLoading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      'Sign In',
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: isLoading
-                  ? null
-                  : () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const ForgotPasswordPage(),
-                        ),
-                      );
-                    },
-              child: Text(context.l10n.t('Forgot password?')),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-    ),
-  );
-}
+      padding: EdgeInsets.all(isCompact ? 20 : 28),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (errorMsg != null) ...[
+              _buildErrorBanner(errorMsg),
+              SizedBox(height: isCompact ? 14 : 20),
+            ],
+            _buildLabel(l10n.t('Email address')),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              enabled: !isLoading,
+              decoration: _inputDecoration(
+                hint: context.l10n.t('you@example.com'),
+                icon: Icons.email_outlined,
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return l10n.t('Email is required');
+                }
+                final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
+                if (!emailRegex.hasMatch(v.trim())) {
+                  return l10n.t('Enter a valid email');
+                }
+                return null;
+              },
+            ),
+            SizedBox(height: isCompact ? 14 : 20),
+            _buildLabel(l10n.t('Password')),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              textInputAction: TextInputAction.done,
+              enabled: !isLoading,
+              onFieldSubmitted: (_) => _submit(),
+              decoration: _inputDecoration(
+                hint: context.l10n.t('Enter your password'),
+                icon: Icons.lock_outline_rounded,
+                suffix: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: Colors.grey.shade500,
+                    size: 22,
+                  ),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+              validator: (v) {
+                if (v == null || v.isEmpty) {
+                  return l10n.t('Password is required');
+                }
+                if (v.length < 6) {
+                  return l10n.t('Password must be at least 6 characters');
+                }
+                return null;
+              },
+            ),
+            SizedBox(height: isCompact ? 22 : 32),
+            SizedBox(
+              height: isCompact ? 50 : 54,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF001F3F),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: isLoading ? 0 : 2,
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        l10n.t('Sign In'),
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: isLoading
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ForgotPasswordPage(),
+                          ),
+                        );
+                      },
+                child: Text(context.l10n.t('Forgot password?')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildFooter() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          "Don't have an account? ",
+          context.l10n.t("Don't have an account? "),
           style: GoogleFonts.inter(
             color: Colors.black.withValues(alpha: 0.8),
             fontSize: 14,
@@ -314,7 +323,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
             );
           },
           child: Text(
-            'Create Account',
+            context.l10n.t('Create Account'),
             style: GoogleFonts.inter(
               color: Colors.black,
               fontSize: 14,

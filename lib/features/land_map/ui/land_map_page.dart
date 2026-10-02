@@ -83,6 +83,7 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
         widget.reason == _MapLocationBlockReason.permissionForever;
     final isService = widget.reason == _MapLocationBlockReason.serviceOff;
 
+    final l10n = context.l10n;
     final headline = isService
         ? 'Location is turned off'
         : isForever
@@ -144,7 +145,7 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  headline,
+                  l10n.t(headline),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
@@ -153,7 +154,7 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  body,
+                  l10n.t(body),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.black54,
@@ -179,7 +180,7 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                       elevation: 0,
                     ),
                     child: Text(
-                      primaryLabel,
+                      l10n.t(primaryLabel),
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
@@ -200,9 +201,9 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        'Dismiss',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                      child: Text(
+                        l10n.t('Dismiss'),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -892,7 +893,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _activeTool = _MapTool.none;
       });
       await _loadSavedMarkers();
-      _snack('Location saved locally. Sync queued.');
+      if (!mounted) return;
+      _snack(context.l10n.t('Location saved locally. Sync queued.'));
     } finally {
       if (mounted) {
         setState(() => _isMarkerSaving = false);
@@ -922,7 +924,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       return;
     }
     if (current == null) {
-      _snack('No current location available.');
+      _snack(context.l10n.t('No current location available.'));
       return;
     }
 
@@ -969,7 +971,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  sheetContext.l10n.t('Add location name and point label before saving.'),
+                  sheetContext.l10n.t(
+                    'Add location name and point label before saving.',
+                  ),
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     color: Colors.grey.shade600,
@@ -985,7 +989,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     FocusScope.of(sheetContext).nextFocus();
                   },
                   decoration: _sheetInputDecoration(
-                    hint: sheetContext.l10n.t('e.g. Home, Office, Farm Entrace'),
+                    hint: sheetContext.l10n.t(
+                      'e.g. Home, Office, Farm Entrace',
+                    ),
                     icon: Icons.place_outlined,
                   ),
                 ),
@@ -1047,7 +1053,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                           ),
                         ),
                         child: Text(
-                          'Save',
+                          sheetContext.l10n.t('Save'),
                           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -1072,7 +1078,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     await box.delete(id);
     if (!mounted) return;
     await _loadSavedMarkers();
-    _snack('Marker deleted');
+    if (!mounted) return;
+    _snack(context.l10n.t('Marker deleted'));
   }
 
   void _addDistancePoint(LatLng point) {
@@ -1106,7 +1113,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final points = List<LatLng>.from(_distancePoints);
     final labels = List<String>.from(_distanceLabels);
     if (points.length < 2) {
-      _snack('Add at least 2 points to save a distance.');
+      _snack(context.l10n.t('Add at least 2 points to save a distance.'));
       return;
     }
 
@@ -1147,7 +1154,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _distancePoints = const [];
       _activeTool = _MapTool.none;
     });
-    _snack('Distance saved locally. Sync queued.');
+    _snack(context.l10n.t('Distance saved locally. Sync queued.'));
   }
 
   double _totalDistanceMeters() {
@@ -1973,7 +1980,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         // Fallback to straight line if routing fails
         _fullRoutePoints = [current, destination];
         _routePoints = _fullRoutePoints;
-        _snack('Road routing unavailable. Showing straight line.');
+        _snack(
+          context.l10n.t('Road routing unavailable. Showing straight line.'),
+        );
       }
     });
   }
@@ -2081,7 +2090,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       _hasJoinedCurrentRoute = false;
     });
     if (result != null && result.points.length >= 2) {
-      _snack('Route updated from your current position.');
+      _snack(context.l10n.t('Route updated from your current position.'));
     }
   }
 
@@ -2608,7 +2617,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               }
               if (_activeTool == _MapTool.none) {
                 if (!_showFieldLayer) {
-                  _snack('Turn on the Field layer to add area points.');
+                  _snack(
+                    context.l10n.t(
+                      'Turn on the Field layer to add area points.',
+                    ),
+                  );
                   return;
                 }
                 _skipNextFieldPointsFocus = true;
@@ -2661,11 +2674,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   ),
                 ],
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
@@ -2673,10 +2686,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       color: Colors.white,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
-                    'Finding best route...',
-                    style: TextStyle(
+                    context.l10n.t('Finding best route...'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -2701,18 +2714,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
+                    const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Text(
-                      'Switching map type...',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      context.l10n.t('Switching map type...'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -2764,7 +2777,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                           children: [
                             if (st.current != null && hasLiveLocationAccess)
                               Text(
-                                utmText ?? 'UTM unavailable',
+                                utmText ?? context.l10n.t('UTM unavailable'),
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -2773,7 +2786,20 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               ),
                             if (st.current != null && hasLiveLocationAccess)
                               Text(
-                                '${ref.watch(selectedReferenceNameProvider)} • Accuracy: ${st.accuracyMeters == null ? '—' : _formatDistance(st.accuracyMeters!, distanceUnit)}',
+                                context.l10n.t(
+                                  '{reference} • Accuracy: {accuracy}',
+                                  params: {
+                                    'reference': ref.watch(
+                                      selectedReferenceNameProvider,
+                                    ),
+                                    'accuracy': st.accuracyMeters == null
+                                        ? '—'
+                                        : _formatDistance(
+                                            st.accuracyMeters!,
+                                            distanceUnit,
+                                          ),
+                                  },
+                                ),
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: Colors.grey.shade600,
@@ -2784,8 +2810,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   ? _locationStatusMessage(_locationError)
                                   : st.current == null
                                   ? (_isLocating
-                                        ? 'Locating...'
-                                        : 'Waiting for GPS...')
+                                        ? context.l10n.t('Locating...')
+                                        : context.l10n.t('Waiting for GPS...'))
                                   : CoordinateFormatter.format(
                                       st.current!.latitude,
                                       st.current!.longitude,
@@ -2810,7 +2836,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            '${st.points.length} pts',
+                            context.l10n.t(
+                              '{count} pts',
+                              params: {'count': '${st.points.length}'},
+                            ),
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -2853,7 +2882,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                             [
                               navigationTarget.label,
                               if (_isFetchingRoute)
-                                'Calculating...'
+                                context.l10n.t('Calculating...')
                               else if (_routePoints.length >= 2)
                                 _formatDistance(
                                   _remainingRouteDistanceMeters(),
@@ -2923,7 +2952,15 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Viewing: ${st.activeFieldName ?? 'Saved location'} · ${st.points.length} pts',
+                            context.l10n.t(
+                              'Viewing: {name} · {count} pts',
+                              params: {
+                                'name':
+                                    st.activeFieldName ??
+                                    context.l10n.t('Saved location'),
+                                'count': '${st.points.length}',
+                              },
+                            ),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -3000,7 +3037,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   onSaveDistance: _showDistanceDialog,
                   onAddFieldPoint: () async {
                     if (!_showFieldLayer) {
-                      _snack('Turn on the Field layer to add area points.');
+                      _snack(
+                        context.l10n.t(
+                          'Turn on the Field layer to add area points.',
+                        ),
+                      );
                       return;
                     }
                     final err = await ref
@@ -3107,7 +3148,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Tools',
+                      context.l10n.t('Tools'),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -3125,13 +3166,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   String _locationStatusMessage(String? error) {
     if (error?.contains('enable location services') == true) {
-      return 'Location Services are off';
+      return context.l10n.t('Location Services are off');
     }
     if (error?.contains('permanently denied') == true ||
         error?.contains('Permission denied') == true) {
-      return 'Location access is off';
+      return context.l10n.t('Location access is off');
     }
-    return 'Location unavailable';
+    return context.l10n.t('Location unavailable');
   }
 
   List<Widget> _buildMapTileLayers() {
@@ -3529,14 +3570,19 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                l10n.t('Capture boundary points and save your land details.'),
+                                l10n.t(
+                                  'Capture boundary points and save your land details.',
+                                ),
                                 style: GoogleFonts.inter(
                                   fontSize: 13,
                                   color: Colors.grey.shade600,
                                 ),
                               ),
                               const SizedBox(height: 20),
-                              Text(l10n.t('Place *'), style: _sheetLabelStyle()),
+                              Text(
+                                l10n.t('Place *'),
+                                style: _sheetLabelStyle(),
+                              ),
                               const SizedBox(height: 8),
                               TextField(
                                 controller: _placeController,
@@ -3557,13 +3603,13 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 keyboardType: TextInputType.phone,
                                 textInputAction: TextInputAction.next,
                                 decoration: _sheetInputDecoration(
-                                  hint: 'e.g. 0712345678',
+                                  hint: l10n.t('e.g. 0712345678'),
                                   icon: Icons.phone_outlined,
                                 ),
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'Description (optional)',
+                                l10n.t('Description (optional)'),
                                 style: _sheetLabelStyle(),
                               ),
                               const SizedBox(height: 8),
@@ -3588,7 +3634,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                l10n.t('Mark current Location while walking around the field boundary.'),
+                                l10n.t(
+                                  'Mark current Location while walking around the field boundary.',
+                                ),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey.shade600,
@@ -3609,12 +3657,15 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               }
                                               setSheetState(() {
                                                 fieldSheetMessage =
-                                                    err ?? 'Point added';
+                                                    err ??
+                                                    l10n.t('Point added');
                                                 fieldSheetIsError = err != null;
                                               });
                                             },
                                       icon: const Icon(Icons.my_location),
-                                      label: Text(l10n.t('Mark Current Location')),
+                                      label: Text(
+                                        l10n.t('Mark Current Location'),
+                                      ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(
                                           0xFF001F3F,
@@ -3684,7 +3735,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '$pointsCount points captured',
+                                      l10n.t(
+                                        '{count} points captured',
+                                        params: {'count': '$pointsCount'},
+                                      ),
                                       style: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w700,
@@ -3692,11 +3746,21 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'Perimeter: ${_formatDistance(perimeter, distanceUnit)}',
+                                      l10n.t(
+                                        'Perimeter: {distance}',
+                                        params: {
+                                          'distance': _formatDistance(
+                                            perimeter,
+                                            distanceUnit,
+                                          ),
+                                        },
+                                      ),
                                       style: const TextStyle(fontSize: 12),
                                     ),
                                     PopupMenuButton<AreaDisplayUnit>(
-                                      tooltip: l10n.t('Choose area display unit'),
+                                      tooltip: l10n.t(
+                                        'Choose area display unit',
+                                      ),
                                       initialValue: areaDisplayUnit,
                                       onSelected: (unit) => setSheetState(
                                         () => areaDisplayUnit = unit,
@@ -3706,7 +3770,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                             in AreaDisplayUnit.values)
                                           PopupMenuItem(
                                             value: unit,
-                                            child: Text(unit.label),
+                                            child: Text(l10n.t(unit.label)),
                                           ),
                                       ],
                                       child: Padding(
@@ -3717,7 +3781,17 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Text(
-                                              'Area: ${MeasurementFormatter.areaIn(area, areaDisplayUnit, distanceUnit)}',
+                                              l10n.t(
+                                                'Area: {area}',
+                                                params: {
+                                                  'area':
+                                                      MeasurementFormatter.areaIn(
+                                                        area,
+                                                        areaDisplayUnit,
+                                                        distanceUnit,
+                                                      ),
+                                                },
+                                              ),
                                               style: const TextStyle(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
@@ -3740,7 +3814,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                               if (pointsCount > 0) ...[
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Point labels',
+                                  l10n.t('Point labels'),
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -3749,7 +3823,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Optional. Rename boundary points for reference.',
+                                  l10n.t(
+                                    'Optional. Rename boundary points for reference.',
+                                  ),
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey.shade600,
@@ -3780,7 +3856,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                             SizedBox(
                                               width: 72,
                                               child: Text(
-                                                'Point ${index + 1}',
+                                                l10n.t(
+                                                  'Point {number}',
+                                                  params: {
+                                                    'number': '${index + 1}',
+                                                  },
+                                                ),
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w600,
@@ -3798,7 +3879,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                     : TextInputAction.next,
                                                 decoration:
                                                     _pointLabelDecoration(
-                                                      hint: 'Label',
+                                                      hint: l10n.t('Label'),
                                                     ),
                                               ),
                                             ),
@@ -3862,8 +3943,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                     return;
                                                   }
                                                   setSheetState(() {
-                                                    fieldSheetMessage =
-                                                        'Place is required.';
+                                                    fieldSheetMessage = l10n.t(
+                                                      'Place is required.',
+                                                    );
                                                     fieldSheetIsError = true;
                                                   });
                                                   return;
@@ -3898,8 +3980,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                     ).pop(
                                                       mapState.activeFieldId !=
                                                               null
-                                                          ? 'Field updated offline successfully. Sync queued.'
-                                                          : 'Field saved offline successfully. Sync queued.',
+                                                          ? l10n.t(
+                                                              'Field updated offline successfully. Sync queued.',
+                                                            )
+                                                          : l10n.t(
+                                                              'Field saved offline successfully. Sync queued.',
+                                                            ),
                                                     );
                                                   }
                                                 }
@@ -3928,8 +4014,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               )
                                             : Text(
                                                 mapState.activeFieldId != null
-                                                    ? 'Update Area'
-                                                    : 'Save Area',
+                                                    ? l10n.t('Update Area')
+                                                    : l10n.t('Save Area'),
                                                 style: GoogleFonts.inter(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w700,
@@ -4015,7 +4101,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    l10n.t('Store this measured line locally and send it to the server as a distance record.'),
+                    l10n.t(
+                      'Store this measured line locally and send it to the server as a distance record.',
+                    ),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       color: Colors.grey.shade600,
@@ -4065,7 +4153,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${_distancePoints.length} points • ${_formatDistance(totalDistance, distanceUnit)}',
+                          l10n.t(
+                            '{count} points • {distance}',
+                            params: {
+                              'count': '${_distancePoints.length}',
+                              'distance': _formatDistance(
+                                totalDistance,
+                                distanceUnit,
+                              ),
+                            },
+                          ),
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -4111,7 +4208,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                               fontSize: 13,
                                             ),
                                             decoration: InputDecoration(
-                                              hintText: '${l10n.t('Point')} ${index + 1}',
+                                              hintText:
+                                                  '${l10n.t('Point')} ${index + 1}',
                                               hintStyle: TextStyle(
                                                 color: Colors.grey.shade400,
                                                 fontSize: 13,
@@ -4176,7 +4274,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                         final place = _placeController.text.trim();
                         if (place.isEmpty) {
                           ScaffoldMessenger.of(sheetContext).showSnackBar(
-                            SnackBar(content: Text(l10n.t('Place is required.'))),
+                            SnackBar(
+                              content: Text(l10n.t('Place is required.')),
+                            ),
                           );
                           return;
                         }
@@ -4406,7 +4506,7 @@ class _LayerOption extends StatelessWidget {
               ? GestureDetector(
                   onTap: onClear,
                   child: Text(
-                    'Clear',
+                    context.l10n.t('Clear'),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -4873,11 +4973,11 @@ class _CompassWidgetState extends State<CompassWidget> {
             // North pointer (red)
             CustomPaint(size: const Size(40, 40), painter: _CompassPainter()),
             // N letter
-            const Positioned(
+            Positioned(
               top: 6,
               child: Text(
-                'N',
-                style: TextStyle(
+                context.l10n.t('N'),
+                style: const TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFFE53E3E),
@@ -5035,15 +5135,24 @@ class _BottomActionBarState extends State<_BottomActionBar>
     switch (widget.activeTool) {
       case _MapTool.distance:
         if (widget.distancePoints.isEmpty) {
-          return 'Long-press map to add points';
+          return context.l10n.t('Long-press map to add points');
         }
-        return '${widget.distancePoints.length} pts · ${_fmt(widget.totalDistanceMeters)}';
+        return context.l10n.t(
+          '{count} pts · {distance}',
+          params: {
+            'count': '${widget.distancePoints.length}',
+            'distance': _fmt(widget.totalDistanceMeters),
+          },
+        );
       case _MapTool.marker:
-        return 'Long-press map to place marker';
+        return context.l10n.t('Long-press map to place marker');
       case _MapTool.none:
         return widget.fieldPoints.isEmpty
-            ? 'Long-press map or use + GPS to add area points'
-            : '${widget.fieldPoints.length} area pts · long-press to add more';
+            ? context.l10n.t('Long-press map or use + GPS to add area points')
+            : context.l10n.t(
+                '{count} area pts · long-press to add more',
+                params: {'count': '${widget.fieldPoints.length}'},
+              );
     }
   }
 
@@ -5076,7 +5185,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
               ),
               for (final unit in AreaDisplayUnit.values)
                 ListTile(
-                  title: Text(unit.label),
+                  title: Text(sheetContext.l10n.t(unit.label)),
                   trailing: unit == _areaDisplayUnit
                       ? const Icon(Icons.check, color: Color(0xFF001F3F))
                       : null,
@@ -5286,7 +5395,10 @@ class _BottomActionBarState extends State<_BottomActionBar>
               value: '${widget.distancePoints.length}',
             ),
             const SizedBox(width: 8),
-            _StatChip(label: l10n.t('Total'), value: _fmt(widget.totalDistanceMeters)),
+            _StatChip(
+              label: l10n.t('Total'),
+              value: _fmt(widget.totalDistanceMeters),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -5357,7 +5469,10 @@ class _BottomActionBarState extends State<_BottomActionBar>
           children: [
             _StatChip(label: l10n.t('Points'), value: '$count'),
             const SizedBox(width: 8),
-            _StatChip(label: l10n.t('Perimeter'), value: _fmt(widget.perimeterMeters)),
+            _StatChip(
+              label: l10n.t('Perimeter'),
+              value: _fmt(widget.perimeterMeters),
+            ),
             const SizedBox(width: 8),
             _StatChip(
               label: l10n.t('Area'),
@@ -5372,7 +5487,9 @@ class _BottomActionBarState extends State<_BottomActionBar>
         ),
         const SizedBox(height: 8),
         Text(
-          l10n.t('Long-press the map to add area points, or use + GPS for your current location.'),
+          l10n.t(
+            'Long-press the map to add area points, or use + GPS for your current location.',
+          ),
           style: TextStyle(
             fontSize: 11,
             color: Colors.grey.shade600,

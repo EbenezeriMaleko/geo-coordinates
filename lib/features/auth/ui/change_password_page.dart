@@ -44,7 +44,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t(result.message))));
     Navigator.of(context).pop();
   }
 
@@ -53,7 +53,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
     final l10n = context.l10n;
     final state = ref.watch(changePasswordProvider);
     final isLoading = state.isLoading;
-    final error = state.hasError ? state.error.toString() : null;
+    final error = state.hasError ? l10n.t(state.error.toString()) : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('Change Password'))),
@@ -79,7 +79,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Current password is required';
+                      return l10n.t('Current password is required');
                     }
                     return null;
                   },
@@ -95,10 +95,10 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'New password is required';
+                      return l10n.t('New password is required');
                     }
                     if (value.length < 8) {
-                      return 'Minimum 8 characters';
+                      return l10n.t('Minimum 8 characters');
                     }
                     return null;
                   },
@@ -114,10 +114,10 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Confirm your new password';
+                      return l10n.t('Confirm your new password');
                     }
                     if (value != _newController.text) {
-                      return 'Passwords do not match';
+                      return l10n.t('Passwords do not match');
                     }
                     return null;
                   },

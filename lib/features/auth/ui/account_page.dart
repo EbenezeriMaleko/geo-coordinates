@@ -67,7 +67,9 @@ class AccountPage extends ConsumerWidget {
                 children: [
                   _ActionTile(
                     title: l10n.t('Sign In'),
-                    subtitle: l10n.t('Connect this device to your cloud account'),
+                    subtitle: l10n.t(
+                      'Connect this device to your cloud account',
+                    ),
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
@@ -106,7 +108,9 @@ class AccountPage extends ConsumerWidget {
             ),
           ] else ...[
             _ProfileCard(
-              name: user?.name.isNotEmpty == true ? user!.name : l10n.t('Account'),
+              name: user?.name.isNotEmpty == true
+                  ? user!.name
+                  : l10n.t('Account'),
               email: user?.email ?? '',
               phone: user?.phone,
               isVerified: session.isVerified,
@@ -146,16 +150,18 @@ class AccountPage extends ConsumerWidget {
               _PanelCard(
                 child: _ActionTile(
                   title: l10n.t('Resend verification email'),
-                  subtitle:
-                      'Send a new verification email to ${user?.email ?? ''}',
+                  subtitle: l10n.t(
+                    'Send a new verification email to {email}',
+                    params: {'email': user?.email ?? ''},
+                  ),
                   onTap: () async {
                     final result = await ref
                         .read(resendVerificationProvider.notifier)
                         .send();
                     if (!context.mounted || result == null) return;
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(result.message)));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(context.l10n.t(result.message))),
+                    );
                   },
                   trailing: const HugeIcon(
                     icon: HugeIcons.strokeRoundedArrowRight01,
@@ -169,7 +175,9 @@ class AccountPage extends ConsumerWidget {
             _PanelCard(
               child: _ActionTile(
                 title: l10n.t('Logout'),
-                subtitle: l10n.t('Stop cloud sync on this device and keep local data'),
+                subtitle: l10n.t(
+                  'Stop cloud sync on this device and keep local data',
+                ),
                 onTap: () async {
                   await ref.read(authSessionProvider.notifier).logout();
                   if (!context.mounted) return;
@@ -189,7 +197,9 @@ class AccountPage extends ConsumerWidget {
             _PanelCard(
               child: _ActionTile(
                 title: l10n.t('Delete account'),
-                subtitle: l10n.t('Permanently delete your account. You will need your password and email access to confirm.'),
+                subtitle: l10n.t(
+                  'Permanently delete your account. You will need your password and email access to confirm.',
+                ),
                 onTap: () => _showDeleteAccountSheet(context),
                 titleColor: const Color(0xFFB42318),
                 trailing: const Icon(
@@ -338,9 +348,9 @@ class _ProfileCard extends StatelessWidget {
                   color: const Color(0xFFFFF4E5),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Email not verified',
-                  style: TextStyle(
+                child: Text(
+                  context.l10n.t('Email not verified'),
+                  style: const TextStyle(
                     color: Color(0xFFB26A00),
                     fontWeight: FontWeight.w600,
                   ),
@@ -477,7 +487,9 @@ class _UpdateProfileSheetState extends ConsumerState<_UpdateProfileSheet> {
   Widget build(BuildContext context) {
     final state = ref.watch(updateProfileProvider);
     final isLoading = state.isLoading;
-    final error = state.hasError ? state.error.toString() : null;
+    final error = state.hasError
+        ? context.l10n.t(state.error.toString())
+        : null;
 
     return _SheetFrame(
       title: context.l10n.t('Update profile'),
@@ -584,14 +596,16 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
     Navigator.of(context).pop();
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t(result.message))));
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(changePasswordProvider);
     final isLoading = state.isLoading;
-    final error = state.hasError ? state.error.toString() : null;
+    final error = state.hasError
+        ? context.l10n.t(state.error.toString())
+        : null;
 
     return _SheetFrame(
       title: context.l10n.t('Change password'),
@@ -630,7 +644,9 @@ class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
                 if (value == null || value.isEmpty) {
                   return context.l10n.t('New password is required');
                 }
-                if (value.length < 8) return context.l10n.t('Minimum 8 characters');
+                if (value.length < 8) {
+                  return context.l10n.t('Minimum 8 characters');
+                }
                 return null;
               },
             ),
@@ -776,8 +792,9 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
     await ref.read(authSessionProvider.notifier).clearLocalSession();
     ref.read(accountDeletionProvider.notifier).reset();
     if (!mounted) return;
+    final message = context.l10n.t(response.message);
     Navigator.of(context).pop();
-    messenger.showSnackBar(SnackBar(content: Text(response.message)));
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -814,7 +831,9 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    context.l10n.t('This action is irreversible. All tokens will be revoked and your account data will be deleted after code confirmation.'),
+                    context.l10n.t(
+                      'This action is irreversible. All tokens will be revoked and your account data will be deleted after code confirmation.',
+                    ),
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       height: 1.45,
@@ -846,7 +865,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
           ),
           const SizedBox(height: 16),
           if (bannerText != null) ...[
-            _SheetError(message: bannerText),
+            _SheetError(message: context.l10n.t(bannerText)),
             const SizedBox(height: 14),
           ],
           Text(
@@ -911,7 +930,9 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'A verification code will be sent to your email address. The request is throttled to 3 times per minute.',
+                          context.l10n.t(
+                            'A verification code will be sent to your email address. The request is throttled to 3 times per minute.',
+                          ),
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             height: 1.45,
@@ -936,7 +957,9 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : Text(context.l10n.t('Send verification code')),
+                                : Text(
+                                    context.l10n.t('Send verification code'),
+                                  ),
                           ),
                         ),
                       ],
@@ -958,17 +981,22 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                           decoration: InputDecoration(
                             labelText: context.l10n.t('Verification code'),
                             prefixIcon: Icon(Icons.pin_outlined),
-                            helperText:
-                                context.l10n.t('Enter the 6-digit code sent to your email.'),
+                            helperText: context.l10n.t(
+                              'Enter the 6-digit code sent to your email.',
+                            ),
                           ),
                           validator: (value) =>
                               value == null || value.trim().length != 6
-                              ? context.l10n.t('Enter the 6-digit verification code')
+                              ? context.l10n.t(
+                                  'Enter the 6-digit verification code',
+                                )
                               : null,
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'The confirm request is throttled to 6 times per minute.',
+                          context.l10n.t(
+                            'The confirm request is throttled to 6 times per minute.',
+                          ),
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             height: 1.45,

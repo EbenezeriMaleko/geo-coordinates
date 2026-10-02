@@ -58,7 +58,7 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
     final l10n = context.l10n;
     final state = ref.watch(updateProfileProvider);
     final isLoading = state.isLoading;
-    final error = state.hasError ? state.error.toString() : null;
+    final error = state.hasError ? l10n.t(state.error.toString()) : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('Update Profile'))),
@@ -82,7 +82,7 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Name is required';
+                      return l10n.t('Name is required');
                     }
                     return null;
                   },
@@ -97,7 +97,7 @@ class _UpdateProfilePageState extends ConsumerState<UpdateProfilePage> {
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Email is required';
+                      return l10n.t('Email is required');
                     }
                     return null;
                   },

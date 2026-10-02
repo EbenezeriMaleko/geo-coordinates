@@ -40,6 +40,26 @@ class AppLocalizations {
     return translated;
   }
 
+  String compassAbbreviation(String direction) {
+    if (isFrench) {
+      return const {'W': 'O', 'SW': 'SO', 'NW': 'NO'}[direction] ?? direction;
+    }
+    if (isArabic) {
+      return const {
+            'N': 'ش',
+            'NE': 'ش ق',
+            'E': 'ق',
+            'SE': 'ج ق',
+            'S': 'ج',
+            'SW': 'ج غ',
+            'W': 'غ',
+            'NW': 'ش غ',
+          }[direction] ??
+          direction;
+    }
+    return direction;
+  }
+
   String copied(String label) => isArabic
       ? 'تم نسخ $label'
       : isFrench
@@ -65,6 +85,47 @@ class AppLocalizations {
       : 'Satisfaction $score out of 5';
 
   static const _fr = <String, String>{
+    'Required': 'Obligatoire',
+    'Enter a valid email': 'Saisissez une adresse e-mail valide',
+    'Password is required': 'Le mot de passe est obligatoire',
+    'Password must be at least 6 characters':
+        'Le mot de passe doit contenir au moins 6 caractères',
+    "Don't have an account? ": 'Vous n’avez pas de compte ? ',
+    'Send Reset Link': 'Envoyer le lien de réinitialisation',
+    'Remembered your password? ': 'Vous vous souvenez de votre mot de passe ? ',
+    'Token is required': 'Le jeton est obligatoire',
+    'Confirm your password': 'Confirmez votre mot de passe',
+    'Must include uppercase & number':
+        'Doit contenir une majuscule et un chiffre',
+    'Please confirm your password': 'Veuillez confirmer votre mot de passe',
+    'I agree to the ': 'J’accepte les ',
+    'Terms and Conditions': 'conditions générales',
+    'You must accept the terms to continue.':
+        'Vous devez accepter les conditions pour continuer.',
+    'Send a new verification email to {email}':
+        'Envoyer un nouvel e-mail de vérification à {email}',
+    'Email not verified': 'Adresse e-mail non vérifiée',
+    'A verification code will be sent to your email address. The request is throttled to 3 times per minute.':
+        'Un code de vérification sera envoyé à votre adresse e-mail. Vous pouvez faire 3 demandes par minute.',
+    'The confirm request is throttled to 6 times per minute.':
+        'Vous pouvez confirmer jusqu’à 6 fois par minute.',
+    'Login failed. Please try again.': 'Échec de la connexion. Réessayez.',
+    'Registration failed. Please try again.':
+        'Échec de l’inscription. Réessayez.',
+    'Failed to request password reset.':
+        'Impossible de demander la réinitialisation du mot de passe.',
+    'Failed to reset password.': 'Impossible de réinitialiser le mot de passe.',
+    'Failed to update profile.': 'Impossible de mettre à jour le profil.',
+    'Failed to update password.':
+        'Impossible de mettre à jour le mot de passe.',
+    'Failed to send verification email.':
+        'Impossible d’envoyer l’e-mail de vérification.',
+    'Failed to request account deletion.':
+        'Impossible de demander la suppression du compte.',
+    'Failed to confirm account deletion.':
+        'Impossible de confirmer la suppression du compte.',
+    'Unable to connect. Check your internet connection.':
+        'Connexion impossible. Vérifiez votre connexion Internet.',
     'Land Mapper': 'Cartographie des terres',
     'Settings': 'Paramètres',
     'Account': 'Compte',
@@ -132,10 +193,59 @@ class AppLocalizations {
     'Grant Permission': 'Accorder l’autorisation',
     'Open Settings': 'Ouvrir les paramètres',
     'Cloud synchronization': 'Synchronisation cloud',
+    'Signed in': 'Connecté',
+    'Sign in only when you want to sync data to the server.':
+        'Connectez-vous uniquement lorsque vous souhaitez synchroniser les données avec le serveur.',
     'Location Settings': 'Paramètres de localisation',
     'Coordinates format': 'Format des coordonnées',
+    'Decimal Degrees': 'Degrés décimaux',
+    'Degrees Minutes Seconds': 'Degrés minutes secondes',
+    'Degrees Decimal Minutes': 'Degrés minutes décimales',
+    'Example: {coordinates}': 'Exemple : {coordinates}',
+    'Minna — Nigeria': 'Minna — Nigeria',
+    'Arc 1960 — Kenya/Tanzania mean': 'Arc 1960 — moyenne Kenya/Tanzanie',
+    'Arc 1960 — Kenya': 'Arc 1960 — Kenya',
+    'Arc 1960 — Tanzania': 'Arc 1960 — Tanzanie',
+    'Arc 1950 — Southern Africa mean': 'Arc 1950 — moyenne Afrique australe',
+    'NAD27 — CONUS': 'NAD27 — États-Unis contigus',
+    'NAD83 — North America': 'NAD83 — Amérique du Nord',
+    'ETRS89 — Europe': 'ETRS89 — Europe',
+    'GDA94 — Australia': 'GDA94 — Australie',
+    'SAD69 — South America mean': 'SAD69 — moyenne Amérique du Sud',
+    'WGS 72 — global': 'WGS 72 — mondial',
+    'Nigeria — onshore and offshore': 'Nigeria — terrestre et maritime',
+    'Kenya and Tanzania': 'Kenya et Tanzanie',
+    'Kenya — onshore': 'Kenya — terrestre',
+    'Tanzania — onshore': 'Tanzanie — terrestre',
+    'Botswana, Eswatini, Lesotho, Malawi, Zambia and Zimbabwe':
+        'Botswana, Eswatini, Lesotho, Malawi, Zambie et Zimbabwe',
+    'Contiguous United States — onshore': 'États-Unis contigus — terrestre',
+    'North America': 'Amérique du Nord',
+    'Europe — onshore and offshore': 'Europe — terrestre et maritime',
+    'Australia and external territories': 'Australie et territoires extérieurs',
+    'South America onshore north of 45°S, excluding Amazonia':
+        'Amérique du Sud terrestre au nord de 45° S, hors Amazonie',
+    'World': 'Monde',
     'Geodetic datum': 'Datum géodésique',
+    'Select datum': 'Choisir un datum',
+    'Choose the datum used by your survey. Its reference ellipsoid is shown below the datum name.':
+        'Choisissez le datum utilisé pour votre levé. Son ellipsoïde de référence figure sous son nom.',
+    'WGS 84 ellipsoid • Global reference system (default; valid everywhere)':
+        'Ellipsoïde WGS 84 • Système de référence mondial (par défaut ; valable partout)',
+    '{ellipsoid} ellipsoid • {area}\nEPSG:{code} • {accuracy} m accuracy':
+        'Ellipsoïde {ellipsoid} • {area}\nEPSG:{code} • précision de {accuracy} m',
+    ' • Approximate': ' • Approximatif',
+    ' • Valid here': ' • Valable ici',
+    'REFERENCE / ELLIPSOID-ONLY OPTIONS':
+        'OPTIONS DE RÉFÉRENCE / ELLIPSOÏDE SEUL',
+    '{ellipsoid} ellipsoid • No verified datum transformation; ellipsoid-shape-only conversion':
+        'Ellipsoïde {ellipsoid} • Aucune transformation de datum vérifiée ; conversion de forme de l’ellipsoïde uniquement',
+    'Coordinates now shown in {datum}':
+        'Coordonnées maintenant affichées en {datum}',
+    'Error changing coordinate display: {error}':
+        'Erreur lors du changement d’affichage des coordonnées : {error}',
     'Compass north reference': 'Référence du nord de la boussole',
+    'True North (geographic)': 'Nord géographique',
     'Units': 'Unités',
     'Meters': 'Mètres',
     'Feet': 'Pieds',
@@ -149,26 +259,62 @@ class AppLocalizations {
         'Corrige la déclinaison magnétique pour pointer vers le nord géographique.',
     'Photo': 'Photo',
     'Save original photo': 'Enregistrer la photo originale',
+    'Save with no data on it. Useful for editing before sharing.':
+        'Enregistrer sans données incrustées. Utile pour retoucher la photo avant de la partager.',
     'Save to gallery': 'Enregistrer dans la galerie',
+    'Save image with data': 'Enregistrer l’image avec les données',
     'Privacy policy': 'Politique de confidentialité',
     'Cache': 'Cache',
     'Clear cache': 'Vider le cache',
     'Clear cache?': 'Vider le cache ?',
+    'Remove cached data and temporary files':
+        'Supprimer les données en cache et les fichiers temporaires',
+    'Cache cleared successfully': 'Cache vidé avec succès',
+    'Cache cleared successfully (~{size} MB freed)':
+        'Cache vidé avec succès (environ {size} Mo libérés)',
+    'Error clearing cache: {error}': 'Erreur lors du vidage du cache : {error}',
     'This will clear all cached data including images, temporary files, and app cache storage. Your saved locations will not be affected.':
         'Toutes les données en cache, images et fichiers temporaires seront supprimés. Vos lieux enregistrés ne seront pas affectés.',
-    'Preview ready. Open Saved locations. Submitting the form sends a real response.':
-        'Aperçu prêt. Ouvrez les lieux enregistrés. L’envoi du formulaire transmettra une vraie réponse.',
+    'Preview ready. Open Library. Submitting the form sends a real response.':
+        'Aperçu prêt. Ouvrez la bibliothèque. L’envoi du formulaire transmettra une vraie réponse.',
     'Information': 'Informations',
     'Contact us': 'Nous contacter',
+    'Send suggestions or report a bug. We appreciate your feedback.':
+        'Envoyez vos suggestions ou signalez un bug. Votre avis nous est précieux.',
+    'Send feedback': 'Envoyer un avis',
+    '[TaREF GPS] Feedback': '[TaREF GPS] Avis',
+    'We read every message': 'Nous lisons chaque message',
+    'Tell us what\'s on your mind — a bug, suggestion, or question…':
+        'Parlez-nous d’un bug, d’une suggestion ou d’une question…',
+    'Send': 'Envoyer',
+    'No email app found. Message copied — send it to {email}':
+        'Aucune application e-mail trouvée. Message copié — envoyez-le à {email}',
+    'Device': 'Appareil',
+    'Product': 'Produit',
+    'Model': 'Modèle',
+    'App version': 'Version de l’application',
+    'Platform': 'Plateforme',
     'Share your experience': 'Partager votre expérience',
+    'Tell us what works and what is difficult.':
+        'Dites-nous ce qui fonctionne et ce qui est difficile.',
+    'Preview survey invitation': 'Prévisualiser l’invitation à l’enquête',
+    'Debug only. Open Library after tapping.':
+        'Débogage uniquement. Ouvrez la bibliothèque après avoir appuyé.',
     'Rate our app': 'Évaluer notre application',
+    'Leave a rating or review in the app store.':
+        'Laissez une note ou un avis dans la boutique d’applications.',
     'Version': 'Version',
     'Loading version...': 'Chargement de la version…',
     'Version unavailable': 'Version indisponible',
+    'Reading build metadata from the app package...':
+        'Lecture des informations de version de l’application…',
+    'This comes from the installed app metadata.':
+        'Ces informations proviennent de l’application installée.',
     'Language': 'Langue',
     'System default': 'Langue du système',
     'English': 'Anglais',
     'French': 'Français',
+    'Arabic': 'Arabe',
     'Map': 'Carte',
     'Map Type': 'Type de carte',
     'Normal': 'Normale',
@@ -206,6 +352,93 @@ class AppLocalizations {
     'Live location is unavailable': 'La position en direct est indisponible',
     'Live coordinates and GPS tracking are off. Other app features remain available.':
         'Les coordonnées en direct et le suivi GPS sont désactivés. Les autres fonctions restent disponibles.',
+    'Enable live location?': 'Activer la localisation en direct ?',
+    'TaREF GPS needs Location Services to display live coordinates, track your position, save GPS points, support navigation, and geotag captured photos or videos. You can continue using other app features without live location.':
+        'TaREF GPS a besoin des services de localisation pour afficher les coordonnées en direct, suivre votre position, enregistrer des points GPS, faciliter la navigation et géolocaliser les photos ou vidéos. Vous pouvez continuer à utiliser les autres fonctions sans localisation en direct.',
+    'Location access is blocked for TaREF GPS. Enable it in Settings to display live coordinates, save your current position, support navigation, and geotag media. You can continue using the app without live GPS.':
+        'L’accès à la localisation est bloqué pour TaREF GPS. Activez-le dans les paramètres pour afficher les coordonnées en direct, enregistrer votre position, utiliser la navigation et géolocaliser les médias. Vous pouvez continuer à utiliser l’application sans GPS en direct.',
+    'TaREF GPS uses your current location only for GPS features such as live coordinates, position tracking, saved points, navigation, and automatic photo or video geotagging. Other app features remain available without it.':
+        'TaREF GPS utilise votre position uniquement pour les fonctions GPS, comme les coordonnées en direct, le suivi, les points enregistrés, la navigation et la géolocalisation des photos ou vidéos. Les autres fonctions restent disponibles sans localisation.',
+    'System camera mode is not available yet, using in-app camera.':
+        'Le mode appareil photo système n’est pas encore disponible ; utilisation de l’appareil photo intégré.',
+    'Location tracking is active': 'Le suivi de la position est actif',
+    'TaREF GPS - Coordinates': 'TaREF GPS - Coordonnées',
+    'Coordinates unavailable': 'Coordonnées indisponibles',
+    'Video deleted': 'Vidéo supprimée',
+    'Photo deleted': 'Photo supprimée',
+    'GPS Camera': 'Appareil photo GPS',
+    'GPS Capture': 'Capture GPS',
+    'Preview': 'Aperçu',
+    'Camera permission is denied. Allow camera permission in app settings.':
+        'L’accès à l’appareil photo est refusé. Autorisez-le dans les paramètres de l’application.',
+    'Failed to open camera. Please try again.':
+        'Impossible d’ouvrir l’appareil photo. Veuillez réessayer.',
+    '{media} saved locally. Cloud upload failed.':
+        '{media} enregistré localement. L’envoi vers le cloud a échoué.',
+    'Video': 'Vidéo',
+    'Good': 'Bonne',
+    'Fair': 'Moyenne',
+    'Poor': 'Faible',
+    'Compass': 'Boussole',
+    'Unavailable': 'Indisponible',
+    'North': 'Nord',
+    'North East': 'Nord-est',
+    'East': 'Est',
+    'South East': 'Sud-est',
+    'South': 'Sud',
+    'South West': 'Sud-ouest',
+    'West': 'Ouest',
+    'North West': 'Nord-ouest',
+    'Magnetic': 'Magnétique',
+    'Not reported': 'Non indiqué',
+    'High': 'Élevée',
+    'Moderate': 'Modérée',
+    'Low': 'Faible',
+    'Compass sensor unavailable on this device.':
+        'Capteur de boussole indisponible sur cet appareil.',
+    'Live compass · {north}': 'Boussole en direct · {north}',
+    'Location permission is required for the compass sensor on Android.':
+        'L’autorisation de localisation est nécessaire pour utiliser la boussole sur Android.',
+    'Initializing GPS…': 'Initialisation du GPS…',
+    'Live tracking': 'Suivi en direct',
+    'Tracking paused': 'Suivi en pause',
+    'GPS media details': 'Détails du média GPS',
+    'UTM unavailable for this latitude': 'UTM indisponible à cette latitude',
+    'Camera permission is blocked': 'Accès à l’appareil photo bloqué',
+    'Camera permission is required': 'Autorisation de l’appareil photo requise',
+    'Failed to initialize the camera':
+        'Impossible d’initialiser l’appareil photo',
+    'Open app settings and allow camera access to take GPS photos.':
+        'Ouvrez les paramètres de l’application et autorisez l’appareil photo pour prendre des photos GPS.',
+    'Grant camera permission to capture GPS-tagged photos and videos.':
+        'Autorisez l’appareil photo pour capturer des photos et vidéos géolocalisées.',
+    'Something went wrong. Try again or check your device camera.':
+        'Une erreur est survenue. Réessayez ou vérifiez l’appareil photo de votre appareil.',
+    'Try Again': 'Réessayer',
+    'Location service is disabled.':
+        'Le service de localisation est désactivé.',
+    'Location is off. Media will be saved without a GPS tag.':
+        'La localisation est désactivée. Le média sera enregistré sans position GPS.',
+    'Unable to resolve current location.':
+        'Impossible de déterminer la position actuelle.',
+    'Live location updates failed.':
+        'Échec de la mise à jour de la position en direct.',
+    'Recording… Tap to stop': 'Enregistrement… Appuyez pour arrêter',
+    'Tap to record video': 'Appuyez pour enregistrer une vidéo',
+    'Tap to capture photo': 'Appuyez pour prendre une photo',
+    'Recent media': 'Médias récents',
+    'No local media yet': 'Aucun média local pour le moment',
+    'No photos captured yet': 'Aucune photo prise pour le moment',
+    'Tap to view cloud media': 'Appuyez pour voir les médias du cloud',
+    'Tap to capture your first photo':
+        'Appuyez pour prendre votre première photo',
+    'Date {date}': 'Date : {date}',
+    'Street {street}': 'Rue : {street}',
+    'Place {place}': 'Lieu : {place}',
+    'Coordinates {coordinates}': 'Coordonnées : {coordinates}',
+    'Accuracy {accuracy}': 'Précision : {accuracy}',
+    'Waiting for GPS details': 'En attente des données GPS',
+    'Address unavailable': 'Adresse indisponible',
     'Saved locations': 'Lieux enregistrés',
     'Location': 'Position',
     'Coordinates': 'Coordonnées',
@@ -251,6 +484,72 @@ class AppLocalizations {
     'Point label (e.g. A1, P1)': 'Étiquette du point (ex. A1, P1)',
     'Center here': 'Centrer ici',
     'View area in': 'Afficher la surface en',
+    'Description (optional)': 'Description (facultative)',
+    'e.g. 0712345678': 'p. ex. 0712345678',
+    'Point added': 'Point ajouté',
+    '{count} points captured': '{count} points capturés',
+    'Perimeter: {distance}': 'Périmètre : {distance}',
+    'Area: {area}': 'Surface : {area}',
+    'Optional. Rename boundary points for reference.':
+        'Facultatif. Renommez les points de limite pour les retrouver.',
+    'Point {number}': 'Point {number}',
+    'Label': 'Étiquette',
+    'Field updated offline successfully. Sync queued.':
+        'Terrain modifié hors ligne. Synchronisation en attente.',
+    'Field saved offline successfully. Sync queued.':
+        'Terrain enregistré hors ligne. Synchronisation en attente.',
+    'Save Area': 'Enregistrer la surface',
+    'Distance name or place': 'Nom ou lieu de la distance',
+    '{count} points • {distance}': '{count} points • {distance}',
+    'Automatic': 'Automatique',
+    'Square metres (m²)': 'Mètres carrés (m²)',
+    'Hectares (ha)': 'Hectares (ha)',
+    'Square kilometres (km²)': 'Kilomètres carrés (km²)',
+    'Square feet (ft²)': 'Pieds carrés (ft²)',
+    'Acres (ac)': 'Acres (ac)',
+    'Long-press map to add points':
+        'Maintenez la carte appuyée pour ajouter des points',
+    '{count} pts · {distance}': '{count} pts · {distance}',
+    'Long-press map to place marker':
+        'Maintenez la carte appuyée pour placer un repère',
+    'Long-press map or use + GPS to add area points':
+        'Maintenez la carte appuyée ou utilisez + GPS pour ajouter des points de surface',
+    '{count} area pts · long-press to add more':
+        '{count} points de surface · maintenez appuyé pour en ajouter',
+    'Location saved locally. Sync queued.':
+        'Position enregistrée localement. Synchronisation en attente.',
+    'No current location available.': 'Aucune position actuelle disponible.',
+    'Marker deleted': 'Repère supprimé',
+    'Add at least 2 points to save a distance.':
+        'Ajoutez au moins 2 points pour enregistrer une distance.',
+    'Distance saved locally. Sync queued.':
+        'Distance enregistrée localement. Synchronisation en attente.',
+    'Road routing unavailable. Showing straight line.':
+        'Itinéraire routier indisponible. Affichage d’une ligne droite.',
+    'Route updated from your current position.':
+        'Itinéraire mis à jour depuis votre position actuelle.',
+    'Turn on the Field layer to add area points.':
+        'Activez la couche Terrain pour ajouter des points de surface.',
+    'Finding best route...': 'Recherche du meilleur itinéraire…',
+    'Switching map type...': 'Changement du type de carte…',
+    'UTM unavailable': 'UTM indisponible',
+    '{reference} • Accuracy: {accuracy}':
+        '{reference} • Précision : {accuracy}',
+    'Locating...': 'Localisation en cours…',
+    'Waiting for GPS...': 'En attente du GPS…',
+    '{count} pts': '{count} pts',
+    'Calculating...': 'Calcul en cours…',
+    'Viewing: {name} · {count} pts': 'Affichage : {name} · {count} pts',
+    'Tools': 'Outils',
+    'Location Services are off': 'Les services de localisation sont désactivés',
+    'Location unavailable': 'Position indisponible',
+    'Use your current location?': 'Utiliser votre position actuelle ?',
+    'TaREF GPS needs Location Services to show your live position on the map, capture GPS points, guide navigation, measure routes, and attach coordinates to saved work. You can continue using the map and saved records without live GPS.':
+        'TaREF GPS a besoin des services de localisation pour afficher votre position en direct sur la carte, capturer des points GPS, guider la navigation, mesurer des itinéraires et joindre des coordonnées aux données enregistrées. Vous pouvez continuer à utiliser la carte et vos données enregistrées sans GPS en direct.',
+    'Location access is blocked for TaREF GPS. Enable it in Settings to use live map position, GPS point capture, navigation guidance, route measurement, and coordinate tagging. You can continue using the app without GPS.':
+        'L’accès à la localisation est bloqué pour TaREF GPS. Activez-le dans les paramètres pour utiliser la position en direct, la capture de points GPS, la navigation, la mesure d’itinéraires et l’ajout de coordonnées. Vous pouvez continuer à utiliser l’application sans GPS.',
+    'TaREF GPS uses your current location only for GPS features such as live map position, point capture, navigation, distance tracking, and coordinate tagging. You can continue using the map without granting location access.':
+        'TaREF GPS utilise votre position actuelle uniquement pour les fonctions GPS telles que la position en direct, la capture de points, la navigation, le suivi des distances et l’ajout de coordonnées. Vous pouvez continuer à utiliser la carte sans autoriser l’accès à votre position.',
     '+ GPS': '+ GPS',
     'Long-press the map to add area points, or use + GPS for your current location.':
         'Maintenez la carte appuyée pour ajouter des points de surface, ou utilisez + GPS pour votre position actuelle.',
@@ -436,6 +735,20 @@ class AppLocalizations {
     'Update password': 'Modifier le mot de passe',
     'Media deleted.': 'Média supprimé.',
     'Location media': 'Médias de la position',
+    'Sign in to view uploaded media':
+        'Connectez-vous pour voir les médias téléversés',
+    'Your cloud media will appear here once you sign in with a verified account.':
+        'Vos médias dans le cloud apparaîtront ici une fois connecté avec un compte vérifié.',
+    'No uploaded media found yet.': 'Aucun média téléversé pour le moment.',
+    'Media': 'Média',
+    'Unnamed location': 'Position sans nom',
+    'File name': 'Nom du fichier',
+    'Path': 'Chemin',
+    'MIME': 'MIME',
+    'Size': 'Taille',
+    'Location ID': 'Identifiant de la position',
+    'Play': 'Lire',
+    'Pause': 'Pause',
     'Sign in to delete media.': 'Connectez-vous pour supprimer ce média.',
     'Delete media?': 'Supprimer le média ?',
     'This will permanently delete the media from the server.':
@@ -526,6 +839,7 @@ class AppLocalizations {
     'Source': 'Source',
     'Saved location': 'Lieu enregistré',
     'Saved': 'Enregistrés',
+    'Library': 'Bibliothèque',
     'Add manually': 'Ajouter manuellement',
     'Updating cloud records...': 'Mise à jour des enregistrements cloud…',
     'Loading more records...': 'Chargement d’autres enregistrements…',
@@ -596,6 +910,65 @@ class AppLocalizations {
   };
 
   static const _ar = <String, String>{
+    'TaREF GPS-Coordinates': 'TaREF GPS-Coordinates',
+    'Sign in to your account': 'سجّل الدخول إلى حسابك',
+    'Join Taref Gps today': 'انضم إلى Taref GPS اليوم',
+    'Email address': 'عنوان البريد الإلكتروني',
+    'Password': 'كلمة المرور',
+    'you@example.com': 'you@example.com',
+    'John': 'محمد',
+    'Doe': 'أحمد',
+    'Could not open terms and conditions': 'تعذر فتح الشروط والأحكام',
+    'Enter the reset token from email and choose a new password.':
+        'أدخل رمز إعادة التعيين المرسل بالبريد الإلكتروني واختر كلمة مرور جديدة.',
+    'Reset token': 'رمز إعادة التعيين',
+    'Confirm password': 'تأكيد كلمة المرور',
+    'Account refreshed': 'تم تحديث الحساب',
+    'Stop cloud sync on this device and keep local data':
+        'إيقاف المزامنة السحابية على هذا الجهاز مع الاحتفاظ بالبيانات المحلية',
+    'Logged out successfully': 'تم تسجيل الخروج بنجاح',
+    'Permanently delete your account. You will need your password and email access to confirm.':
+        'احذف حسابك نهائيًا. ستحتاج إلى كلمة المرور والوصول إلى بريدك الإلكتروني للتأكيد.',
+    'This action is irreversible. All tokens will be revoked and your account data will be deleted after code confirmation.':
+        'هذا الإجراء لا يمكن التراجع عنه. ستُلغى جميع رموز الدخول وستُحذف بيانات حسابك بعد تأكيد الرمز.',
+    'Enter the 6-digit code sent to your email.':
+        'أدخل الرمز المكوّن من 6 أرقام المرسل إلى بريدك الإلكتروني.',
+    'Enter the 6-digit verification code': 'أدخل رمز التحقق المكوّن من 6 أرقام',
+    'Required': 'مطلوب',
+    'Enter a valid email': 'أدخل بريدًا إلكترونيًا صالحًا',
+    'Password is required': 'كلمة المرور مطلوبة',
+    'Password must be at least 6 characters':
+        'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل',
+    "Don't have an account? ": 'ليس لديك حساب؟ ',
+    'Send Reset Link': 'إرسال رابط إعادة التعيين',
+    'Remembered your password? ': 'تذكرت كلمة المرور؟ ',
+    'Token is required': 'رمز إعادة التعيين مطلوب',
+    'Confirm your password': 'أكد كلمة المرور',
+    'Must include uppercase & number': 'يجب أن تحتوي على حرف كبير ورقم',
+    'Please confirm your password': 'يرجى تأكيد كلمة المرور',
+    'I agree to the ': 'أوافق على ',
+    'Terms and Conditions': 'الشروط والأحكام',
+    'You must accept the terms to continue.':
+        'يجب الموافقة على الشروط للمتابعة.',
+    'Send a new verification email to {email}':
+        'إرسال رسالة تحقق جديدة إلى {email}',
+    'Email not verified': 'البريد الإلكتروني غير موثّق',
+    'A verification code will be sent to your email address. The request is throttled to 3 times per minute.':
+        'سيُرسل رمز تحقق إلى بريدك الإلكتروني. يمكنك طلبه 3 مرات في الدقيقة.',
+    'The confirm request is throttled to 6 times per minute.':
+        'يمكنك تأكيد الطلب 6 مرات في الدقيقة.',
+    'Login failed. Please try again.': 'فشل تسجيل الدخول. حاول مرة أخرى.',
+    'Registration failed. Please try again.':
+        'فشل إنشاء الحساب. حاول مرة أخرى.',
+    'Failed to request password reset.': 'تعذر طلب إعادة تعيين كلمة المرور.',
+    'Failed to reset password.': 'تعذر إعادة تعيين كلمة المرور.',
+    'Failed to update profile.': 'تعذر تحديث الملف الشخصي.',
+    'Failed to update password.': 'تعذر تحديث كلمة المرور.',
+    'Failed to send verification email.': 'تعذر إرسال رسالة التحقق.',
+    'Failed to request account deletion.': 'تعذر طلب حذف الحساب.',
+    'Failed to confirm account deletion.': 'تعذر تأكيد حذف الحساب.',
+    'Unable to connect. Check your internet connection.':
+        'تعذر الاتصال. تحقق من اتصالك بالإنترنت.',
     'Land Mapper': 'خرائط الأراضي',
     'Settings': 'الإعدادات',
     'Account': 'الحساب',
@@ -652,10 +1025,57 @@ class AppLocalizations {
     'Enable': 'تفعيل',
     'Grant Permission': 'منح الإذن',
     'Cloud synchronization': 'المزامنة السحابية',
+    'Signed in': 'تم تسجيل الدخول',
+    'Sign in only when you want to sync data to the server.':
+        'سجّل الدخول فقط عندما تريد مزامنة البيانات مع الخادم.',
     'Location Settings': 'إعدادات الموقع',
     'Coordinates format': 'تنسيق الإحداثيات',
+    'Decimal Degrees': 'درجات عشرية',
+    'Degrees Minutes Seconds': 'درجات ودقائق وثوانٍ',
+    'Degrees Decimal Minutes': 'درجات ودقائق عشرية',
+    'Example: {coordinates}': 'مثال: {coordinates}',
+    'Minna — Nigeria': 'مينا — نيجيريا',
+    'Arc 1960 — Kenya/Tanzania mean': 'آرك 1960 — متوسط كينيا/تنزانيا',
+    'Arc 1960 — Kenya': 'آرك 1960 — كينيا',
+    'Arc 1960 — Tanzania': 'آرك 1960 — تنزانيا',
+    'Arc 1950 — Southern Africa mean': 'آرك 1950 — متوسط الجنوب الأفريقي',
+    'NAD27 — CONUS': 'NAD27 — الولايات المتحدة المتجاورة',
+    'NAD83 — North America': 'NAD83 — أمريكا الشمالية',
+    'ETRS89 — Europe': 'ETRS89 — أوروبا',
+    'GDA94 — Australia': 'GDA94 — أستراليا',
+    'SAD69 — South America mean': 'SAD69 — متوسط أمريكا الجنوبية',
+    'WGS 72 — global': 'WGS 72 — عالمي',
+    'Nigeria — onshore and offshore': 'نيجيريا — برًا وبحرًا',
+    'Kenya and Tanzania': 'كينيا وتنزانيا',
+    'Kenya — onshore': 'كينيا — برًا',
+    'Tanzania — onshore': 'تنزانيا — برًا',
+    'Botswana, Eswatini, Lesotho, Malawi, Zambia and Zimbabwe':
+        'بوتسوانا وإسواتيني وليسوتو وملاوي وزامبيا وزيمبابوي',
+    'Contiguous United States — onshore': 'الولايات المتحدة المتجاورة — برًا',
+    'North America': 'أمريكا الشمالية',
+    'Europe — onshore and offshore': 'أوروبا — برًا وبحرًا',
+    'Australia and external territories': 'أستراليا والأقاليم الخارجية',
+    'South America onshore north of 45°S, excluding Amazonia':
+        'أمريكا الجنوبية برًا شمال 45° جنوبًا، باستثناء الأمازون',
+    'World': 'العالم',
     'Geodetic datum': 'المرجع الجيوديسي',
+    'Select datum': 'اختر المرجع الجيوديسي',
+    'Choose the datum used by your survey. Its reference ellipsoid is shown below the datum name.':
+        'اختر المرجع الجيوديسي المستخدم في المسح. يظهر الشكل الإهليلجي المرجعي أسفل اسم المرجع.',
+    'WGS 84 ellipsoid • Global reference system (default; valid everywhere)':
+        'الشكل الإهليلجي WGS 84 • نظام مرجعي عالمي (افتراضي؛ صالح في كل مكان)',
+    '{ellipsoid} ellipsoid • {area}\nEPSG:{code} • {accuracy} m accuracy':
+        'الشكل الإهليلجي {ellipsoid} • {area}\nEPSG:{code} • دقة {accuracy} م',
+    ' • Approximate': ' • تقريبي',
+    ' • Valid here': ' • صالح هنا',
+    'REFERENCE / ELLIPSOID-ONLY OPTIONS': 'خيارات المرجع / الشكل الإهليلجي فقط',
+    '{ellipsoid} ellipsoid • No verified datum transformation; ellipsoid-shape-only conversion':
+        'الشكل الإهليلجي {ellipsoid} • لا يوجد تحويل مرجعي متحقق منه؛ تحويل شكل الإهليلج فقط',
+    'Coordinates now shown in {datum}': 'تُعرض الإحداثيات الآن وفق {datum}',
+    'Error changing coordinate display: {error}':
+        'خطأ أثناء تغيير عرض الإحداثيات: {error}',
     'Compass north reference': 'مرجع الشمال في البوصلة',
+    'True North (geographic)': 'الشمال الحقيقي (الجغرافي)',
     'Units': 'الوحدات',
     'Meters': 'أمتار',
     'Feet': 'أقدام',
@@ -663,20 +1083,65 @@ class AppLocalizations {
     'Use feet (ft)': 'استخدام الأقدام (قدم)',
     'Magnetic North': 'الشمال المغناطيسي',
     'True North': 'الشمال الحقيقي',
+    'Uses raw compass sensor reading. No correction applied.':
+        'يستخدم القراءة المباشرة لمستشعر البوصلة. لا يُطبّق أي تصحيح.',
+    'Corrects for magnetic declination to point to geographic north.':
+        'يصحح الانحراف المغناطيسي للإشارة إلى الشمال الجغرافي.',
     'Photo': 'صورة',
     'Save original photo': 'حفظ الصورة الأصلية',
+    'Save with no data on it. Useful for editing before sharing.':
+        'احفظ الصورة دون بيانات مضافة. مفيد لتحريرها قبل مشاركتها.',
     'Save to gallery': 'حفظ في المعرض',
+    'Save image with data': 'حفظ الصورة مع البيانات',
     'Privacy policy': 'سياسة الخصوصية',
     'Cache': 'ذاكرة التخزين المؤقت',
     'Clear cache': 'مسح ذاكرة التخزين المؤقت',
     'Clear cache?': 'مسح ذاكرة التخزين المؤقت؟',
+    'Remove cached data and temporary files':
+        'إزالة البيانات المخزنة مؤقتًا والملفات المؤقتة',
+    'Cache cleared successfully': 'تم مسح ذاكرة التخزين المؤقت بنجاح',
+    'Cache cleared successfully (~{size} MB freed)':
+        'تم مسح ذاكرة التخزين المؤقت بنجاح (تحرير نحو {size} ميغابايت)',
+    'Error clearing cache: {error}':
+        'خطأ أثناء مسح ذاكرة التخزين المؤقت: {error}',
+    'This will clear all cached data including images, temporary files, and app cache storage. Your saved locations will not be affected.':
+        'سيؤدي هذا إلى مسح جميع البيانات المخزنة مؤقتًا، بما فيها الصور والملفات المؤقتة وذاكرة التطبيق. لن تتأثر المواقع المحفوظة.',
+    'Preview ready. Open Library. Submitting the form sends a real response.':
+        'المعاينة جاهزة. افتح المكتبة. سيؤدي إرسال النموذج إلى إرسال رد فعلي.',
     'Information': 'معلومات',
     'Contact us': 'اتصل بنا',
+    'Send suggestions or report a bug. We appreciate your feedback.':
+        'أرسل اقتراحاتك أو أبلغ عن خلل. نقدر ملاحظاتك.',
+    'Send feedback': 'إرسال ملاحظات',
+    '[TaREF GPS] Feedback': '[TaREF GPS] ملاحظات',
+    'We read every message': 'نقرأ كل رسالة',
+    'Tell us what\'s on your mind — a bug, suggestion, or question…':
+        'أخبرنا بما يدور في ذهنك — خلل أو اقتراح أو سؤال…',
+    'Send': 'إرسال',
+    'No email app found. Message copied — send it to {email}':
+        'لم يُعثر على تطبيق بريد إلكتروني. نُسخت الرسالة — أرسلها إلى {email}',
+    'Device': 'الجهاز',
+    'Product': 'المنتج',
+    'Model': 'الطراز',
+    'App version': 'إصدار التطبيق',
+    'Platform': 'النظام',
     'Share your experience': 'شارك تجربتك',
+    'Tell us what works and what is difficult.':
+        'أخبرنا بما يعمل جيدًا وما الذي تجده صعبًا.',
+    'Preview survey invitation': 'معاينة دعوة الاستبيان',
+    'Debug only. Open Library after tapping.':
+        'للتصحيح فقط. افتح المكتبة بعد الضغط.',
     'Rate our app': 'قيّم تطبيقنا',
+    'Leave a rating or review in the app store.':
+        'اترك تقييمًا أو مراجعة في متجر التطبيقات.',
     'Version': 'الإصدار',
     'Loading version...': 'جارٍ تحميل الإصدار...',
     'Version unavailable': 'الإصدار غير متاح',
+    'Reading build metadata from the app package...':
+        'جارٍ قراءة بيانات الإصدار من حزمة التطبيق…',
+    'This comes from the installed app metadata.':
+        'تأتي هذه المعلومات من بيانات التطبيق المثبت.',
+    'Other': 'أخرى',
     'Language': 'اللغة',
     'System default': 'إعدادات النظام الافتراضية',
     'English': 'الإنجليزية',
@@ -726,6 +1191,129 @@ class AppLocalizations {
     'Copy coordinates': 'نسخ الإحداثيات',
     'Share location': 'مشاركة الموقع',
     'Save location': 'حفظ الموقع',
+    'Dismiss': 'تجاهل',
+    'EASTING': 'الإحداثي الشرقي',
+    'NORTHING': 'الإحداثي الشمالي',
+    'Live location is unavailable': 'الموقع المباشر غير متاح',
+    'Live coordinates and GPS tracking are off. Other app features remain available.':
+        'الإحداثيات المباشرة وتتبع GPS متوقفان. تظل الميزات الأخرى متاحة.',
+    'Enable live location?': 'هل تريد تفعيل الموقع المباشر؟',
+    'TaREF GPS needs Location Services to display live coordinates, track your position, save GPS points, support navigation, and geotag captured photos or videos. You can continue using other app features without live location.':
+        'يحتاج TaREF GPS إلى خدمات الموقع لعرض الإحداثيات المباشرة وتتبع موقعك وحفظ نقاط GPS ودعم الملاحة وتحديد مواقع الصور أو الفيديوهات. يمكنك متابعة استخدام الميزات الأخرى دون الموقع المباشر.',
+    'Location access is blocked for TaREF GPS. Enable it in Settings to display live coordinates, save your current position, support navigation, and geotag media. You can continue using the app without live GPS.':
+        'الوصول إلى الموقع محظور لتطبيق TaREF GPS. فعّله في الإعدادات لعرض الإحداثيات المباشرة وحفظ موقعك ودعم الملاحة وتحديد مواقع الوسائط. يمكنك متابعة استخدام التطبيق دون GPS مباشر.',
+    'TaREF GPS uses your current location only for GPS features such as live coordinates, position tracking, saved points, navigation, and automatic photo or video geotagging. Other app features remain available without it.':
+        'يستخدم TaREF GPS موقعك الحالي فقط لميزات GPS، مثل الإحداثيات المباشرة والتتبع والنقاط المحفوظة والملاحة وتحديد مواقع الصور أو الفيديوهات تلقائيًا. تظل الميزات الأخرى متاحة دون ذلك.',
+    'System camera mode is not available yet, using in-app camera.':
+        'وضع كاميرا النظام غير متاح بعد؛ سيتم استخدام كاميرا التطبيق.',
+    'Location tracking is active': 'تتبع الموقع نشط',
+    'TaREF GPS - Coordinates': 'TaREF GPS - الإحداثيات',
+    'Coordinates unavailable': 'الإحداثيات غير متاحة',
+    'Video deleted': 'تم حذف الفيديو',
+    'Photo deleted': 'تم حذف الصورة',
+    'GPS Camera': 'كاميرا GPS',
+    'GPS Capture': 'لقطة GPS',
+    'Preview': 'معاينة',
+    'Camera permission is denied. Allow camera permission in app settings.':
+        'تم رفض إذن الكاميرا. اسمح بالوصول إليها من إعدادات التطبيق.',
+    'Failed to open camera. Please try again.':
+        'تعذر فتح الكاميرا. يرجى المحاولة مرة أخرى.',
+    'Failed to capture GPS photo. Try again.':
+        'تعذر التقاط صورة GPS. حاول مرة أخرى.',
+    'Delete media?': 'حذف الوسائط؟',
+    'Media deleted.': 'تم حذف الوسائط.',
+    'Location media': 'وسائط الموقع',
+    'Sign in to view uploaded media': 'سجّل الدخول لعرض الوسائط المرفوعة',
+    'Your cloud media will appear here once you sign in with a verified account.':
+        'ستظهر وسائطك السحابية هنا بعد تسجيل الدخول بحساب تم التحقق منه.',
+    'No uploaded media found yet.': 'لم يُعثر على وسائط مرفوعة بعد.',
+    'Media': 'وسائط',
+    'Unnamed location': 'موقع بلا اسم',
+    'File name': 'اسم الملف',
+    'Path': 'المسار',
+    'MIME': 'MIME',
+    'Size': 'الحجم',
+    'Location ID': 'معرّف الموقع',
+    'Play': 'تشغيل',
+    'Pause': 'إيقاف مؤقت',
+    'Sign in to delete media.': 'سجّل الدخول لحذف الوسائط.',
+    'This will permanently delete the media from the server.':
+        'سيؤدي هذا إلى حذف الوسائط نهائيًا من الخادم.',
+    'Failed to download media for sharing.': 'فشل تنزيل الوسائط للمشاركة.',
+    'Failed to share media.': 'فشلت مشاركة الوسائط.',
+    'Video saved to gallery': 'تم حفظ الفيديو في المعرض',
+    'Photo saved to gallery': 'تم حفظ الصورة في المعرض',
+    'Retake': 'إعادة الالتقاط',
+    '{media} saved locally. Cloud upload failed.':
+        'تم حفظ {media} محليًا. فشل الرفع إلى السحابة.',
+    'Video': 'فيديو',
+    'Good': 'جيدة',
+    'Fair': 'متوسطة',
+    'Poor': 'ضعيفة',
+    'Compass': 'البوصلة',
+    'Unavailable': 'غير متاح',
+    'North': 'الشمال',
+    'North East': 'الشمال الشرقي',
+    'East': 'الشرق',
+    'South East': 'الجنوب الشرقي',
+    'South': 'الجنوب',
+    'South West': 'الجنوب الغربي',
+    'West': 'الغرب',
+    'North West': 'الشمال الغربي',
+    'Magnetic': 'مغناطيسي',
+    'Not reported': 'غير مبلّغ عنها',
+    'High': 'عالية',
+    'Moderate': 'متوسطة',
+    'Low': 'منخفضة',
+    'Compass sensor unavailable on this device.':
+        'مستشعر البوصلة غير متاح على هذا الجهاز.',
+    'Live compass · {north}': 'بوصلة مباشرة · {north}',
+    'Location permission is required for the compass sensor on Android.':
+        'يلزم إذن الموقع لاستخدام مستشعر البوصلة على أندرويد.',
+    'Initializing GPS…': 'جارٍ تهيئة GPS…',
+    'Live tracking': 'تتبع مباشر',
+    'Tracking paused': 'التتبع متوقف مؤقتًا',
+    'GPS media details': 'تفاصيل وسائط GPS',
+    'UTM unavailable for this latitude':
+        'إحداثيات UTM غير متاحة عند خط العرض هذا',
+    'Camera permission is blocked': 'إذن الكاميرا محظور',
+    'Camera permission is required': 'إذن الكاميرا مطلوب',
+    'Failed to initialize the camera': 'تعذر تهيئة الكاميرا',
+    'Open app settings and allow camera access to take GPS photos.':
+        'افتح إعدادات التطبيق واسمح بالوصول إلى الكاميرا لالتقاط صور GPS.',
+    'Grant camera permission to capture GPS-tagged photos and videos.':
+        'امنح إذن الكاميرا لالتقاط صور وفيديوهات محددة الموقع.',
+    'Something went wrong. Try again or check your device camera.':
+        'حدث خطأ ما. حاول مرة أخرى أو تحقق من كاميرا جهازك.',
+    'Try Again': 'حاول مرة أخرى',
+    'Location service is disabled.': 'خدمة الموقع معطلة.',
+    'Location is off. Media will be saved without a GPS tag.':
+        'الموقع متوقف. سيتم حفظ الوسائط دون بيانات GPS.',
+    'Unable to resolve current location.': 'تعذر تحديد الموقع الحالي.',
+    'Live location updates failed.': 'فشل تحديث الموقع المباشر.',
+    'Recording… Tap to stop': 'جارٍ التسجيل… اضغط للإيقاف',
+    'Tap to record video': 'اضغط لتسجيل فيديو',
+    'Tap to capture photo': 'اضغط لالتقاط صورة',
+    'Recent media': 'الوسائط الحديثة',
+    'No local media yet': 'لا توجد وسائط محلية بعد',
+    'No photos captured yet': 'لم تُلتقط صور بعد',
+    'Tap to view cloud media': 'اضغط لعرض الوسائط السحابية',
+    'Tap to capture your first photo': 'اضغط لالتقاط صورتك الأولى',
+    'Date {date}': 'التاريخ: {date}',
+    'Street {street}': 'الشارع: {street}',
+    'Place {place}': 'المكان: {place}',
+    'Coordinates {coordinates}': 'الإحداثيات: {coordinates}',
+    'Accuracy {accuracy}': 'الدقة: {accuracy}',
+    'Waiting for GPS details': 'بانتظار تفاصيل GPS',
+    'Address unavailable': 'العنوان غير متاح',
+    'Could not save to gallery — file not found.':
+        'تعذر الحفظ في المعرض — الملف غير موجود.',
+    'Could not save media to gallery. Check permissions.':
+        'تعذر حفظ الوسائط في المعرض. تحقق من الأذونات.',
+    'This will delete the media from this device and from the cloud if uploaded.':
+        'سيتم حذف الوسائط من هذا الجهاز ومن السحابة إذا رُفعت إليها.',
+    'Failed to capture photo.': 'فشل التقاط الصورة.',
+    'Failed to stop video recording.': 'فشل إيقاف تسجيل الفيديو.',
     'Place name': 'اسم المكان',
     'Enter place name': 'أدخل اسم المكان',
     'Skip': 'تخطي',
@@ -739,6 +1327,102 @@ class AppLocalizations {
     'Most points': 'أكثر نقاط',
     'Location saved': 'تم حفظ الموقع',
     'Center here': 'توسيط هنا',
+    'Update Area': 'تحديث المساحة',
+    'Create Area': 'إنشاء مساحة',
+    'Capture boundary points and save your land details.':
+        'التقط نقاط الحدود واحفظ تفاصيل أرضك.',
+    'Place *': 'المكان *',
+    'Phone (optional)': 'الهاتف (اختياري)',
+    'Description (optional)': 'الوصف (اختياري)',
+    'e.g. 0712345678': 'مثلاً 0712345678',
+    'Add notes about this land': 'أضف ملاحظات حول هذه الأرض',
+    'Boundary capture': 'التقاط الحدود',
+    'Mark current Location while walking around the field boundary.':
+        'حدّد موقعك الحالي أثناء السير حول حدود الأرض.',
+    'Mark Current Location': 'تحديد الموقع الحالي',
+    'Undo Last': 'التراجع عن الأخير',
+    'Clear All': 'مسح الكل',
+    'Choose area display unit': 'اختر وحدة عرض المساحة',
+    'Save Distance': 'حفظ المسافة',
+    'Store this measured line locally and send it to the server as a distance record.':
+        'احفظ هذا الخط المقاس محليًا وأرسله إلى الخادم كسجل مسافة.',
+    'Contact phone': 'رقم هاتف التواصل',
+    'Notes about this distance': 'ملاحظات حول هذه المسافة',
+    'Point labels': 'تسميات النقاط',
+    'Place is required.': 'المكان مطلوب.',
+    'Save distance': 'حفظ المسافة',
+    'Add location name and point label before saving.':
+        'أضف اسم الموقع وتسمية النقطة قبل الحفظ.',
+    'e.g. Home, Office, Farm Entrace': 'مثلاً: المنزل، المكتب، مدخل المزرعة',
+    'Point label (e.g. A1, P1)': 'تسمية النقطة (مثل A1، P1)',
+    'View area in': 'عرض المساحة بوحدة',
+    '+ GPS': '+ GPS',
+    'Long-press the map to add area points, or use + GPS for your current location.':
+        'اضغط مطولًا على الخريطة لإضافة نقاط المساحة، أو استخدم + GPS لموقعك الحالي.',
+    'Save area': 'حفظ المساحة',
+    'Long-press anywhere on the map to place a marker':
+        'اضغط مطولًا على أي مكان في الخريطة لوضع علامة',
+    'Point added': 'تمت إضافة النقطة',
+    '{count} points captured': 'النقاط الملتقطة: {count}',
+    'Perimeter: {distance}': 'المحيط: {distance}',
+    'Area: {area}': 'المساحة: {area}',
+    'Optional. Rename boundary points for reference.':
+        'اختياري. أعد تسمية نقاط الحدود لتسهيل الرجوع إليها.',
+    'Point {number}': 'النقطة {number}',
+    'Label': 'التسمية',
+    'Field updated offline successfully. Sync queued.':
+        'تم تحديث الأرض دون اتصال. المزامنة قيد الانتظار.',
+    'Field saved offline successfully. Sync queued.':
+        'تم حفظ الأرض دون اتصال. المزامنة قيد الانتظار.',
+    'Save Area': 'حفظ المساحة',
+    'Distance name or place': 'اسم المسافة أو المكان',
+    '{count} points • {distance}': '{count} نقطة • {distance}',
+    'Automatic': 'تلقائي',
+    'Square metres (m²)': 'متر مربع (م²)',
+    'Hectares (ha)': 'هكتارات (ha)',
+    'Square kilometres (km²)': 'كيلومترات مربعة (كم²)',
+    'Square feet (ft²)': 'أقدام مربعة (ft²)',
+    'Acres (ac)': 'أفدنة (ac)',
+    'Long-press map to add points': 'اضغط مطولًا على الخريطة لإضافة نقاط',
+    '{count} pts · {distance}': '{count} نقاط · {distance}',
+    'Long-press map to place marker': 'اضغط مطولًا على الخريطة لوضع علامة',
+    'Long-press map or use + GPS to add area points':
+        'اضغط مطولًا على الخريطة أو استخدم + GPS لإضافة نقاط المساحة',
+    '{count} area pts · long-press to add more':
+        '{count} نقاط مساحة · اضغط مطولًا لإضافة المزيد',
+    'Location saved locally. Sync queued.':
+        'تم حفظ الموقع محليًا. المزامنة قيد الانتظار.',
+    'No current location available.': 'لا يوجد موقع حالي متاح.',
+    'Marker deleted': 'تم حذف العلامة',
+    'Add at least 2 points to save a distance.':
+        'أضف نقطتين على الأقل لحفظ المسافة.',
+    'Distance saved locally. Sync queued.':
+        'تم حفظ المسافة محليًا. المزامنة قيد الانتظار.',
+    'Road routing unavailable. Showing straight line.':
+        'المسار عبر الطرق غير متاح. يُعرض خط مستقيم.',
+    'Route updated from your current position.':
+        'تم تحديث المسار من موقعك الحالي.',
+    'Turn on the Field layer to add area points.':
+        'فعّل طبقة الأرض لإضافة نقاط المساحة.',
+    'Finding best route...': 'جارٍ البحث عن أفضل مسار…',
+    'Switching map type...': 'جارٍ تغيير نوع الخريطة…',
+    'UTM unavailable': 'إحداثيات UTM غير متاحة',
+    '{reference} • Accuracy: {accuracy}': '{reference} • الدقة: {accuracy}',
+    'Locating...': 'جارٍ تحديد الموقع…',
+    'Waiting for GPS...': 'جارٍ انتظار GPS…',
+    '{count} pts': '{count} نقاط',
+    'Calculating...': 'جارٍ الحساب…',
+    'Viewing: {name} · {count} pts': 'عرض: {name} · {count} نقاط',
+    'Tools': 'الأدوات',
+    'Location Services are off': 'خدمات الموقع متوقفة',
+    'Location unavailable': 'الموقع غير متاح',
+    'Use your current location?': 'هل تريد استخدام موقعك الحالي؟',
+    'TaREF GPS needs Location Services to show your live position on the map, capture GPS points, guide navigation, measure routes, and attach coordinates to saved work. You can continue using the map and saved records without live GPS.':
+        'يحتاج TaREF GPS إلى خدمات الموقع لعرض موقعك المباشر على الخريطة والتقاط نقاط GPS وإرشاد الملاحة وقياس المسارات وإرفاق الإحداثيات بالأعمال المحفوظة. يمكنك متابعة استخدام الخريطة والسجلات المحفوظة دون GPS مباشر.',
+    'Location access is blocked for TaREF GPS. Enable it in Settings to use live map position, GPS point capture, navigation guidance, route measurement, and coordinate tagging. You can continue using the app without GPS.':
+        'الوصول إلى الموقع محظور لتطبيق TaREF GPS. فعّله في الإعدادات لاستخدام الموقع المباشر والتقاط نقاط GPS وإرشاد الملاحة وقياس المسارات وإضافة الإحداثيات. يمكنك متابعة استخدام التطبيق دون GPS.',
+    'TaREF GPS uses your current location only for GPS features such as live map position, point capture, navigation, distance tracking, and coordinate tagging. You can continue using the map without granting location access.':
+        'يستخدم TaREF GPS موقعك الحالي فقط لميزات GPS مثل عرض الموقع المباشر والتقاط النقاط والملاحة وتتبع المسافة وإضافة الإحداثيات. يمكنك متابعة استخدام الخريطة دون منح إذن الموقع.',
     'View more': 'عرض المزيد',
     'File': 'ملف',
     'Full name': 'الاسم الكامل',
@@ -799,6 +1483,7 @@ class AppLocalizations {
     'Source': 'المصدر',
     'Saved location': 'موقع محفوظ',
     'Saved': 'المحفوظات',
+    'Library': 'المكتبة',
     'Add manually': 'إضافة يدويًا',
     'Updating cloud records...': 'جارٍ تحديث السجلات السحابية…',
     'Loading more records...': 'جارٍ تحميل المزيد من السجلات…',
