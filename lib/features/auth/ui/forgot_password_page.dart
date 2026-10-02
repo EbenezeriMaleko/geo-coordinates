@@ -6,7 +6,6 @@ import '../providers/auth_provider.dart';
 import 'login_page.dart';
 import '../../../core/localization/app_localizations.dart';
 
-
 class ForgotPasswordPage extends ConsumerStatefulWidget {
   const ForgotPasswordPage({super.key});
 
@@ -50,7 +49,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t(result.message))));
   }
 
   @override
@@ -58,7 +57,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
     final l10n = context.l10n;
     final state = ref.watch(forgotPasswordProvider);
     final isLoading = state.isLoading;
-    final errorMsg = state.hasError ? state.error.toString() : null;
+    final errorMsg = state.hasError ? l10n.t(state.error.toString()) : null;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -163,11 +162,11 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Email is required';
+                  return l10n.t('Email is required');
                 }
                 final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
                 if (!emailRegex.hasMatch(value.trim())) {
-                  return 'Enter a valid email';
+                  return l10n.t('Enter a valid email');
                 }
                 return null;
               },
@@ -195,7 +194,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
                         ),
                       )
                     : Text(
-                        'Send Reset Link',
+                        l10n.t('Send Reset Link'),
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -215,7 +214,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          'Remembered your password? ',
+          context.l10n.t('Remembered your password? '),
           style: GoogleFonts.inter(
             color: Colors.black.withValues(alpha: 0.8),
             fontSize: 14,
@@ -234,7 +233,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage>
             );
           },
           child: Text(
-            'Sign In',
+            context.l10n.t('Sign In'),
             style: GoogleFonts.inter(
               color: Colors.black,
               fontSize: 14,

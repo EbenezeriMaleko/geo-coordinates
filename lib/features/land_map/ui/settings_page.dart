@@ -60,7 +60,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          _sectionHeader('Cloud synchronization', theme),
+          _sectionHeader(l10n.t('Cloud synchronization'), theme),
           _item(
             title: l10n.t('Account'),
             subtitle: accountSubtitle,
@@ -79,20 +79,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _sectionHeader(l10n.t('Location Settings'), theme),
           _item(
             title: l10n.t('Coordinates format'),
-            subtitle: selectedFormat.displayName,
+            subtitle: l10n.t(selectedFormat.displayName),
             onTap: _showCoordinateFormatSelector,
           ),
 
           _item(
             title: l10n.t('Geodetic datum'),
-            subtitle:
-                selectedDatum?.displayName ?? selectedEllipsoid.displayName,
+            subtitle: selectedDatum == null
+                ? selectedEllipsoid.displayName
+                : l10n.t(selectedDatum.displayName),
             onTap: _showReferenceEllipsoidSelector,
           ),
 
           _item(
             title: l10n.t('Compass north reference'),
-            subtitle: _compassNorthLabel(ref.watch(compassNorthTypeProvider)),
+            subtitle: l10n.t(
+              _compassNorthLabel(ref.watch(compassNorthTypeProvider)),
+            ),
             onTap: _showCompassNorthSelector,
           ),
 
@@ -108,8 +111,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _sectionHeader(l10n.t('Photo'), theme),
           _switchItem(
             title: l10n.t('Save original photo'),
-            subtitle:
-                'Save with no data on it. Useful for editing before sharing.',
+            subtitle: l10n.t(
+              'Save with no data on it. Useful for editing before sharing.',
+            ),
             value: saveOriginalPhoto,
             onChanged: (value) =>
                 ref.read(saveOriginalPhotoProvider.notifier).setValue(value),
@@ -149,8 +153,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           _sectionHeader(l10n.t('Information'), theme),
           _item(
             title: l10n.t('Contact us'),
-            subtitle:
-                'Send suggestions or report a bug. We appreciate your feedback.',
+            subtitle: l10n.t(
+              'Send suggestions or report a bug. We appreciate your feedback.',
+            ),
             onTap: _openContactUsPage,
           ),
           _item(
@@ -161,7 +166,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           if (kDebugMode)
             _item(
               title: l10n.t('Preview survey invitation'),
-              subtitle: l10n.t('Debug only. Open Saved locations after tapping.'),
+              subtitle: l10n.t('Debug only. Open Library after tapping.'),
               onTap: _previewSurveyInvitation,
             ),
           _item(
@@ -401,16 +406,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               builder: (context, snapshot) {
                 final info = snapshot.data;
                 final versionText = info == null
-                    ? 'Loading version...'
+                    ? context.l10n.t('Loading version...')
                     : info.version;
 
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Version',
-                      style: TextStyle(
+                    Text(
+                      context.l10n.t('Version'),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
@@ -426,8 +431,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     const SizedBox(height: 8),
                     Text(
                       snapshot.connectionState == ConnectionState.waiting
-                          ? 'Reading build metadata from the app package...'
-                          : 'This comes from the installed app metadata.',
+                          ? context.l10n.t(
+                              'Reading build metadata from the app package...',
+                            )
+                          : context.l10n.t(
+                              'This comes from the installed app metadata.',
+                            ),
                       style: const TextStyle(
                         fontSize: 13,
                         color: Colors.black54,
@@ -449,7 +458,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       builder: (context) => AlertDialog(
         title: Text(context.l10n.t('Clear cache?')),
         content: Text(
-          context.l10n.t('This will clear all cached data including images, temporary files, and app cache storage. Your saved locations will not be affected.'),
+          context.l10n.t(
+            'This will clear all cached data including images, temporary files, and app cache storage. Your saved locations will not be affected.',
+          ),
         ),
         actions: [
           TextButton(
@@ -458,6 +469,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           TextButton(
             onPressed: () async {
+              final l10n = context.l10n;
               Navigator.pop(context);
 
               final messenger = ScaffoldMessenger.of(context);
@@ -493,19 +505,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   SnackBar(
                     content: Text(
                       freedBytes > 0
-                          ? 'Cache cleared successfully (~$freedMB MB freed)'
-                          : 'Cache cleared successfully',
+                          ? l10n.t(
+                              'Cache cleared successfully (~{size} MB freed)',
+                              params: {'size': freedMB},
+                            )
+                          : l10n.t('Cache cleared successfully'),
                     ),
                   ),
                 );
               } catch (e) {
                 if (!mounted) return;
                 messenger.showSnackBar(
-                  SnackBar(content: Text(context.l10n.t('Error clearing cache: $e'))),
+                  SnackBar(
+                    content: Text(
+                      l10n.t(
+                        'Error clearing cache: {error}',
+                        params: {'error': '$e'},
+                      ),
+                    ),
+                  ),
                 );
               }
             },
-            child: Text(context.l10n.t('Clear'), style: const TextStyle(color: Colors.red)),
+            child: Text(
+              context.l10n.t('Clear'),
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -536,12 +561,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       return '$fullName\n$email';
     }
     if (fullName.isNotEmpty) {
-      return '$fullName\nSigned in';
+      return '$fullName\n${context.l10n.t('Signed in')}';
     }
     if (email.isNotEmpty) {
-      return '$email\nSigned in';
+      return '$email\n${context.l10n.t('Signed in')}';
     }
-    return 'Sign in only when you want to sync data to the server.';
+    return context.l10n.t(
+      'Sign in only when you want to sync data to the server.',
+    );
   }
 
   Future<void> _openAccountPage() async {
@@ -565,7 +592,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ).push<bool>(MaterialPageRoute(builder: (_) => const UserSurveyPage()));
     if (!mounted || saved != true) return;
     ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.t('Response saved. It will sync automatically.'))),
+      SnackBar(
+        content: Text(
+          context.l10n.t('Response saved. It will sync automatically.'),
+        ),
+      ),
     );
   }
 
@@ -573,7 +604,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     await SurveyInvitation(Hive.box('landbox')).requestDebugPreview();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.t('Preview ready. Open Saved locations. Submitting the form sends a real response.'))),
+      SnackBar(
+        content: Text(
+          context.l10n.t(
+            'Preview ready. Open Library. Submitting the form sends a real response.',
+          ),
+        ),
+      ),
     );
   }
 
@@ -612,15 +649,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 10),
-            const Text(
-              'Coordinates format',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            Text(
+              context.l10n.t('Coordinates format'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
             ...CoordinateFormat.values.map((format) {
               final isSelected = format == current;
               return ListTile(
-                title: Text(format.displayName),
+                title: Text(context.l10n.t(format.displayName)),
                 subtitle: Text(_getFormatExample(format)),
                 trailing: isSelected
                     ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
@@ -726,15 +763,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           child: Column(
             children: [
               const SizedBox(height: 10),
-              const Text(
-                'Select datum',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              Text(
+                sheetContext.l10n.t('Select datum'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
                 child: Text(
-                  'Choose the datum used by your survey. Its reference '
-                  'ellipsoid is shown below the datum name.',
+                  sheetContext.l10n.t(
+                    'Choose the datum used by your survey. Its reference ellipsoid is shown below the datum name.',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -744,9 +785,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   children: [
                     ListTile(
                       title: Text(ReferenceEllipsoid.wgs84.displayName),
-                      subtitle: const Text(
-                        'WGS 84 ellipsoid • Global reference system '
-                        '(default; valid everywhere)',
+                      subtitle: Text(
+                        sheetContext.l10n.t(
+                          'WGS 84 ellipsoid • Global reference system (default; valid everywhere)',
+                        ),
                       ),
                       trailing:
                           currentDatum == null &&
@@ -755,10 +797,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               Icons.check_circle,
                               color: Color(0xFF0C8A8C),
                             )
-                          : const Icon(
-                              Icons.near_me,
-                              color: Color(0xFF0C8A8C),
-                            ),
+                          : const Icon(Icons.near_me, color: Color(0xFF0C8A8C)),
                       onTap: () async {
                         Navigator.of(sheetContext).pop();
                         await _handleEllipsoidOrDatumChange(
@@ -773,14 +812,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           currentLocation != null &&
                           datum.isValidAt(currentLocation);
                       return ListTile(
-                        title: Text(datum.displayName),
+                        title: Text(sheetContext.l10n.t(datum.displayName)),
                         subtitle: Text(
-                          '${datum.parentEllipsoid.displayName} ellipsoid • '
-                          '${datum.areaOfUse}\n'
-                          'EPSG:${datum.epsgOperationCode} • '
-                          '${datum.accuracyMeters.toStringAsFixed(0)} m accuracy'
-                          '${datum.isApproximate ? ' • Approximate' : ''}'
-                          '${validHere ? ' • Valid here' : ''}',
+                          sheetContext.l10n.t(
+                                '{ellipsoid} ellipsoid • {area}\nEPSG:{code} • {accuracy} m accuracy',
+                                params: {
+                                  'ellipsoid':
+                                      datum.parentEllipsoid.displayName,
+                                  'area': sheetContext.l10n.t(datum.areaOfUse),
+                                  'code': '${datum.epsgOperationCode}',
+                                  'accuracy': datum.accuracyMeters
+                                      .toStringAsFixed(0),
+                                },
+                              ) +
+                              (datum.isApproximate
+                                  ? sheetContext.l10n.t(' • Approximate')
+                                  : '') +
+                              (validHere
+                                  ? sheetContext.l10n.t(' • Valid here')
+                                  : ''),
                         ),
                         isThreeLine: true,
                         trailing: isSelected
@@ -804,11 +854,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       );
                     }),
                     if (datumlessEllipsoids.isNotEmpty) ...[
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(20, 18, 20, 6),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
                         child: Text(
-                          'REFERENCE / ELLIPSOID-ONLY OPTIONS',
-                          style: TextStyle(
+                          sheetContext.l10n.t(
+                            'REFERENCE / ELLIPSOID-ONLY OPTIONS',
+                          ),
+                          style: const TextStyle(
                             color: Colors.black54,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -822,9 +874,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         return ListTile(
                           title: Text(ellipsoid.displayName),
                           subtitle: Text(
-                            '${ellipsoid.displayName} ellipsoid • '
-                            'No verified datum transformation; '
-                            'ellipsoid-shape-only conversion',
+                            sheetContext.l10n.t(
+                              '{ellipsoid} ellipsoid • No verified datum transformation; ellipsoid-shape-only conversion',
+                              params: {'ellipsoid': ellipsoid.displayName},
+                            ),
                           ),
                           trailing: isSelected
                               ? const Icon(
@@ -883,8 +936,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Coordinates now shown in '
-            '${newDatum?.displayName ?? newEllipsoid.displayName}',
+            context.l10n.t(
+              'Coordinates now shown in {datum}',
+              params: {
+                'datum': newDatum == null
+                    ? newEllipsoid.displayName
+                    : context.l10n.t(newDatum.displayName),
+              },
+            ),
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -893,7 +952,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l10n.t('Error changing coordinate display: $e')),
+          content: Text(
+            context.l10n.t(
+              'Error changing coordinate display: {error}',
+              params: {'error': '$e'},
+            ),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -928,7 +992,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             const SizedBox(height: 10),
             ListTile(
               title: Text(context.l10n.t('Magnetic North')),
-              subtitle: Text(context.l10n.t('Uses raw compass sensor reading. No correction applied.')),
+              subtitle: Text(
+                context.l10n.t(
+                  'Uses raw compass sensor reading. No correction applied.',
+                ),
+              ),
               trailing: current == CompassNorthType.magnetic
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
@@ -941,7 +1009,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             ListTile(
               title: Text(context.l10n.t('True North')),
-              subtitle: Text(context.l10n.t('Corrects for magnetic declination to point to geographic north.')),
+              subtitle: Text(
+                context.l10n.t(
+                  'Corrects for magnetic declination to point to geographic north.',
+                ),
+              ),
               trailing: current == CompassNorthType.trueNorth
                   ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
                   : const Icon(Icons.circle_outlined),
@@ -962,7 +1034,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _getFormatExample(CoordinateFormat format) {
     const lat = -6.7924;
     const lon = 39.2083;
-    return 'Example: ${CoordinateFormatter.format(lat, lon, format)}';
+    return context.l10n.t(
+      'Example: {coordinates}',
+      params: {'coordinates': CoordinateFormatter.format(lat, lon, format)},
+    );
   }
 
   String _photoQualityLabel(PhotoCaptureQuality quality) {
@@ -1007,6 +1082,7 @@ class _ContactDialogState extends State<_ContactDialog> {
   Future<void> _send() async {
     final message = _controller.text.trim();
     if (message.isEmpty) return;
+    final l10n = context.l10n;
 
     setState(() => _isSending = true);
 
@@ -1020,24 +1096,24 @@ class _ContactDialogState extends State<_ContactDialog> {
       if (Platform.isAndroid) {
         final android = await deviceInfo.androidInfo;
         deviceDetails =
-            'Device: ${android.manufacturer} ${android.model}\n'
+            '${l10n.t('Device')}: ${android.manufacturer} ${android.model}\n'
             'Android: ${android.version.release} (SDK ${android.version.sdkInt})\n'
-            'Product: ${android.product}';
+            '${l10n.t('Product')}: ${android.product}';
       } else if (Platform.isIOS) {
         final ios = await deviceInfo.iosInfo;
         deviceDetails =
-            'Device: ${ios.utsname.machine}\n'
+            '${l10n.t('Device')}: ${ios.utsname.machine}\n'
             'iOS: ${ios.systemVersion}\n'
-            'Model: ${ios.model}';
+            '${l10n.t('Model')}: ${ios.model}';
       }
 
-      final subject = Uri.encodeComponent('[TaREF GPS] Feedback');
+      final subject = Uri.encodeComponent(l10n.t('[TaREF GPS] Feedback'));
       final body = Uri.encodeComponent(
         '$message\n\n'
         '---\n'
-        'App version: $version\n'
+        '${l10n.t('App version')}: $version\n'
         '$deviceDetails\n'
-        'Platform: ${Platform.operatingSystem}',
+        '${l10n.t('Platform')}: ${Platform.operatingSystem}',
       );
 
       final uri = Uri.parse(
@@ -1055,7 +1131,9 @@ class _ContactDialogState extends State<_ContactDialog> {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.l10n.t('Email app opened — tap Send to submit.')),
+            content: Text(
+              context.l10n.t('Email app opened — tap Send to submit.'),
+            ),
           ),
         );
       } else {
@@ -1066,7 +1144,10 @@ class _ContactDialogState extends State<_ContactDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'No email app found. Message copied — send it to $_supportEmail',
+              context.l10n.t(
+                'No email app found. Message copied — send it to {email}',
+                params: {'email': _supportEmail},
+              ),
             ),
             duration: const Duration(seconds: 5),
           ),
@@ -1077,7 +1158,9 @@ class _ContactDialogState extends State<_ContactDialog> {
       setState(() => _isSending = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.l10n.t('Something went wrong. Please try again.')),
+          content: Text(
+            context.l10n.t('Something went wrong. Please try again.'),
+          ),
         ),
       );
     }
@@ -1122,13 +1205,13 @@ class _ContactDialogState extends State<_ContactDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Send feedback',
+                        context.l10n.t('Send feedback'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
-                        'We read every message',
+                        context.l10n.t('We read every message'),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: Colors.black45,
                         ),
@@ -1157,8 +1240,9 @@ class _ContactDialogState extends State<_ContactDialog> {
               textCapitalization: TextCapitalization.sentences,
               autofocus: true,
               decoration: InputDecoration(
-                hintText:
-                    'Tell us what\'s on your mind — a bug, suggestion, or question…',
+                hintText: context.l10n.t(
+                  'Tell us what\'s on your mind — a bug, suggestion, or question…',
+                ),
                 hintStyle: TextStyle(
                   color: Colors.grey.shade400,
                   fontSize: 13,
@@ -1207,9 +1291,9 @@ class _ContactDialogState extends State<_ContactDialog> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        'Send',
-                        style: TextStyle(
+                    : Text(
+                        context.l10n.t('Send'),
+                        style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),

@@ -56,7 +56,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.t(result.message))));
     Navigator.of(context).pop();
   }
 
@@ -65,7 +65,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
     final l10n = context.l10n;
     final state = ref.watch(resetPasswordProvider);
     final isLoading = state.isLoading;
-    final error = state.hasError ? state.error.toString() : null;
+    final error = state.hasError ? l10n.t(state.error.toString()) : null;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.t('Reset Password'))),
@@ -78,7 +78,9 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  l10n.t('Enter the reset token from email and choose a new password.'),
+                  l10n.t(
+                    'Enter the reset token from email and choose a new password.',
+                  ),
                   style: GoogleFonts.inter(
                     fontSize: 15,
                     color: Colors.black54,
@@ -98,7 +100,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Token is required';
+                      return l10n.t('Token is required');
                     }
                     return null;
                   },
@@ -113,7 +115,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Email is required';
+                      return l10n.t('Email is required');
                     }
                     return null;
                   },
@@ -137,10 +139,10 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Password is required';
+                      return l10n.t('Password is required');
                     }
                     if (value.length < 8) {
-                      return 'Minimum 8 characters';
+                      return l10n.t('Minimum 8 characters');
                     }
                     return null;
                   },
@@ -164,10 +166,10 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Confirm your password';
+                      return l10n.t('Confirm your password');
                     }
                     if (value != _passwordController.text) {
-                      return 'Passwords do not match';
+                      return l10n.t('Passwords do not match');
                     }
                     return null;
                   },

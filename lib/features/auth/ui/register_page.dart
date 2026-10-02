@@ -79,7 +79,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (ok || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.t('Could not open terms and conditions'))),
+      SnackBar(
+        content: Text(context.l10n.t('Could not open terms and conditions')),
+      ),
     );
   }
 
@@ -119,7 +121,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               ),
               const SizedBox(height: 10),
               Text(
-                message,
+                l10n.t(message),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: 14,
@@ -168,10 +170,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final authState = ref.watch(registerProvider);
     final isLoading = authState.isLoading;
-    final errorMsg = authState.hasError ? authState.error.toString() : null;
-    final l10n = context.l10n;
+    final errorMsg = authState.hasError
+        ? l10n.t(authState.error.toString())
+        : null;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -278,7 +282,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                           icon: Icons.person_outline_rounded,
                         ),
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if (v == null || v.trim().isEmpty) {
+                            return l10n.t('Required');
+                          }
                           return null;
                         },
                       ),
@@ -302,7 +308,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                           icon: Icons.person_outline_rounded,
                         ),
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if (v == null || v.trim().isEmpty) {
+                            return l10n.t('Required');
+                          }
                           return null;
                         },
                       ),
@@ -324,10 +332,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                 icon: Icons.email_outlined,
               ),
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'Email is required';
+                if (v == null || v.trim().isEmpty) {
+                  return l10n.t('Email is required');
+                }
                 final emailRegex = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
                 if (!emailRegex.hasMatch(v.trim())) {
-                  return 'Enter a valid email';
+                  return l10n.t('Enter a valid email');
                 }
                 return null;
               },
@@ -356,11 +366,15 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                 ),
               ),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Password is required';
-                if (v.length < 8) return 'Minimum 8 characters';
+                if (v == null || v.isEmpty) {
+                  return l10n.t('Password is required');
+                }
+                if (v.length < 8) {
+                  return l10n.t('Minimum 8 characters');
+                }
                 final strongRegex = RegExp(r'^(?=.*[A-Z])(?=.*[0-9])');
                 if (!strongRegex.hasMatch(v)) {
-                  return 'Must include uppercase & number';
+                  return l10n.t('Must include uppercase & number');
                 }
                 return null;
               },
@@ -391,10 +405,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
               ),
               validator: (v) {
                 if (v == null || v.isEmpty) {
-                  return 'Please confirm your password';
+                  return l10n.t('Please confirm your password');
                 }
                 if (v != _passwordController.text) {
-                  return 'Passwords do not match';
+                  return l10n.t('Passwords do not match');
                 }
                 return null;
               },
@@ -418,7 +432,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                   child: Wrap(
                     children: [
                       Text(
-                        'I agree to the ',
+                        l10n.t('I agree to the '),
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: Colors.black.withValues(alpha: 0.8),
@@ -427,7 +441,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                       InkWell(
                         onTap: _openTermsLink,
                         child: Text(
-                          'Terms and Conditions',
+                          l10n.t('Terms and Conditions'),
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -444,7 +458,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
             if (_termsError) ...[
               const SizedBox(height: 8),
               Text(
-                'You must accept the terms to continue.',
+                l10n.t('You must accept the terms to continue.'),
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: const Color(0xFFDC2626),

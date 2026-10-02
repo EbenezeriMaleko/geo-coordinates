@@ -74,9 +74,9 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
         _isLoading = false;
         if (_showDeleteToast) {
           _showDeleteToast = false;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(context.l10n.t('Media deleted.'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.t('Media deleted.'))),
+          );
         }
       });
     } catch (error) {
@@ -176,7 +176,7 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'Sign in to view uploaded media',
+                              l10n.t('Sign in to view uploaded media'),
                               textAlign: TextAlign.center,
                               style: theme.textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.w700,
@@ -185,7 +185,9 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Your cloud media will appear here once you sign in with a verified account.',
+                              l10n.t(
+                                'Your cloud media will appear here once you sign in with a verified account.',
+                              ),
                               textAlign: TextAlign.center,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: Colors.black54,
@@ -238,7 +240,7 @@ class _LocationMediaPageState extends ConsumerState<LocationMediaPage> {
                 Padding(
                   padding: const EdgeInsets.only(top: 48),
                   child: Text(
-                    'No uploaded media found yet.',
+                    l10n.t('No uploaded media found yet.'),
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.black54,
@@ -343,7 +345,11 @@ class _MediaCard extends StatelessWidget {
                       left: 10,
                       top: 10,
                       child: _TypeBadge(
-                        label: item.type.isEmpty ? 'media' : item.type,
+                        label: item.type.isEmpty
+                            ? context.l10n.t('Media')
+                            : item.isVideo
+                            ? context.l10n.t('Video')
+                            : context.l10n.t('Photo'),
                       ),
                     ),
                   ],
@@ -365,7 +371,7 @@ class _MediaCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item.location?.name ?? 'Unnamed location',
+                    item.location?.name ?? context.l10n.t('Unnamed location'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -467,9 +473,7 @@ class _LocationMediaViewerPageState
     final session = ref.read(authSessionProvider);
     if (!session.isLoggedIn || !session.isVerified) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.t('Sign in to delete media.'))),
       );
       return;
@@ -480,7 +484,9 @@ class _LocationMediaViewerPageState
       builder: (dialogContext) => AlertDialog(
         title: Text(context.l10n.t('Delete media?')),
         content: Text(
-          context.l10n.t('This will permanently delete the media from the server.'),
+          context.l10n.t(
+            'This will permanently delete the media from the server.',
+          ),
         ),
         actions: [
           TextButton(
@@ -523,7 +529,9 @@ class _LocationMediaViewerPageState
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.l10n.t('Failed to download media for sharing.')),
+            content: Text(
+              context.l10n.t('Failed to download media for sharing.'),
+            ),
           ),
         );
         return;
@@ -540,9 +548,7 @@ class _LocationMediaViewerPageState
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.t('Failed to share media.'))),
       );
     }
@@ -562,9 +568,11 @@ class _LocationMediaViewerPageState
       referenceEllipsoid,
       ref.watch(selectedDatumProvider),
     );
-    final titleText = placeText == '—' ? 'Saved location' : placeText;
+    final titleText = placeText == '—'
+        ? context.l10n.t('Saved location')
+        : placeText;
     final subtitleText = coordinateText == '—'
-        ? 'Coordinates unavailable'
+        ? context.l10n.t('Coordinates unavailable')
         : coordinateText;
     return Scaffold(
       backgroundColor: Colors.white,
@@ -706,7 +714,11 @@ class _LocationMediaViewerPageState
               runSpacing: 8,
               children: [
                 _MediaMetaChip(
-                  label: item.type.isEmpty ? 'Media' : item.type,
+                  label: item.type.isEmpty
+                      ? context.l10n.t('Media')
+                      : item.isVideo
+                      ? context.l10n.t('Video')
+                      : context.l10n.t('Photo'),
                   icon: item.isVideo ? Icons.videocam : Icons.photo,
                 ),
                 _MediaMetaChip(
@@ -732,12 +744,15 @@ class _LocationMediaViewerPageState
               title: context.l10n.t('Coordinates'),
               children: [
                 _detailRow('Lat/Lon', coordinateText),
-                _detailRow('UTM', utmText),
+                _detailRow('UTM', context.l10n.t(utmText)),
                 _detailRow(
                   'Display datum',
-                  ref.watch(selectedReferenceNameProvider),
+                  context.l10n.t(ref.watch(selectedReferenceNameProvider)),
                 ),
-                _detailRow('Format', coordinateFormat.displayName),
+                _detailRow(
+                  'Format',
+                  context.l10n.t(coordinateFormat.displayName),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -784,7 +799,9 @@ class _LocationMediaViewerPageState
                       : Icons.play_arrow,
                 ),
                 label: Text(
-                  _videoController!.value.isPlaying ? 'Pause' : 'Play',
+                  context.l10n.t(
+                    _videoController!.value.isPlaying ? 'Pause' : 'Play',
+                  ),
                 ),
               ),
             ],
@@ -804,7 +821,7 @@ class _LocationMediaViewerPageState
           SizedBox(
             width: 92,
             child: Text(
-              label,
+              context.l10n.t(label),
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: Colors.black54,

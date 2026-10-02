@@ -2650,7 +2650,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       );
       if (zone != null && zone.isNotEmpty) {
         final ellipsoidSuffix = ellipsoid != null
-            ? ' ${ref.read(selectedReferenceNameProvider)}'
+            ? ' ${l10n.t(ref.read(selectedReferenceNameProvider))}'
             : '';
         buffer.writeln('${l10n.t('Zone')}: $zone$ellipsoidSuffix');
       }

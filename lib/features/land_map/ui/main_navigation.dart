@@ -629,8 +629,8 @@ class _MainNavigationState extends State<MainNavigation> {
               onTap: () => _navigateToPage(1),
             ),
             _BottomNavItem(
-              label: l10n.t('Saved'),
-              semanticLabel: l10n.t('Saved locations'),
+              label: l10n.t('Library'),
+              semanticLabel: l10n.t('Library'),
               icon: Icons.list_alt,
               isSelected: _currentIndex == 2,
               selectedColor: _selectedColor,
