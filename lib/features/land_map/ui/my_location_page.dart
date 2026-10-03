@@ -26,6 +26,7 @@ import '../models/location_media_models.dart';
 import '../models/reference_ellipsoid.dart';
 import '../services/coordinate_converter.dart';
 import '../services/location_media_service.dart';
+import '../services/placemark_display.dart';
 import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 import 'location_media_page.dart';
@@ -4766,11 +4767,8 @@ List<String> _buildOverlayLines({
 }) {
   final placemark = capture.placemark;
   final position = capture.position;
-  final street = (placemark?.street ?? '').trim();
-  final area = [
-    placemark?.subLocality?.trim() ?? '',
-    placemark?.locality?.trim() ?? '',
-  ].firstWhere((v) => v.isNotEmpty, orElse: () => '');
+  final street = PlacemarkDisplay.street(placemark);
+  final area = PlacemarkDisplay.place(placemark);
 
   final lines = <String>[
     l10n.t(
@@ -4836,14 +4834,6 @@ TextStyle _overlayStyle({
 }
 
 String _formatPlacemark(Placemark? placemark) {
-  if (placemark == null) return 'Address unavailable';
-  final values = <String>[
-    placemark.street ?? '',
-    placemark.subLocality ?? '',
-    placemark.locality ?? '',
-    placemark.administrativeArea ?? '',
-    placemark.postalCode ?? '',
-    placemark.country ?? '',
-  ].where((v) => v.trim().isNotEmpty).toSet().toList();
-  return values.isEmpty ? 'Address unavailable' : values.join(', ');
+  final address = PlacemarkDisplay.address(placemark);
+  return address.isEmpty ? 'Address unavailable' : address;
 }

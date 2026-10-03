@@ -3215,11 +3215,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       case MapType.hybrid:
         return [
           cachedTile(
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           ),
           cachedTile(
-            'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png',
-            subdomains: ['a', 'b', 'c', 'd'],
+            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
           ),
         ];
     }
