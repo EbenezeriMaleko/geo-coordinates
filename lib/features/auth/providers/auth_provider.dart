@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/auth_models.dart';
 import '../services/auth_service.dart';
 import '../services/auth_session_store.dart';
+import '../../workspaces/workspace_context.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 
@@ -17,6 +18,9 @@ class AuthSessionNotifier extends Notifier<AuthSession> {
   }
 
   Future<void> setFromAuthResponse(AuthResponse response) async {
+    // A freshly authenticated account must never inherit another account's
+    // selected company context from local storage.
+    await WorkspaceContext.clear();
     final next = AuthSession(
       user: response.user,
       token: response.token?.trim() ?? '',
@@ -49,11 +53,13 @@ class AuthSessionNotifier extends Notifier<AuthSession> {
       }
     }
     await ref.read(authSessionStoreProvider).clear();
+    await WorkspaceContext.clear();
     state = AuthSession.empty;
   }
 
   Future<void> clearLocalSession() async {
     await ref.read(authSessionStoreProvider).clear();
+    await WorkspaceContext.clear();
     state = AuthSession.empty;
   }
 }

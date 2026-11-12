@@ -40,6 +40,10 @@ class CreateLandRequest {
   final String? place;
   final String? phone;
   final String? description;
+  final String? claimantName;
+  final String? claimantPhone;
+  final String? plotNumber;
+  final String? landUse;
   final String? referenceEllipsoid;
   final List<LandCoordinateRequest> coordinates;
 
@@ -50,6 +54,10 @@ class CreateLandRequest {
     this.place,
     this.phone,
     this.description,
+    this.claimantName,
+    this.claimantPhone,
+    this.plotNumber,
+    this.landUse,
     this.referenceEllipsoid,
   });
 
@@ -60,6 +68,10 @@ class CreateLandRequest {
         'place': place?.trim(),
         'phone': phone?.trim(),
         'description': description?.trim(),
+        'claimant_name': claimantName?.trim(),
+        'claimant_phone': claimantPhone?.trim(),
+        'plot_number': plotNumber?.trim(),
+        'land_use': landUse?.trim(),
         'reference_ellipsoid': referenceEllipsoid?.trim(),
         'coordinates': coordinates.map((e) => e.toJson()).toList(),
       }..removeWhere(
@@ -72,6 +84,10 @@ class UpdateLandRequest {
   final String? place;
   final String? phone;
   final String? description;
+  final String? claimantName;
+  final String? claimantPhone;
+  final String? plotNumber;
+  final String? landUse;
   final List<LandPointUpdateRequest>? points;
 
   const UpdateLandRequest({
@@ -79,6 +95,10 @@ class UpdateLandRequest {
     this.place,
     this.phone,
     this.description,
+    this.claimantName,
+    this.claimantPhone,
+    this.plotNumber,
+    this.landUse,
     this.points,
   });
 
@@ -88,10 +108,23 @@ class UpdateLandRequest {
         'place': place?.trim(),
         'phone': phone?.trim(),
         'description': description?.trim(),
+        'claimant_name': claimantName?.trim(),
+        'claimant_phone': claimantPhone?.trim(),
+        'plot_number': plotNumber?.trim(),
+        'land_use': landUse?.trim(),
         if (points != null)
           'points': points!.map((point) => point.toJson()).toList(),
       }..removeWhere(
-        (key, value) => value == null || (value is String && value.isEmpty),
+        (key, value) =>
+            value == null ||
+            (value is String &&
+                value.isEmpty &&
+                !const {
+                  'claimant_name',
+                  'claimant_phone',
+                  'plot_number',
+                  'land_use',
+                }.contains(key)),
       );
 }
 
@@ -171,12 +204,18 @@ class UpdateLandMarkerRequest {
 }
 
 class LandListItem {
+  final bool canManage;
   final String id;
   final String userId;
   final String type;
   final String name;
   final String? place;
   final String? phone;
+  final String? claimantName;
+  final String? claimantPhone;
+  final String? claimantIdMasked;
+  final String? plotNumber;
+  final String? landUse;
   final double? area;
   final double? perimeter;
   final String? description;
@@ -188,12 +227,18 @@ class LandListItem {
   final String? updatedAt;
 
   const LandListItem({
+    this.canManage = true,
     required this.id,
     required this.userId,
     required this.type,
     required this.name,
     required this.place,
     required this.phone,
+    this.claimantName,
+    this.claimantPhone,
+    this.claimantIdMasked,
+    this.plotNumber,
+    this.landUse,
     required this.area,
     required this.perimeter,
     required this.description,
@@ -207,12 +252,20 @@ class LandListItem {
 
   factory LandListItem.fromJson(Map<String, dynamic> json) {
     return LandListItem(
+      canManage: json['record_access'] is Map
+          ? json['record_access']['can_manage'] != false
+          : true,
       id: json['id']?.toString() ?? '',
       userId: json['user_id']?.toString() ?? '',
       type: json['type']?.toString() ?? 'polygon',
       name: json['name']?.toString() ?? '',
       place: json['place']?.toString(),
       phone: json['phone']?.toString(),
+      claimantName: json['claimant_name']?.toString(),
+      claimantPhone: json['claimant_phone']?.toString(),
+      claimantIdMasked: json['claimant_id_masked']?.toString(),
+      plotNumber: json['plot_number']?.toString(),
+      landUse: json['land_use']?.toString(),
       area: (json['area'] as num?)?.toDouble(),
       perimeter: (json['perimeter'] as num?)?.toDouble(),
       description: json['description']?.toString(),
@@ -305,12 +358,18 @@ class LandDetail extends LandListItem {
   final List<LandMedia> media;
 
   const LandDetail({
+    super.canManage,
     required super.id,
     required super.userId,
     required super.type,
     required super.name,
     required super.place,
     required super.phone,
+    super.claimantName,
+    super.claimantPhone,
+    super.claimantIdMasked,
+    super.plotNumber,
+    super.landUse,
     required super.area,
     required super.perimeter,
     required super.description,
@@ -328,12 +387,18 @@ class LandDetail extends LandListItem {
   factory LandDetail.fromJson(Map<String, dynamic> json) {
     final base = LandListItem.fromJson(json);
     return LandDetail(
+      canManage: base.canManage,
       id: base.id,
       userId: base.userId,
       type: base.type,
       name: base.name,
       place: base.place,
       phone: base.phone,
+      claimantName: base.claimantName,
+      claimantPhone: base.claimantPhone,
+      claimantIdMasked: base.claimantIdMasked,
+      plotNumber: base.plotNumber,
+      landUse: base.landUse,
       area: base.area,
       perimeter: base.perimeter,
       description: base.description,

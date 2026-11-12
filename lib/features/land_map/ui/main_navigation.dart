@@ -22,19 +22,23 @@ import '../state/land_map_notifier.dart';
 import '../state/settings_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../workspaces/workspace_context.dart';
+import '../../workspaces/workspace_provider.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../notifications/services/push_notification_service.dart';
 
 enum _StartupLocationIssue { serviceOff, permissionDenied, permissionForever }
 
 // ─── Main navigation ──────────────────────────────────────────────────────────
 
-class MainNavigation extends StatefulWidget {
+class MainNavigation extends ConsumerStatefulWidget {
   const MainNavigation({super.key});
 
   @override
-  State<MainNavigation> createState() => _MainNavigationState();
+  ConsumerState<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class _MainNavigationState extends ConsumerState<MainNavigation> {
   int _currentIndex = 0;
   Timer? _syncTimer;
   bool _syncInProgress = false;
@@ -53,6 +57,14 @@ class _MainNavigationState extends State<MainNavigation> {
     super.initState();
     _savedLocationsToolbarController.addListener(_onSavedToolbarChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(
+        PushNotificationService.instance.syncSession(
+          ProviderScope.containerOf(
+            context,
+            listen: false,
+          ).read(authSessionProvider),
+        ),
+      );
       unawaited(_requestStartupLocationPermission());
       _runBackgroundSync();
       _syncTimer = Timer.periodic(_syncInterval, (_) => _runBackgroundSync());
@@ -353,25 +365,28 @@ class _MainNavigationState extends State<MainNavigation> {
         final name = customName.trim().isEmpty
             ? context.l10n.t('My location {date}', params: {'date': now})
             : customName.trim();
-        await box.put(id, {
-          'id': id,
-          'entityType': 'point',
-          'type': 'point',
-          'name': name,
-          'referenceEllipsoid': ellipsoid.name,
-          'labels': ['1'],
-          'points': [
-            {
-              'order': 0,
-              'lat': current.latitude,
-              'lng': current.longitude,
-              'label': '1',
-            },
-          ],
-          'syncStatus': 'pending',
-          'createdAt': now,
-          'updatedAt': now,
-        });
+        await box.put(
+          id,
+          WorkspaceContext.stampRecord({
+            'id': id,
+            'entityType': 'point',
+            'type': 'point',
+            'name': name,
+            'referenceEllipsoid': ellipsoid.name,
+            'labels': ['1'],
+            'points': [
+              {
+                'order': 0,
+                'lat': current.latitude,
+                'lng': current.longitude,
+                'label': '1',
+              },
+            ],
+            'syncStatus': 'pending',
+            'createdAt': now,
+            'updatedAt': now,
+          }),
+        );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.l10n.t('Location saved'))),
@@ -556,7 +571,15 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authSessionProvider, (previous, next) {
+      unawaited(PushNotificationService.instance.syncSession(next));
+    });
     final l10n = context.l10n;
+    final companyWorkspace =
+        ref.watch(workspaceProvider).activeCompanyId != null;
+    final selectedColor = companyWorkspace
+        ? const Color(0xFF197568)
+        : _selectedColor;
     final bottomInset =
         _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom;
     final pages = [
@@ -587,7 +610,11 @@ class _MainNavigationState extends State<MainNavigation> {
           : AppBar(
               automaticallyImplyLeading: false,
               title: Text(
-                _appBarTitleText(),
+                _currentIndex == 2
+                    ? (companyWorkspace ? 'Company library' : 'My library')
+                    : _currentIndex == 3 && companyWorkspace
+                    ? 'Company settings'
+                    : _appBarTitleText(),
                 style: const TextStyle(
                   color: Colors.black87,
                   fontWeight: FontWeight.w700,
@@ -599,56 +626,61 @@ class _MainNavigationState extends State<MainNavigation> {
               elevation: 0,
             ),
       body: IndexedStack(index: _currentIndex, children: pages),
-      bottomNavigationBar: Container(
-        height: _bottomNavHeight + MediaQuery.of(context).padding.bottom,
-        padding: EdgeInsets.only(
-          left: 12,
-          right: 12,
-          top: 6,
-          bottom: 6 + MediaQuery.of(context).padding.bottom,
-        ),
-        color: _bottomNavBackground,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _BottomNavItem(
-              label: l10n.t('Map'),
-              semanticLabel: l10n.t('Map'),
-              icon: Icons.public,
-              isSelected: _currentIndex == 0,
-              selectedColor: _selectedColor,
-              unselectedColor: _unselectedColor,
-              onTap: () => _navigateToPage(0),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: _bottomNavHeight + MediaQuery.of(context).padding.bottom,
+            padding: EdgeInsets.only(
+              left: 12,
+              right: 12,
+              top: 6,
+              bottom: 6 + MediaQuery.of(context).padding.bottom,
             ),
-            _BottomNavItem(
-              label: l10n.t('Location'),
-              semanticLabel: l10n.t('My location'),
-              icon: Icons.navigation,
-              isSelected: _currentIndex == 1,
-              selectedColor: _selectedColor,
-              unselectedColor: _unselectedColor,
-              onTap: () => _navigateToPage(1),
+            color: _bottomNavBackground,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _BottomNavItem(
+                  label: l10n.t('Map'),
+                  semanticLabel: l10n.t('Map'),
+                  icon: Icons.public,
+                  isSelected: _currentIndex == 0,
+                  selectedColor: selectedColor,
+                  unselectedColor: _unselectedColor,
+                  onTap: () => _navigateToPage(0),
+                ),
+                _BottomNavItem(
+                  label: l10n.t('Location'),
+                  semanticLabel: l10n.t('My location'),
+                  icon: Icons.navigation,
+                  isSelected: _currentIndex == 1,
+                  selectedColor: selectedColor,
+                  unselectedColor: _unselectedColor,
+                  onTap: () => _navigateToPage(1),
+                ),
+                _BottomNavItem(
+                  label: l10n.t('Library'),
+                  semanticLabel: l10n.t('Library'),
+                  icon: Icons.list_alt,
+                  isSelected: _currentIndex == 2,
+                  selectedColor: selectedColor,
+                  unselectedColor: _unselectedColor,
+                  onTap: () => _navigateToPage(2),
+                ),
+                _BottomNavItem(
+                  label: l10n.t('Settings'),
+                  semanticLabel: l10n.t('Settings'),
+                  icon: Icons.settings,
+                  isSelected: _currentIndex == 3,
+                  selectedColor: selectedColor,
+                  unselectedColor: _unselectedColor,
+                  onTap: () => _navigateToPage(3),
+                ),
+              ],
             ),
-            _BottomNavItem(
-              label: l10n.t('Library'),
-              semanticLabel: l10n.t('Library'),
-              icon: Icons.list_alt,
-              isSelected: _currentIndex == 2,
-              selectedColor: _selectedColor,
-              unselectedColor: _unselectedColor,
-              onTap: () => _navigateToPage(2),
-            ),
-            _BottomNavItem(
-              label: l10n.t('Settings'),
-              semanticLabel: l10n.t('Settings'),
-              icon: Icons.settings,
-              isSelected: _currentIndex == 3,
-              selectedColor: _selectedColor,
-              unselectedColor: _unselectedColor,
-              onTap: () => _navigateToPage(3),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

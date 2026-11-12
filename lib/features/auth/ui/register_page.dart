@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:country_code_picker/country_code_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/auth_provider.dart';
+import '../models/registration_phone.dart';
 import 'login_page.dart';
 import '../../../core/localization/app_localizations.dart';
 
@@ -20,6 +23,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  String _dialCode = '+255';
+  String _countryCode = 'TZ';
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
@@ -45,6 +51,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
     _firstNameController.dispose();
     _lastNameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -65,6 +72,11 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
           lastName: _lastNameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
+          phone: registrationPhoneNumber(
+            _dialCode,
+            _countryCode,
+            _phoneController.text,
+          ),
         );
 
     if (!mounted) return;
@@ -341,6 +353,52 @@ class _RegisterPageState extends ConsumerState<RegisterPage>
                 }
                 return null;
               },
+            ),
+            const SizedBox(height: 20),
+            _buildLabel(l10n.t('Phone number (optional)')),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CountryCodePicker(
+                  initialSelection: 'TZ',
+                  showCountryOnly: false,
+                  showOnlyCountryWhenClosed: false,
+                  enabled: !isLoading,
+                  onChanged: (country) => setState(() {
+                    _dialCode = country.dialCode ?? '+255';
+                    _countryCode = country.code ?? 'TZ';
+                  }),
+                ),
+                Expanded(
+                  child: TextFormField(
+                    controller: _phoneController,
+                    enabled: !isLoading,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(15),
+                    ],
+                    textInputAction: TextInputAction.next,
+                    decoration: _inputDecoration(
+                      hint: l10n.t('Number without country code'),
+                      icon: Icons.phone_outlined,
+                    ),
+                    validator: (value) {
+                      final number = registrationPhoneNumber(
+                        _dialCode,
+                        _countryCode,
+                        value ?? '',
+                      );
+                      if (number != null &&
+                          (number.length < 6 || number.length > 16)) {
+                        return l10n.t('Enter a valid phone number');
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 20),
             _buildLabel(l10n.t('Password')),

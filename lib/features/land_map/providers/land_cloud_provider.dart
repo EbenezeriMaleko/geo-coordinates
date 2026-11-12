@@ -6,6 +6,8 @@ import '../../auth/providers/auth_provider.dart';
 import '../../auth/services/auth_service.dart';
 import '../models/land_api_models.dart';
 import '../services/land_cloud_service.dart';
+import '../../workspaces/workspace_provider.dart';
+import '../../workspaces/library_organization_filter.dart';
 
 const int latestRemoteLandsLimit = 100;
 const int latestRemoteLandsPageSize = 20;
@@ -15,8 +17,15 @@ final landCloudServiceProvider = Provider<LandCloudService>(
 );
 
 class RemoteLandsNotifier extends AsyncNotifier<PaginatedLands?> {
+  int _generation = 0;
   @override
-  Future<PaginatedLands?> build() async => null;
+  Future<PaginatedLands?> build() async {
+    ref.watch(workspaceProvider.select((s) => s.activeCompanyId));
+    ref.watch(authSessionProvider);
+    ref.watch(libraryOrganizationFilterProvider);
+    _generation++;
+    return null;
+  }
 
   Future<PaginatedLands?> fetch({
     String? search,
@@ -33,8 +42,9 @@ class RemoteLandsNotifier extends AsyncNotifier<PaginatedLands?> {
       throw const AuthException('Verify your email before cloud access.');
     }
 
+    final generation = ++_generation;
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    final outcome = await AsyncValue.guard(() async {
       final service = ref.read(landCloudServiceProvider);
       final maxItems = limit <= 0 ? latestRemoteLandsLimit : limit;
       final pageSize = perPage <= 0 ? maxItems : min(perPage, maxItems);
@@ -43,6 +53,8 @@ class RemoteLandsNotifier extends AsyncNotifier<PaginatedLands?> {
         search: search,
         perPage: pageSize,
         page: page,
+        projectId: ref.read(libraryOrganizationFilterProvider).project,
+        teamId: ref.read(libraryOrganizationFilterProvider).team,
       );
 
       final items = <LandListItem>[];
@@ -62,6 +74,8 @@ class RemoteLandsNotifier extends AsyncNotifier<PaginatedLands?> {
         lastPage: result.lastPage,
       );
     });
+    if (!ref.mounted || generation != _generation) return null;
+    state = outcome;
     return switch (state) {
       AsyncData<PaginatedLands?>(:final value) => value,
       _ => null,
@@ -97,6 +111,7 @@ class RemoteLandsNotifier extends AsyncNotifier<PaginatedLands?> {
     }
 
     final remaining = maxItems - current.items.length;
+    final generation = _generation;
     final pageSize = min(
       perPage <= 0 ? latestRemoteLandsPageSize : perPage,
       remaining,
@@ -108,8 +123,11 @@ class RemoteLandsNotifier extends AsyncNotifier<PaginatedLands?> {
           search: search,
           perPage: pageSize,
           page: current.currentPage + 1,
+          projectId: ref.read(libraryOrganizationFilterProvider).project,
+          teamId: ref.read(libraryOrganizationFilterProvider).team,
         );
 
+    if (!ref.mounted || generation != _generation) return null;
     final seenIds = current.items.map((item) => item.id.trim()).toSet();
     final merged = <LandListItem>[...current.items];
     for (final item in result.items) {
@@ -137,8 +155,14 @@ final remoteLandsProvider =
     );
 
 class RemoteLandSummaryNotifier extends AsyncNotifier<LandSummary?> {
+  int _generation = 0;
   @override
-  Future<LandSummary?> build() async => null;
+  Future<LandSummary?> build() async {
+    ref.watch(workspaceProvider.select((s) => s.activeCompanyId));
+    ref.watch(authSessionProvider);
+    _generation++;
+    return null;
+  }
 
   Future<LandSummary?> fetch() async {
     final session = ref.read(authSessionProvider);
@@ -150,10 +174,13 @@ class RemoteLandSummaryNotifier extends AsyncNotifier<LandSummary?> {
       throw const AuthException('Verify your email before cloud access.');
     }
 
+    final generation = ++_generation;
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
+    final outcome = await AsyncValue.guard(
       () => ref.read(landCloudServiceProvider).summary(token),
     );
+    if (!ref.mounted || generation != _generation) return null;
+    state = outcome;
     return switch (state) {
       AsyncData<LandSummary?>(:final value) => value,
       _ => null,
@@ -198,6 +225,7 @@ final remoteSettingsProvider =
 
 final remoteLandDetailProvider = FutureProvider.autoDispose
     .family<LandDetail, String>((ref, landId) async {
+      ref.watch(workspaceProvider.select((s) => s.activeCompanyId));
       final session = ref.read(authSessionProvider);
       final token = session.token.trim();
       if (token.isEmpty) {

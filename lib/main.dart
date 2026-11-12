@@ -3,16 +3,28 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:taref_gps/features/land_map/services/map_tile_cache.dart';
 
 import 'features/land_map/ui/splash_page.dart';
+import 'features/workspaces/workspace_context.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/localization/locale_provider.dart';
+import 'features/notifications/services/push_notification_service.dart';
+import 'features/notifications/ui/notifications_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('landbox');
+  await Hive.openBox('notification_preferences');
+  try {
+    await Firebase.initializeApp();
+    await PushNotificationService.instance.initialize();
+  } catch (error) {
+    debugPrint('Firebase notifications are unavailable: $error');
+  }
+  WorkspaceContext.restore();
   await MapTileCache.init();
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -25,6 +37,7 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(localeProvider);
     return MaterialApp(
+      navigatorKey: notificationsNavigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Land Mapper',
       locale: locale,
@@ -105,6 +118,7 @@ class MyApp extends ConsumerWidget {
         ),
       ),
       home: const SplashPage(),
+      routes: {'/notifications': (_) => const NotificationsPage()},
     );
   }
 }

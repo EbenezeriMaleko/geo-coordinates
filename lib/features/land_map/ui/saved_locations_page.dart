@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../subscriptions/plans_access_page.dart';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,14 @@ import '../services/survey_invitation.dart';
 import 'user_survey_page.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../workspaces/workspace_context.dart';
+import '../../workspaces/workspace_provider.dart';
+import '../../workspaces/library_organization_filter.dart';
+import '../../workspaces/record_organization_section.dart';
+import 'record_recovery_page.dart';
+import 'record_export_page.dart';
+import 'parcel_pdf_page.dart';
+import 'record_sharing_page.dart';
 
 enum _ViewMode { combined, basic, text, photo }
 
@@ -127,10 +136,12 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   String _groupFilter = 'All groups';
   bool _compactMode = false;
   bool _isLoadingMoreRemote = false;
+  bool _isManuallySyncing = false;
   bool _showSurveyInvitation = false;
   bool _previewSurveyInvitation = false;
   bool _checkingSurveyInvitation = false;
   ProviderSubscription<AuthSession>? _authSubscription;
+  ProviderSubscription<WorkspaceState>? _workspaceSubscription;
 
   @override
   void initState() {
@@ -143,6 +154,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         _fetchRemoteData();
         return;
       }
+    });
+    _workspaceSubscription = ref.listenManual(workspaceProvider, (
+      previous,
+      next,
+    ) {
+      if (previous?.activeCompanyId == next.activeCompanyId) return;
+      _selectedIds.clear();
+      _selectionMode = false;
+      if (mounted) setState(() {});
+      _fetchRemoteData();
     });
 
     Future.microtask(_fetchRemoteData);
@@ -167,6 +188,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     _savedListScrollController.removeListener(_onSavedListScroll);
     _savedListScrollController.dispose();
     _authSubscription?.close();
+    _workspaceSubscription?.close();
     _searchController.dispose();
     super.dispose();
   }
@@ -179,6 +201,58 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         .fetch(search: _searchQuery.isEmpty ? null : _searchQuery);
     await ref.read(remoteLandSummaryProvider.notifier).fetch();
     if (mounted && widget.isActive) _considerSurveyInvitation();
+  }
+
+  Future<void> _syncPendingRecords() async {
+    if (_isManuallySyncing) return;
+    final session = ref.read(authSessionProvider);
+    if (!session.isLoggedIn || !session.isVerified) return;
+    final companyId = ref.read(workspaceProvider).activeCompanyId;
+    final token = Hive.box('landbox').get('auth_token');
+    setState(() => _isManuallySyncing = true);
+    try {
+      final box = Hive.box('landbox');
+      final result = await LandSyncService(
+        box,
+      ).syncPendingLands(limit: max(1, box.length));
+      if (!mounted ||
+          companyId != ref.read(workspaceProvider).activeCompanyId ||
+          token != box.get('auth_token')) {
+        return;
+      }
+      await _fetchRemoteData();
+      if (!mounted ||
+          companyId != ref.read(workspaceProvider).activeCompanyId ||
+          token != box.get('auth_token')) {
+        return;
+      }
+      final message = result.attempted == 0
+          ? context.l10n.t('No pending records to sync.')
+          : context.l10n.t(
+              '{synced} records synced. {failed} records remain pending.',
+              params: {
+                'synced': '${result.synced}',
+                'failed': '${result.failed}',
+              },
+            );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.l10n.t(
+                'Unable to complete cloud sync. Your local records are kept. Please try again.',
+              ),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isManuallySyncing = false);
+    }
   }
 
   Future<void> _considerSurveyInvitation() async {
@@ -351,6 +425,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     final l10n = context.l10n;
     final box = Hive.box('landbox');
     final authSession = ref.watch(authSessionProvider);
+    final workspace = ref.watch(workspaceProvider);
+    final organizationFilter = ref.watch(libraryOrganizationFilterProvider);
+    ref.listen(libraryOrganizationFilterProvider, (previous, next) {
+      _selectedIds.clear();
+      _selectionMode = false;
+      _notifyToolbarStateChanged();
+      _fetchRemoteData();
+    });
     final remoteLandsState = ref.watch(remoteLandsProvider);
     final distanceUnit = ref.watch(distanceUnitProvider);
     final canUseCloud = authSession.isLoggedIn && authSession.isVerified;
@@ -536,6 +618,20 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     ),
                   ),
                 ),
+                if (canUseCloud) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: l10n.t('Sync pending records'),
+                    onPressed: _isManuallySyncing ? null : _syncPendingRecords,
+                    icon: _isManuallySyncing
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_upload_outlined, size: 22),
+                  ),
+                ],
                 const SizedBox(width: 8),
                 _HeaderActionButton(
                   icon: Icons.tune_rounded,
@@ -584,6 +680,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ],
               ),
             ),
+          if (canUseCloud && workspace.activeCompanyId != null)
+            const LibraryOrganizationFilters(),
           const SizedBox(height: 8),
           Expanded(
             child: ValueListenableBuilder(
@@ -592,6 +690,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 final localItems = box.values
                     .whereType<Map>()
                     .map((e) => Map<String, dynamic>.from(e))
+                    .where(WorkspaceContext.belongsToActiveWorkspace)
                     .toList();
 
                 final remoteItems =
@@ -599,7 +698,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     const <LandListItem>[];
                 final remotePage = remoteLandsState.asData?.value;
                 final allDisplayItems = _buildDisplayItems(
-                  localItems: localItems,
+                  localItems: organizationFilter.active ? const [] : localItems,
                   remoteItems: remoteItems,
                   canUseCloud: canUseCloud,
                 ).where((item) => _pointsCount(item) > 0).toList();
@@ -791,6 +890,11 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                               areaSquareMeters: _areaSquareMeters(item),
                               distanceUnit: distanceUnit,
                               isCloudSynced: _isCloudSynced(item),
+                              waitingForSpace:
+                                  !isRemote &&
+                                  item['syncStatus'] == 'pending' &&
+                                  item['syncBlockedReason'] ==
+                                      'waiting_for_space',
                               viewMode: _viewMode,
                               compactMode: _compactMode,
                               selectionMode: _selectionMode,
@@ -1086,6 +1190,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       'area': remote.area,
       'perimeter': remote.perimeter,
       'pointsCount': remote.pointsCount,
+      'canManage': remote.canManage,
       'markersCount': remote.markersCount,
       'mediaCount': remote.mediaCount,
       '__isRemote': true,
@@ -1155,6 +1260,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     if (id.isEmpty) return null;
 
     return LandListItem(
+      canManage: item['canManage'] != false,
       id: id,
       userId: '',
       type:
@@ -1347,6 +1453,24 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (ref.read(authSessionProvider).isLoggedIn &&
+                ref.read(authSessionProvider).isVerified)
+              ListTile(
+                leading: const Icon(Icons.restore_from_trash_outlined),
+                title: const Text('Recycle bin'),
+                onTap: () {
+                  final company = ref.read(workspaceProvider).activeCompanyId;
+                  Navigator.pop(sheetContext);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RecordRecoveryPage(
+                        company: company,
+                        onRestored: _fetchRemoteData,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.checklist_outlined),
               title: Text(sheetContext.l10n.t('Select multiple')),
@@ -1487,6 +1611,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
 
   Future<void> _deleteSelectedItems() async {
     if (_selectedIds.isEmpty) return;
+    for (final selectionId in _selectedIds.toList()) {
+      final raw = Hive.box('landbox').get(selectionId);
+      final item = selectionId.startsWith('remote:')
+          ? <String, dynamic>{'cloudId': selectionId.substring(7)}
+          : raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
+      if (!await _canManageLocal(item)) return;
+    }
+    if (!mounted) return;
     final selectedCount = _selectedIds.length;
     showDialog(
       context: context,
@@ -1547,6 +1681,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               }
 
               for (final landId in cloudIdsToDelete) {
+                if (!await _canManageLocal({'cloudId': landId})) return;
+              }
+              for (final landId in cloudIdsToDelete) {
                 await ref
                     .read(landCloudServiceProvider)
                     .deleteLand(token, landId);
@@ -1593,8 +1730,10 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     );
   }
 
-  void _setGroupForSelectedItems() {
+  Future<void> _setGroupForSelectedItems() async {
     if (_selectedIds.isEmpty) return;
+    if (!await _canManageSelection()) return;
+    if (!mounted) return;
     final controller = TextEditingController(text: context.l10n.t('General'));
     showDialog(
       context: context,
@@ -1620,6 +1759,8 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           ElevatedButton(
             onPressed: () async {
               final input = controller.text.trim();
+              if (!await _canManageSelection()) return;
+              if (!context.mounted) return;
               final group = input.isEmpty || input == context.l10n.t('General')
                   ? 'General'
                   : input;
@@ -1725,18 +1866,28 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     }
                   },
                 ),
-                _ActionTile(
-                  icon: Icons.edit,
-                  label: sheetContext.l10n.t('Rename'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    if (isRemote) {
-                      unawaited(_editRemoteItem(context, item));
-                    } else {
-                      _renameItem(context, id, item['name']?.toString() ?? '');
-                    }
-                  },
-                ),
+                if (item['canManage'] == false)
+                  const ListTile(
+                    leading: Icon(Icons.lock_outline),
+                    title: Text('Read-only record'),
+                  ),
+                if (item['canManage'] != false)
+                  _ActionTile(
+                    icon: Icons.edit,
+                    label: sheetContext.l10n.t('Rename'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      if (isRemote) {
+                        unawaited(_editRemoteItem(context, item));
+                      } else {
+                        _renameItem(
+                          context,
+                          id,
+                          item['name']?.toString() ?? '',
+                        );
+                      }
+                    },
+                  ),
                 _ActionTile(
                   icon: Icons.copy,
                   label: sheetContext.l10n.t('Copy coordinates'),
@@ -1777,15 +1928,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     );
                   },
                 ),
-                _ActionTile(
-                  icon: Icons.delete_outline,
-                  label: sheetContext.l10n.t('Delete'),
-                  isDestructive: true,
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _deleteItem(context, id, item: item, isRemote: isRemote);
-                  },
-                ),
+                if (item['canManage'] != false)
+                  _ActionTile(
+                    icon: Icons.delete_outline,
+                    label: sheetContext.l10n.t('Delete'),
+                    isDestructive: true,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _deleteItem(context, id, item: item, isRemote: isRemote);
+                    },
+                  ),
               ],
             ),
           ),
@@ -1841,6 +1993,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           _cachedDetailForRemote(item) ??
           await ref.read(remoteLandDetailProvider(cloudId).future);
       if (detail == null) throw StateError('Cloud record not found');
+      if (!detail.canManage) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This record is read-only after a plan change.'),
+            ),
+          );
+        }
+        return;
+      }
       if (!context.mounted) return;
       await showModalBottomSheet<void>(
         context: context,
@@ -2086,6 +2248,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       name: local['name']?.toString() ?? remote.name,
       place: local['place']?.toString() ?? remote.place,
       phone: local['phone']?.toString() ?? remote.phone,
+      claimantName: local['claimant_name']?.toString() ?? remote.claimantName,
+      claimantPhone:
+          local['claimant_phone']?.toString() ?? remote.claimantPhone,
+      claimantIdMasked:
+          local['claimant_id_masked']?.toString() ?? remote.claimantIdMasked,
+      plotNumber: local['plot_number']?.toString() ?? remote.plotNumber,
+      landUse: local['land_use']?.toString() ?? remote.landUse,
       area: remote.area,
       perimeter: remote.perimeter,
       description: local['description']?.toString() ?? remote.description,
@@ -2136,11 +2305,13 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     return LatLng(lat, lng);
   }
 
-  void _setGroupForItem(
+  Future<void> _setGroupForItem(
     BuildContext context,
     String id,
     Map<String, dynamic> item,
-  ) {
+  ) async {
+    if (!await _canManageLocal(item)) return;
+    if (!context.mounted) return;
     final currentGroup = _groupOf(item);
     final controller = TextEditingController(
       text: currentGroup == 'General'
@@ -2236,7 +2407,54 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     return labels;
   }
 
-  void _renameItem(BuildContext context, String id, String currentName) {
+  Future<bool> _canManageSelection() async {
+    for (final id in _selectedIds.toList()) {
+      final raw = Hive.box('landbox').get(id);
+      final item = id.startsWith('remote:')
+          ? <String, dynamic>{'cloudId': id.substring(7)}
+          : raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
+      if (!await _canManageLocal(item)) return false;
+    }
+    return mounted;
+  }
+
+  Future<void> _canManageNotice() async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'This record is read-only or access could not be verified. No local changes were made.',
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _canManageLocal(Map<String, dynamic> item) async {
+    final cloudId = item['cloudId']?.toString().trim() ?? '';
+    if (cloudId.isEmpty) return true;
+    try {
+      final token = ref.read(authSessionProvider).token;
+      final detail = await ref
+          .read(landCloudServiceProvider)
+          .getLand(token, cloudId);
+      if (detail.canManage) return true;
+    } catch (_) {}
+    await _canManageNotice();
+    return false;
+  }
+
+  Future<void> _renameItem(
+    BuildContext context,
+    String id,
+    String currentName,
+  ) async {
+    final raw = Hive.box('landbox').get(id);
+    if (raw is Map && !await _canManageLocal(Map<String, dynamic>.from(raw))) {
+      return;
+    }
+    if (!context.mounted) return;
     final controller = TextEditingController(text: currentName);
     showDialog(
       context: context,
@@ -2328,12 +2546,15 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
     );
   }
 
-  void _deleteItem(
+  Future<void> _deleteItem(
     BuildContext context,
     String id, {
     required Map<String, dynamic> item,
     required bool isRemote,
-  }) {
+  }) async {
+    final accessItem = isRemote ? {...item, 'cloudId': item['id']} : item;
+    if (!await _canManageLocal(accessItem)) return;
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -2810,6 +3031,7 @@ class _SavedLocationCard extends StatelessWidget {
   final double? areaSquareMeters;
   final DistanceUnit distanceUnit;
   final bool isCloudSynced;
+  final bool waitingForSpace;
   final _ViewMode viewMode;
   final bool compactMode;
   final bool selectionMode;
@@ -2829,6 +3051,7 @@ class _SavedLocationCard extends StatelessWidget {
     required this.areaSquareMeters,
     required this.distanceUnit,
     required this.isCloudSynced,
+    this.waitingForSpace = false,
     required this.viewMode,
     required this.compactMode,
     required this.selectionMode,
@@ -2898,7 +3121,59 @@ class _SavedLocationCard extends StatelessWidget {
             ),
           ],
         ),
-        child: _buildContent(context, theme, dateText, hasUpdated, updatedText),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildContent(context, theme, dateText, hasUpdated, updatedText),
+            if (waitingForSpace)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.tertiaryContainer.withValues(
+                      alpha: 0.4,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.cloud_queue_outlined, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Waiting for space',
+                              style: theme.textTheme.labelLarge,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Saved on this device. Cloud sync will retry when space is available.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      TextButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const PlansAccessPage(),
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.manage_accounts_outlined,
+                          size: 16,
+                        ),
+                        label: const Text('View plan access'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -3281,17 +3556,33 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
   late final TextEditingController _placeController;
   late final TextEditingController _phoneController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _claimantNameController;
+  late final TextEditingController _claimantPhoneController;
+  late final TextEditingController _plotNumberController;
+  late final TextEditingController _landUseController;
+  late final int? _companyAtOpen;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _companyAtOpen = WorkspaceContext.activeCompanyId;
     _nameController = TextEditingController(text: widget.land.name);
     _placeController = TextEditingController(text: widget.land.place ?? '');
     _phoneController = TextEditingController(text: widget.land.phone ?? '');
     _descriptionController = TextEditingController(
       text: widget.land.description ?? '',
     );
+    _claimantNameController = TextEditingController(
+      text: widget.land.claimantName ?? '',
+    );
+    _claimantPhoneController = TextEditingController(
+      text: widget.land.claimantPhone ?? '',
+    );
+    _plotNumberController = TextEditingController(
+      text: widget.land.plotNumber ?? '',
+    );
+    _landUseController = TextEditingController(text: widget.land.landUse ?? '');
   }
 
   @override
@@ -3300,11 +3591,21 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
     _placeController.dispose();
     _phoneController.dispose();
     _descriptionController.dispose();
+    _claimantNameController.dispose();
+    _claimantPhoneController.dispose();
+    _plotNumberController.dispose();
+    _landUseController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_companyAtOpen != WorkspaceContext.activeCompanyId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Workspace changed. Reopen this record.')),
+      );
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {
@@ -3315,6 +3616,14 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
         place: _placeController.text,
         phone: _phoneController.text,
         description: _descriptionController.text,
+        claimantName: _companyAtOpen == null
+            ? null
+            : _claimantNameController.text,
+        claimantPhone: _companyAtOpen == null
+            ? null
+            : _claimantPhoneController.text,
+        plotNumber: _companyAtOpen == null ? null : _plotNumberController.text,
+        landUse: _companyAtOpen == null ? null : _landUseController.text,
       );
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -3418,6 +3727,42 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
                       labelText: context.l10n.t('Description'),
                     ),
                   ),
+                  if (_companyAtOpen != null) ...[
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _claimantNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Owner / claimant',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _claimantPhoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Owner phone',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _plotNumberController,
+                      decoration: const InputDecoration(
+                        labelText: 'Plot number',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _landUseController,
+                      decoration: const InputDecoration(labelText: 'Land use'),
+                    ),
+                    if (widget.land.claimantIdMasked?.isNotEmpty == true)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Text(
+                          'Owner ID: ${widget.land.claimantIdMasked}',
+                        ),
+                      ),
+                  ],
                   const SizedBox(height: 20),
                   SizedBox(
                     height: 52,
@@ -3593,6 +3938,14 @@ class _LandDetailSheet extends ConsumerStatefulWidget {
 }
 
 class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
+  late final int? _companyAtOpen;
+
+  @override
+  void initState() {
+    super.initState();
+    _companyAtOpen = ref.read(workspaceProvider).activeCompanyId;
+  }
+
   bool _showAllPoints = false;
   bool _isDeleting = false;
 
@@ -3856,6 +4209,41 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                             place: place,
                             phone: phone,
                             description: description,
+                            claimantName: _companyAtOpen == null
+                                ? null
+                                : (widget.isCloud
+                                      ? (_cloudDetail?.claimantName ??
+                                            widget.cloudItem!.claimantName)
+                                      : widget.localItem!['claimant_name']
+                                            ?.toString()),
+                            claimantPhone: _companyAtOpen == null
+                                ? null
+                                : (widget.isCloud
+                                      ? (_cloudDetail?.claimantPhone ??
+                                            widget.cloudItem!.claimantPhone)
+                                      : widget.localItem!['claimant_phone']
+                                            ?.toString()),
+                            claimantIdMasked: _companyAtOpen == null
+                                ? null
+                                : (widget.isCloud
+                                      ? (_cloudDetail?.claimantIdMasked ??
+                                            widget.cloudItem!.claimantIdMasked)
+                                      : widget.localItem!['claimant_id_masked']
+                                            ?.toString()),
+                            plotNumber: _companyAtOpen == null
+                                ? null
+                                : (widget.isCloud
+                                      ? (_cloudDetail?.plotNumber ??
+                                            widget.cloudItem!.plotNumber)
+                                      : widget.localItem!['plot_number']
+                                            ?.toString()),
+                            landUse: _companyAtOpen == null
+                                ? null
+                                : (widget.isCloud
+                                      ? (_cloudDetail?.landUse ??
+                                            widget.cloudItem!.landUse)
+                                      : widget.localItem!['land_use']
+                                            ?.toString()),
                             createdAt: createdAt,
                             updatedAt: updatedAt,
                             type: type,
@@ -3863,6 +4251,17 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                           ),
                           const SizedBox(height: 12),
                           // Points card
+                          if (_companyAtOpen != null && isCloudSynced)
+                            RecordOrganizationSection(
+                              company: _companyAtOpen,
+                              record: widget.isCloud
+                                  ? widget.cloudItem!.id
+                                  : widget.localItem!['cloudId'].toString(),
+                              canManage: widget.isCloud
+                                  ? (_cloudDetail?.canManage ?? false)
+                                  : widget.localItem!['canManage'] != false,
+                              onChanged: widget.onRemoteChanged,
+                            ),
                           if (points.isNotEmpty)
                             _buildPointsCard(context, points),
                           const SizedBox(height: 12),
@@ -3958,6 +4357,11 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
     required String? place,
     required String? phone,
     required String? description,
+    String? claimantName,
+    String? claimantPhone,
+    String? claimantIdMasked,
+    String? plotNumber,
+    String? landUse,
     required String? createdAt,
     required String? updatedAt,
     required String type,
@@ -4036,6 +4440,16 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             _InfoRow(label: context.l10n.t('Phone'), value: phone!),
           if (description?.trim().isNotEmpty == true)
             _InfoRow(label: context.l10n.t('Description'), value: description!),
+          if (claimantName?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Owner / claimant', value: claimantName!),
+          if (claimantPhone?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Owner phone', value: claimantPhone!),
+          if (claimantIdMasked?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Owner ID (masked)', value: claimantIdMasked!),
+          if (plotNumber?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Plot number', value: plotNumber!),
+          if (landUse?.trim().isNotEmpty == true)
+            _InfoRow(label: 'Land use', value: landUse!),
           if (perimeterText != null)
             _InfoRow(label: context.l10n.t('Perimeter'), value: perimeterText),
           if (areaText != null)
@@ -4282,6 +4696,97 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       child: Column(
         children: [
           // Go to map — always shown
+          if (widget.isCloud ||
+              (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
+            _ActionRow(
+              icon: Icons.picture_as_pdf_outlined,
+              label: context.l10n.t('Parcel PDF'),
+              color: theme.colorScheme.primary,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ParcelPdfPage(
+                    company: _companyAtOpen,
+                    record: widget.isCloud
+                        ? widget.cloudItem!.id
+                        : widget.localItem!['cloudId'].toString(),
+                    name: widget.isCloud
+                        ? (_cloudDetail?.name ?? widget.cloudItem!.name)
+                        : widget.localItem!['name']?.toString() ??
+                              'Saved record',
+                  ),
+                ),
+              ),
+            ),
+          if (widget.isCloud ||
+              (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
+            _ActionRow(
+              icon: Icons.link,
+              label: 'Share link',
+              color: theme.colorScheme.primary,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => RecordSharingPage(
+                    company: _companyAtOpen,
+                    record: widget.isCloud
+                        ? widget.cloudItem!.id
+                        : widget.localItem!['cloudId'].toString(),
+                  ),
+                ),
+              ),
+            ),
+          if (widget.isCloud ||
+              (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
+            _ActionRow(
+              icon: Icons.file_download_outlined,
+              label: context.l10n.t('Export file'),
+              color: theme.colorScheme.primary,
+              onTap: () {
+                final record = widget.isCloud
+                    ? widget.cloudItem!.id
+                    : widget.localItem!['cloudId'].toString();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => RecordExportPage(
+                      company: _companyAtOpen,
+                      record: record,
+                      name: widget.isCloud
+                          ? (_cloudDetail?.name ?? widget.cloudItem!.name)
+                          : widget.localItem!['name']?.toString() ??
+                                'Saved record',
+                    ),
+                  ),
+                );
+              },
+            ),
+          if (widget.isCloud ||
+              (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
+            _ActionRow(
+              icon: Icons.history,
+              label: context.l10n.t('Record history'),
+              color: theme.colorScheme.primary,
+              onTap: () async {
+                var restored = false;
+                final record = widget.isCloud
+                    ? widget.cloudItem!.id
+                    : widget.localItem!['cloudId'].toString();
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => RecordRecoveryPage(
+                      company: _companyAtOpen,
+                      record: record,
+                      canManage: widget.isCloud
+                          ? (_cloudDetail?.canManage ?? false)
+                          : widget.localItem!['canManage'] != false,
+                      onRestored: () async {
+                        restored = true;
+                        await widget.onRemoteChanged?.call();
+                      },
+                    ),
+                  ),
+                );
+                if (mounted && restored) Navigator.of(this.context).pop();
+              },
+            ),
           _ActionRow(
             icon: Icons.navigation_outlined,
             label: context.l10n.t('Go to map'),
@@ -4382,7 +4887,15 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             },
           ),
           const Divider(height: 1, indent: 56),
-          if (widget.isCloud) ...[
+          if (widget.isCloud && _cloudDetail?.canManage == false)
+            const ListTile(
+              leading: Icon(Icons.lock_outline),
+              title: Text('Read-only record'),
+              subtitle: Text(
+                'Viewing, navigation and coordinate sharing remain available.',
+              ),
+            ),
+          if (widget.isCloud && _cloudDetail?.canManage != false) ...[
             _ActionRow(
               icon: Icons.edit_outlined,
               label: context.l10n.t('Edit metadata'),
@@ -4390,6 +4903,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                 final detail = _cloudDetail;
                 if (detail == null) return;
                 await showModalBottomSheet<void>(
+                  // Recheck permission in the cloud service before any queued edit is uploaded.
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
@@ -4902,40 +5416,43 @@ class _ManualCoordinateEntrySheetState
           : _recordType;
 
       // Save locally first
-      await box.put(id, {
-        'id': id,
-        'entityType': type,
-        'type': type,
-        'name': name,
-        if (_placeController.text.trim().isNotEmpty)
-          'place': _placeController.text.trim(),
-        if (_phoneController.text.trim().isNotEmpty)
-          'phone': _phoneController.text.trim(),
-        if (_descriptionController.text.trim().isNotEmpty)
-          'description': _descriptionController.text.trim(),
-        'referenceEllipsoid': ellipsoid.name,
-        'labels': _points.map((p) => p.label).toList(),
-        'points': _points
-            .asMap()
-            .entries
-            .map(
-              (e) => {
-                'order': e.key,
-                'lat': e.value.lat,
-                'lng': e.value.lng,
-                if (e.value.easting != null) 'easting': e.value.easting,
-                if (e.value.northing != null) 'northing': e.value.northing,
-                if (e.value.zone != null) 'zone': e.value.zone,
-                if (e.value.band != null) 'band': e.value.band,
-                'hemisphere': e.value.hemisphere,
-                'label': e.value.label,
-              },
-            )
-            .toList(),
-        'syncStatus': 'pending',
-        'createdAt': now,
-        'updatedAt': now,
-      });
+      await box.put(
+        id,
+        WorkspaceContext.stampRecord({
+          'id': id,
+          'entityType': type,
+          'type': type,
+          'name': name,
+          if (_placeController.text.trim().isNotEmpty)
+            'place': _placeController.text.trim(),
+          if (_phoneController.text.trim().isNotEmpty)
+            'phone': _phoneController.text.trim(),
+          if (_descriptionController.text.trim().isNotEmpty)
+            'description': _descriptionController.text.trim(),
+          'referenceEllipsoid': ellipsoid.name,
+          'labels': _points.map((p) => p.label).toList(),
+          'points': _points
+              .asMap()
+              .entries
+              .map(
+                (e) => {
+                  'order': e.key,
+                  'lat': e.value.lat,
+                  'lng': e.value.lng,
+                  if (e.value.easting != null) 'easting': e.value.easting,
+                  if (e.value.northing != null) 'northing': e.value.northing,
+                  if (e.value.zone != null) 'zone': e.value.zone,
+                  if (e.value.band != null) 'band': e.value.band,
+                  'hemisphere': e.value.hemisphere,
+                  'label': e.value.label,
+                },
+              )
+              .toList(),
+          'syncStatus': 'pending',
+          'createdAt': now,
+          'updatedAt': now,
+        }),
+      );
 
       // Attempt cloud sync
       final session = ref.read(authSessionProvider);

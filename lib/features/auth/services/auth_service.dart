@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../../core/network/api_client.dart';
 import '../models/auth_models.dart';
+import 'auth_device_identity.dart';
 
 class AuthException implements Exception {
   final String message;
@@ -11,12 +12,28 @@ class AuthException implements Exception {
   String toString() => message;
 }
 
+class DeviceLimitException extends AuthException {
+  const DeviceLimitException(super.message);
+}
+
+bool isDeviceLimitResponse(int status, Map<String, dynamic> body) {
+  final errors = body['errors'];
+  final messages = errors is Map ? errors['device_id'] : null;
+  return status == 422 &&
+      messages is List &&
+      messages.any(
+        (message) =>
+            message is String &&
+            message.startsWith('Device allowance reached.'),
+      );
+}
+
 class AuthService {
   Future<AuthResponse> login(LoginRequest request) async {
     return _performAuthRequest(
-      () => ApiClient.postJson(
+      () async => ApiClient.postJson(
         '/auth/login',
-        body: request.toJson(),
+        body: {...request.toJson(), ...await AuthDeviceIdentity().metadata()},
         tag: 'auth_login',
       ),
       fallbackError: 'Login failed. Please try again.',
@@ -25,9 +42,9 @@ class AuthService {
 
   Future<AuthResponse> register(RegisterRequest request) async {
     return _performAuthRequest(
-      () => ApiClient.postJson(
+      () async => ApiClient.postJson(
         '/auth/register',
-        body: request.toJson(),
+        body: {...request.toJson(), ...await AuthDeviceIdentity().metadata()},
         tag: 'auth_register',
       ),
       fallbackError: 'Registration failed. Please try again.',
@@ -189,6 +206,9 @@ class AuthService {
         return AuthResponse.fromJson(body);
       }
 
+      if (isDeviceLimitResponse(response.statusCode, body)) {
+        throw DeviceLimitException(_extractErrorMessage(body, fallbackError));
+      }
       throw AuthException(_extractErrorMessage(body, fallbackError));
     } on AuthException {
       rethrow;

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.0.0+9
+version: 2.0.0+22
 
 environment:
   sdk: ^3.10.8
@@ -37,6 +37,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_map: ^8.2.2
+  google_maps_flutter: ^2.14.0
   latlong2: ^0.9.1
   hive: ^2.2.3
   drift: ^2.31.0
@@ -44,6 +45,8 @@ dependencies:
   hive_flutter: ^1.1.0
   uuid: ^4.5.2
   flutter_riverpod: ^3.2.1
+  country_code_picker: ^3.2.0
+  image_picker: ^1.2.3
   flutter_launcher_icons: ^0.14.4
   device_info_plus: ^13.2.0
   google_fonts: ^8.1.0
@@ -59,6 +62,7 @@ dependencies:
   share_plus: ^13.3.0
   package_info_plus: ^10.2.1
   proj4dart: ^3.0.0
+  xml: ^6.6.1
   flutter_map_cache: ^2.1.0
   http_cache_hive_store: ^5.1.0
   http_cache_file_store: ^2.0.1
@@ -70,6 +74,9 @@ dependencies:
   url_launcher: ^6.3.2
   permission_handler: ^12.0.2
   saver_gallery: ^5.1.0
+  firebase_core: ^5.1.0
+  firebase_messaging: ^17.0.1
+  flutter_local_notifications: ^22.3.3
 
 dev_dependencies:
   flutter_test:
@@ -131,3 +138,8 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   image_path: "lib/assets/databenki_latest_logo.png"
   min_sdk_android: 21
+
+
+
+
+

@@ -7,6 +7,15 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+val googleMapsAndroidKey = providers.environmentVariable("GOOGLE_MAPS_ANDROID_API_KEY")
+    .orElse(providers.gradleProperty("GOOGLE_MAPS_ANDROID_API_KEY"))
+    .orElse(localProperties.getProperty("GOOGLE_MAPS_ANDROID_API_KEY", ""))
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -21,6 +30,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -33,6 +43,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsAndroidKey.get()
 
         // Enables multi-dex support for large apps
         multiDexEnabled = true
@@ -69,4 +80,5 @@ dependencies {
     implementation("com.google.android.play:app-update:2.1.0")
     implementation("com.google.android.play:app-update-ktx:2.1.0")
     implementation("androidx.concurrent:concurrent-futures:1.1.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

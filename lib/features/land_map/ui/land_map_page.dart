@@ -1,8 +1,10 @@
 import 'dart:async';
+import '../../subscriptions/entitlement_provider.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as google;
 import 'package:flutter/services.dart';
 import 'package:flutter_map_compass/flutter_map_compass.dart';
 import 'package:geolocator/geolocator.dart';
@@ -25,7 +27,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import '../services/map_tile_cache.dart';
 import '../services/measurement_formatter.dart';
+import 'map_camera_controller.dart';
+import 'google_map_geometry.dart';
+import 'google_map_surface.dart';
+import 'google_marker_icons.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../workspaces/workspace_context.dart';
 
 enum MapType { normal, satellite, terrain, hybrid }
 
@@ -240,11 +247,24 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   static const String _layerMarkerPrefKey = 'prefs_layer_marker';
 
   final MapController _mapController = MapController();
+  late final MapCameraController _cameraController = MapCameraController(
+    _mapController,
+  );
+  bool _useGoogleMap = false;
+  final GoogleMarkerIcons _googleMarkerIcons = GoogleMarkerIcons();
+  LatLng? _providerCenter;
+  double? _providerZoom;
   final TextEditingController _placeController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _claimantNameController = TextEditingController();
+  final TextEditingController _claimantPhoneController =
+      TextEditingController();
+  final TextEditingController _plotNumberController = TextEditingController();
+  final TextEditingController _landUseController = TextEditingController();
 
   MapType _currentMapType = MapType.normal;
+  MapType _preferredMapType = MapType.normal;
   _MapTool _activeTool = _MapTool.none;
   final Distance _distanceCalculator = const Distance();
 
@@ -360,7 +380,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _orientationCompassSubscription = null;
     if (_orientationLocked && mounted) {
       // Reset map rotation to north-up
-      _mapController.rotate(0);
+      _cameraController.rotate(0);
     }
     _orientationLocked = false;
     _orientationHeading = 0.0;
@@ -370,7 +390,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   void _applyOrientationRotation() {
     if (!mounted || !_orientationLocked || _navigationCameraActive) return;
-    _mapController.rotate(-_orientationHeading);
+    _cameraController.rotate(-_orientationHeading);
   }
 
   void _toggleOrientation() {
@@ -491,6 +511,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     _placeController.dispose();
     _phoneController.dispose();
     _descriptionController.dispose();
+    _claimantNameController.dispose();
+    _claimantPhoneController.dispose();
+    _plotNumberController.dispose();
+    _landUseController.dispose();
     super.dispose();
   }
 
@@ -687,7 +711,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final st = ref.read(landMapProvider);
     if (st.current != null) {
       _followCurrentLocation = true;
-      _mapController.move(st.current!, 17);
+      _cameraController.move(st.current!, 17);
       err = null;
     }
 
@@ -712,7 +736,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         _navigationDisplayPosition ?? ref.read(landMapProvider).current;
     if (current != null) {
       _followCurrentLocation = true;
-      _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
+      _cameraController.move(current, _clampZoom(max(_currentZoom, 17)));
       _startContinuousPositionStream();
       // unawaited(ref.read(landMapProvider.notifier).refreshLocation());
       return;
@@ -749,7 +773,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final now = ref.read(landMapProvider).current;
     if (now != null) {
       _followCurrentLocation = true;
-      _mapController.move(now, _clampZoom(max(_currentZoom, 17)));
+      _cameraController.move(now, _clampZoom(max(_currentZoom, 17)));
     }
 
     setState(() {
@@ -871,7 +895,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       final id = const Uuid().v4();
       final now = DateTime.now().toIso8601String();
       final label = draft.label.trim();
-      final payload = {
+      final payload = WorkspaceContext.stampRecord({
         'id': id,
         'entityType': 'point',
         'type': 'point',
@@ -886,7 +910,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         'syncError': null,
         'createdAt': now,
         'updatedAt': now,
-      };
+      });
       await box.put(id, payload);
       if (!mounted) return;
       setState(() {
@@ -1121,33 +1145,36 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     final ellipsoid = ref.read(referenceEllipsoidProvider);
     final id = const Uuid().v4();
     final now = DateTime.now().toIso8601String();
-    await box.put(id, {
-      'id': id,
-      'entityType': 'polyline',
-      'type': 'polyline',
-      'name': name,
-      'referenceEllipsoid': ellipsoid.name,
-      if ((place ?? '').trim().isNotEmpty) 'place': place!.trim(),
-      if ((phone ?? '').trim().isNotEmpty) 'phone': phone!.trim(),
-      if ((description ?? '').trim().isNotEmpty)
-        'description': description!.trim(),
-      if (labels.isNotEmpty) 'labels': labels,
-      'points': points
-          .asMap()
-          .entries
-          .map(
-            (entry) => {
-              'order': entry.key,
-              'lat': entry.value.latitude,
-              'lng': entry.value.longitude,
-            },
-          )
-          .toList(),
-      'syncStatus': 'pending',
-      'syncError': null,
-      'createdAt': now,
-      'updatedAt': now,
-    });
+    await box.put(
+      id,
+      WorkspaceContext.stampRecord({
+        'id': id,
+        'entityType': 'polyline',
+        'type': 'polyline',
+        'name': name,
+        'referenceEllipsoid': ellipsoid.name,
+        if ((place ?? '').trim().isNotEmpty) 'place': place!.trim(),
+        if ((phone ?? '').trim().isNotEmpty) 'phone': phone!.trim(),
+        if ((description ?? '').trim().isNotEmpty)
+          'description': description!.trim(),
+        if (labels.isNotEmpty) 'labels': labels,
+        'points': points
+            .asMap()
+            .entries
+            .map(
+              (entry) => {
+                'order': entry.key,
+                'lat': entry.value.latitude,
+                'lng': entry.value.longitude,
+              },
+            )
+            .toList(),
+        'syncStatus': 'pending',
+        'syncError': null,
+        'createdAt': now,
+        'updatedAt': now,
+      }),
+    );
 
     if (!mounted) return;
     setState(() {
@@ -1252,11 +1279,29 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     if (!mounted) return;
     setState(() {
-      if (savedType != null) _currentMapType = savedType;
+      if (savedType != null) _preferredMapType = savedType;
       if (fieldLayer is bool) _showFieldLayer = fieldLayer;
       if (distanceLayer is bool) _showDistanceLayer = distanceLayer;
       if (markerLayer is bool) _showMarkerLayer = markerLayer;
     });
+    final access = ref.read(entitlementProvider).asData?.value;
+    if (access != null) _applyMapAccess(access);
+  }
+
+  void _applyMapAccess(Map<String, FeatureDecision> access) {
+    if (_useGoogleMap && access['map.google_maps']?.allowed != true) {
+      _cameraController.useFlutterMap();
+      if (mounted) setState(() => _useGoogleMap = false);
+    }
+    final key = _preferredMapType == MapType.normal
+        ? 'map.standard_basemap'
+        : 'map.satellite_and_hybrid';
+    final next = access[key]?.allowed == true
+        ? _preferredMapType
+        : MapType.normal;
+    if (mounted && next != _currentMapType) {
+      setState(() => _currentMapType = next);
+    }
   }
 
   Future<void> _saveMapTypePreference(MapType type) async {
@@ -1276,14 +1321,23 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return null;
   }
 
-  void _changeMapType(MapType type, BuildContext sheetContext) {
+  Future<void> _changeMapType(MapType type, BuildContext sheetContext) async {
     if (_currentMapType == type) {
       Navigator.pop(sheetContext);
       return;
     }
     Navigator.pop(sheetContext);
+    final allowed = await checkFeatureAccess(
+      context,
+      ref,
+      type == MapType.normal
+          ? 'map.standard_basemap'
+          : 'map.satellite_and_hybrid',
+    );
+    if (!mounted || !allowed) return;
     setState(() {
       _currentMapType = type;
+      _preferredMapType = type;
       _isMapTypeSwitching = true;
     });
     _saveMapTypePreference(type);
@@ -1294,10 +1348,156 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     });
   }
 
+  Future<void> _changeMapProvider(
+    bool useGoogle,
+    BuildContext sheetContext,
+  ) async {
+    Navigator.pop(sheetContext);
+    if (useGoogle == _useGoogleMap) return;
+    if (useGoogle) {
+      final allowed = await checkFeatureAccess(context, ref, 'map.google_maps');
+      if (!mounted || !allowed) return;
+      try {
+        _providerCenter = _mapController.camera.center;
+        _providerZoom = _mapController.camera.zoom;
+      } catch (_) {
+        _providerCenter = ref.read(landMapProvider).current;
+        _providerZoom = _currentZoom;
+      }
+      _cameraController.beginGoogle(
+        google.CameraPosition(
+          target: toGoogleLatLng(
+            _providerCenter ?? const LatLng(-6.7924, 39.2083),
+          ),
+          zoom: _providerZoom ?? _defaultMapZoom,
+        ),
+      );
+    } else {
+      _cameraController.useFlutterMap();
+    }
+    setState(() => _useGoogleMap = useGoogle);
+  }
+
+  Future<void> _handleMapLongPress(LatLng latLng) async {
+    if (_activeTool == _MapTool.marker) {
+      await _addMarkerAt(latLng);
+      return;
+    }
+    if (_activeTool == _MapTool.distance) {
+      _addDistancePoint(latLng);
+      return;
+    }
+    if (_activeTool != _MapTool.none) return;
+    if (!_showFieldLayer) {
+      _snack(context.l10n.t('Turn on the Field layer to add area points.'));
+      return;
+    }
+    _skipNextFieldPointsFocus = true;
+    final err = ref.read(landMapProvider.notifier).addPointAt(latLng);
+    if (err != null && mounted) {
+      _skipNextFieldPointsFocus = false;
+      _snack(err);
+    }
+  }
+
+  void _startGoogleMapInteraction() {
+    _interactionCooldownTimer?.cancel();
+    if (!_userIsInteracting || _followCurrentLocation) {
+      setState(() {
+        _userIsInteracting = true;
+        _followCurrentLocation = false;
+      });
+    }
+  }
+
+  void _endGoogleMapInteraction() {
+    _interactionCooldownTimer?.cancel();
+    _interactionCooldownTimer = Timer(
+      _navigationCameraActive
+          ? const Duration(seconds: 5)
+          : const Duration(seconds: 2),
+      () {
+        if (!mounted || !_useGoogleMap) return;
+        setState(() => _userIsInteracting = false);
+        if (_navigationCameraActive) {
+          _updateNavigationCamera();
+        } else if (_orientationLocked) {
+          _applyOrientationRotation();
+        }
+      },
+    );
+  }
+
+  Set<google.Marker> _buildGoogleMarkers(List<Marker> markers) {
+    final result = <google.Marker>{};
+    for (var i = 0; i < markers.length; i++) {
+      final marker = markers[i];
+      final child = marker.child;
+      var kind = GoogleMarkerIconKind.point;
+      var color = const Color(0xFF001F3F);
+      var text = '';
+      var rotation = 0.0;
+      VoidCallback? onTap;
+      if (child is _PointMarker) {
+        text = '${child.index}';
+      } else if (child is _SegmentDistancePill) {
+        kind = GoogleMarkerIconKind.label;
+        color = child.color;
+        text = child.text;
+      } else if (child is _DistancePointMarker) {
+        color = Colors.orange.shade700;
+        text = child.label;
+      } else if (child is _NavigationTargetVertexMarker) {
+        color = Colors.teal.shade700;
+        text = child.label;
+      } else if (child is _NavigationArrowMarker) {
+        color = Colors.teal.shade700;
+        kind = GoogleMarkerIconKind.arrow;
+        rotation = child.bearing;
+      } else if (child is _NavigationDestinationMarker) {
+        color = Colors.teal.shade700;
+        text = 'F';
+      } else if (child is _NavigationTargetMarker) {
+        color = Colors.teal.shade700;
+        text = 'X';
+      } else if (child is _CurrentMarker) {
+        color = Colors.blue.shade700;
+        text = '•';
+      } else if (child is GestureDetector && child.child is _SavedMarkerPin) {
+        color = Colors.deepOrange;
+        final label = (child.child! as _SavedMarkerPin).label.trim();
+        text = label.substring(0, min(2, label.length)).toUpperCase();
+        onTap = child.onTap;
+      }
+      result.add(
+        google.Marker(
+          markerId: google.MarkerId('overlay_$i'),
+          position: toGoogleLatLng(marker.point),
+          anchor: kind == GoogleMarkerIconKind.label
+              ? const Offset(0.5, 1)
+              : const Offset(0.5, 0.5),
+          icon: _googleMarkerIcons.get(
+            kind: kind,
+            text: text,
+            color: color,
+            onReady: () {
+              if (mounted && _useGoogleMap) setState(() {});
+            },
+          ),
+          flat: kind == GoogleMarkerIconKind.arrow,
+          rotation: rotation,
+          consumeTapEvents: onTap != null,
+          onTap: onTap,
+        ),
+      );
+    }
+    return result;
+  }
+
   void _focusOnPoints(List<LatLng> points) {
     if (points.isEmpty) return;
     if (points.length == 1) {
-      _mapController.move(points.first, _clampZoom(18));
+      _cameraController.move(points.first, _clampZoom(18));
       return;
     }
 
@@ -1331,7 +1531,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       zoom = 13;
     }
 
-    _mapController.move(center, _clampZoom(zoom));
+    _cameraController.move(center, _clampZoom(zoom));
   }
 
   bool _isUserMapEventSource(MapEventSource source) {
@@ -1358,7 +1558,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       return;
     }
 
-    _mapController.move(current, _clampZoom(max(_currentZoom, 17)));
+    _cameraController.move(current, _clampZoom(max(_currentZoom, 17)));
   }
 
   List<LatLng> _targetPoints(LandNavigationTarget target) {
@@ -1707,7 +1907,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     if (_positionAnimationIsNavigation) {
       _moveNavigationCameraTo(point);
     } else if (_followCurrentLocation && !_userIsInteracting) {
-      _mapController.move(point, _clampZoom(max(_currentZoom, 17)));
+      _cameraController.move(point, _clampZoom(max(_currentZoom, 17)));
     }
   }
 
@@ -1767,7 +1967,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   void _moveNavigationCameraTo(LatLng point) {
     if (!_navigationCameraActive || _userIsInteracting) return;
-    _mapController.moveAndRotate(
+    _cameraController.moveAndRotate(
       point,
       _clampZoom(max(_currentZoom, 17)),
       -_navigationHeading,
@@ -1937,7 +2137,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       if (!mounted || !_navigationCameraActive || _userIsInteracting) return;
       final pos = _navigationDisplayPosition;
       if (pos == null) return;
-      _mapController.moveAndRotate(
+      _cameraController.moveAndRotate(
         pos,
         _clampZoom(max(_currentZoom, 17)),
         -_navigationHeading, // always latest heading at fire time
@@ -2157,12 +2357,22 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   }
 
   void _prepareFieldFormControllers(LandMapState currentState) {
+    _claimantNameController.clear();
+    _claimantPhoneController.clear();
+    _plotNumberController.clear();
+    _landUseController.clear();
     final box = Hive.box('landbox');
     final activeId = currentState.activeFieldId;
     if (activeId != null) {
       final raw = box.get(activeId);
       if (raw is Map) {
         final existing = Map<String, dynamic>.from(raw);
+        _claimantNameController.text =
+            existing['claimant_name']?.toString() ?? '';
+        _claimantPhoneController.text =
+            existing['claimant_phone']?.toString() ?? '';
+        _plotNumberController.text = existing['plot_number']?.toString() ?? '';
+        _landUseController.text = existing['land_use']?.toString() ?? '';
         _placeController.text =
             (existing['place']?.toString() ??
                     existing['name']?.toString() ??
@@ -2309,7 +2519,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 title: Text(sheetContext.l10n.t('Center here')),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  _mapController.move(marker.point, 17);
+                  _cameraController.move(marker.point, 17);
                 },
               ),
               ListTile(
@@ -2331,6 +2541,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    ref.listen(entitlementProvider, (previous, next) {
+      final decisions = next.asData?.value;
+      if (decisions != null) _applyMapAccess(decisions);
+    });
     final st = ref.watch(landMapProvider);
     final hasLiveLocationAccess = !_isLocationAccessError(_locationError);
     final coordinateFormat = ref.watch(coordinateFormatProvider);
@@ -2555,107 +2769,124 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         ),
     ];
 
+    final googleMarkers = _useGoogleMap
+        ? _buildGoogleMarkers(markers)
+        : <google.Marker>{};
+
     return Stack(
       children: [
         // Map
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: center,
-            initialZoom: _defaultMapZoom,
-            onMapEvent: (event) {
-              final isUserEvent = _isUserMapEventSource(event.source);
-              if (event is MapEventMoveStart ||
-                  event is MapEventFlingAnimationStart) {
-                if (isUserEvent) {
-                  _interactionCooldownTimer?.cancel();
-                  setState(() {
-                    _userIsInteracting = true;
-                    _followCurrentLocation = false;
-                  });
+        if (_useGoogleMap)
+          Listener(
+            onPointerDown: (_) => _startGoogleMapInteraction(),
+            onPointerUp: (_) => _endGoogleMapInteraction(),
+            onPointerCancel: (_) => _endGoogleMapInteraction(),
+            child: GoogleMapSurface(
+              initialCenter: _providerCenter ?? center,
+              initialZoom: _providerZoom ?? _defaultMapZoom,
+              mapType: switch (_currentMapType) {
+                MapType.normal => google.MapType.normal,
+                MapType.satellite => google.MapType.satellite,
+                MapType.terrain => google.MapType.terrain,
+                MapType.hybrid => google.MapType.hybrid,
+              },
+              markers: googleMarkers,
+              polygons: googlePolygons(polygons),
+              polylines: googlePolylines(polylines),
+              onMapCreated: (controller) {
+                if (!mounted || !_useGoogleMap) return;
+                _cameraController.useGoogle(
+                  controller,
+                  google.CameraPosition(
+                    target: toGoogleLatLng(_providerCenter ?? center),
+                    zoom: _providerZoom ?? _defaultMapZoom,
+                  ),
+                );
+              },
+              onCameraMove: (position) {
+                if (!_useGoogleMap) return;
+                _cameraController.updateGooglePosition(position);
+                _providerCenter = fromGoogleLatLng(position.target);
+                _providerZoom = position.zoom;
+                if (mounted && position.zoom != _currentZoom) {
+                  setState(() => _currentZoom = position.zoom);
                 }
-              }
-              if (event is MapEventMoveEnd ||
-                  event is MapEventFlingAnimationEnd) {
-                if (isUserEvent) {
-                  _interactionCooldownTimer?.cancel();
-                  _interactionCooldownTimer = Timer(
-                    // Longer cooldown during navigation so user can look around
-                    // then camera snaps back after 5 seconds
-                    _navigationCameraActive
-                        ? const Duration(seconds: 5)
-                        : const Duration(seconds: 2),
-                    () {
-                      if (mounted) {
-                        setState(() => _userIsInteracting = false);
-                        // Re-engage navigation camera after user stops
-                        if (_navigationCameraActive) {
-                          _updateNavigationCamera();
-                        } else if (_orientationLocked) {
-                          _applyOrientationRotation();
+              },
+              onLongPress: _handleMapLongPress,
+            ),
+          )
+        else
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _providerCenter ?? center,
+              initialZoom: _providerZoom ?? _defaultMapZoom,
+              onMapEvent: (event) {
+                final isUserEvent = _isUserMapEventSource(event.source);
+                if (event is MapEventMoveStart ||
+                    event is MapEventFlingAnimationStart) {
+                  if (isUserEvent) {
+                    _interactionCooldownTimer?.cancel();
+                    setState(() {
+                      _userIsInteracting = true;
+                      _followCurrentLocation = false;
+                    });
+                  }
+                }
+                if (event is MapEventMoveEnd ||
+                    event is MapEventFlingAnimationEnd) {
+                  if (isUserEvent) {
+                    _interactionCooldownTimer?.cancel();
+                    _interactionCooldownTimer = Timer(
+                      // Longer cooldown during navigation so user can look around
+                      // then camera snaps back after 5 seconds
+                      _navigationCameraActive
+                          ? const Duration(seconds: 5)
+                          : const Duration(seconds: 2),
+                      () {
+                        if (mounted) {
+                          setState(() => _userIsInteracting = false);
+                          // Re-engage navigation camera after user stops
+                          if (_navigationCameraActive) {
+                            _updateNavigationCamera();
+                          } else if (_orientationLocked) {
+                            _applyOrientationRotation();
+                          }
                         }
-                      }
-                    },
-                  );
+                      },
+                    );
+                  }
                 }
-              }
-            },
-            onPositionChanged: (position, _) {
-              final zoom = position.zoom;
-              if (zoom != _currentZoom && mounted) {
-                setState(() => _currentZoom = zoom);
-              }
-            },
-            onLongPress: (_, latLng) async {
-              if (_activeTool == _MapTool.marker) {
-                await _addMarkerAt(latLng);
-                return;
-              }
-              if (_activeTool == _MapTool.distance) {
-                _addDistancePoint(latLng);
-                return;
-              }
-              if (_activeTool == _MapTool.none) {
-                if (!_showFieldLayer) {
-                  _snack(
-                    context.l10n.t(
-                      'Turn on the Field layer to add area points.',
-                    ),
-                  );
-                  return;
+              },
+              onPositionChanged: (position, _) {
+                final zoom = position.zoom;
+                if (zoom != _currentZoom && mounted) {
+                  setState(() => _currentZoom = zoom);
                 }
-                _skipNextFieldPointsFocus = true;
-                final err = ref
-                    .read(landMapProvider.notifier)
-                    .addPointAt(latLng);
-                if (err != null && mounted) {
-                  _skipNextFieldPointsFocus = false;
-                  _snack(err);
-                }
-              }
-            },
+              },
+              onLongPress: (_, latLng) => _handleMapLongPress(latLng),
+            ),
+            children: [
+              ..._buildMapTileLayers(),
+              if (polygons.isNotEmpty) PolygonLayer(polygons: polygons),
+              if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
+              MarkerLayer(markers: markers),
+
+              // Compass — left side, aligned with first tool button
+              Positioned(
+                left: 16,
+                top: _isFullscreen
+                    ? 90
+                    : 160 + MediaQuery.of(context).padding.top,
+                child: MapCompass.cupertino(hideIfRotatedNorth: true),
+              ),
+
+              RichAttributionWidget(
+                showFlutterMapAttribution: false,
+                attributions: [TextSourceAttribution('OSM contributors')],
+              ),
+            ],
           ),
-          children: [
-            ..._buildMapTileLayers(),
-            if (polygons.isNotEmpty) PolygonLayer(polygons: polygons),
-            if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
-            MarkerLayer(markers: markers),
-
-            // Compass — left side, aligned with first tool button
-            Positioned(
-              left: 16,
-              top: _isFullscreen
-                  ? 90
-                  : 160 + MediaQuery.of(context).padding.top,
-              child: MapCompass.cupertino(hideIfRotatedNorth: true),
-            ),
-
-            RichAttributionWidget(
-              showFlutterMapAttribution: false,
-              attributions: [TextSourceAttribution('OSM contributors')],
-            ),
-          ],
-        ),
         if (_isFetchingRoute)
           Positioned(
             top: 110 + MediaQuery.of(context).padding.top,
@@ -3218,7 +3449,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           ),
           cachedTile(
-            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
+            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
           ),
         ];
     }
@@ -3242,6 +3473,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 l10n.t('Map Type'),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
+              if (!kIsWeb &&
+                  (defaultTargetPlatform == TargetPlatform.android ||
+                      defaultTargetPlatform == TargetPlatform.iOS))
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('Standard')),
+                    ButtonSegment(value: true, label: Text('Google Maps')),
+                  ],
+                  selected: {_useGoogleMap},
+                  onSelectionChanged: (selection) =>
+                      _changeMapProvider(selection.first, context),
+                ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -3622,6 +3865,52 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                   icon: Icons.notes_outlined,
                                 ),
                               ),
+                              if (WorkspaceContext.activeCompanyId != null) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Owner / claimant',
+                                  style: _sheetLabelStyle(),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _claimantNameController,
+                                  decoration: _sheetInputDecoration(
+                                    hint: 'Name (optional)',
+                                    icon: Icons.person_outline,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text('Owner phone', style: _sheetLabelStyle()),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _claimantPhoneController,
+                                  keyboardType: TextInputType.phone,
+                                  decoration: _sheetInputDecoration(
+                                    hint: 'Phone (optional)',
+                                    icon: Icons.phone_outlined,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text('Plot number', style: _sheetLabelStyle()),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _plotNumberController,
+                                  decoration: _sheetInputDecoration(
+                                    hint: 'Plot number (optional)',
+                                    icon: Icons.tag,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text('Land use', style: _sheetLabelStyle()),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _landUseController,
+                                  decoration: _sheetInputDecoration(
+                                    hint: 'Land use (optional)',
+                                    icon: Icons.landscape_outlined,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 18),
                               Text(
                                 l10n.t('Boundary capture'),
@@ -3960,6 +4249,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                                       phone: enteredPhone,
                                                       description:
                                                           enteredDescription,
+                                                      claimantName:
+                                                          _claimantNameController
+                                                              .text,
+                                                      claimantPhone:
+                                                          _claimantPhoneController
+                                                              .text,
+                                                      plotNumber:
+                                                          _plotNumberController
+                                                              .text,
+                                                      landUse:
+                                                          _landUseController
+                                                              .text,
                                                       pointLabels: pointLabels,
                                                     );
                                                 if (!sheetStateContext

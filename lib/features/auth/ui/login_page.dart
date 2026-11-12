@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../land_map/ui/main_navigation.dart';
 import '../providers/auth_provider.dart';
+import '../services/auth_service.dart';
 import 'forgot_password_page.dart';
 import 'register_page.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -78,7 +79,9 @@ class _LoginPageState extends ConsumerState<LoginPage>
     final authState = ref.watch(loginProvider);
     final isLoading = authState.isLoading;
     final errorMsg = authState.hasError
-        ? l10n.t(authState.error.toString())
+        ? authState.error is DeviceLimitException
+            ? '${l10n.t(authState.error.toString())}\n\n${l10n.t('Use Settings > Signed-in devices on an existing signed-in device to sign out another session, or sign out normally on that device, then retry here. If no signed-in device is accessible, contact support.')}'
+              : l10n.t(authState.error.toString())
         : null;
     final isCompact = MediaQuery.of(context).size.width < 700;
 
@@ -252,9 +255,7 @@ class _LoginPageState extends ConsumerState<LoginPage>
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
-                ).copyWith(
-                  elevation: const WidgetStatePropertyAll(2),
-                ),
+                ).copyWith(elevation: const WidgetStatePropertyAll(2)),
                 child: isLoading
                     ? const SizedBox(
                         width: 22,

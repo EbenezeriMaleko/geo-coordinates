@@ -12,6 +12,7 @@ import '../data/land_repo.dart';
 import '../models/geodetic_datum.dart';
 import '../models/reference_ellipsoid.dart';
 import '../services/coordinate_converter.dart';
+import '../../workspaces/workspace_context.dart';
 import 'land_map_state.dart';
 
 final landRepoProvider = Provider<LandRepo>((ref) {
@@ -245,6 +246,10 @@ class LandMapNotifier extends Notifier<LandMapState> {
     String? place,
     String? phone,
     String? description,
+    String? claimantName,
+    String? claimantPhone,
+    String? plotNumber,
+    String? landUse,
     List<String>? pointLabels,
   }) async {
     if (state.points.length < 3) {
@@ -260,6 +265,14 @@ class LandMapNotifier extends Notifier<LandMapState> {
       final placeValue = place?.trim() ?? '';
       final phoneValue = phone?.trim() ?? '';
       final descriptionValue = description?.trim() ?? '';
+      final companyDetails = WorkspaceContext.activeCompanyId == null
+          ? <String, dynamic>{}
+          : <String, dynamic>{
+              'claimant_name': claimantName?.trim() ?? '',
+              'claimant_phone': claimantPhone?.trim() ?? '',
+              'plot_number': plotNumber?.trim() ?? '',
+              'land_use': landUse?.trim() ?? '',
+            };
       final normalizedLabels = _normalizePointLabels(
         pointLabels,
         state.points.length,
@@ -285,7 +298,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
         final displayName = name.isEmpty
             ? (existing['name']?.toString() ?? 'Land ${now.toIso8601String()}')
             : name;
-        final updated = {
+        final updated = WorkspaceContext.stampRecord({
           ...existing,
           // activeFieldId may be the server ID when opened from the cloud
           // list. Preserve the immutable local ID used by Hive.
@@ -297,7 +310,8 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'syncStatus': 'pending',
           'points': pointsPayload,
           'labels': normalizedLabels,
-        };
+          ...companyDetails,
+        });
         if (placeValue.isNotEmpty) {
           updated['place'] = placeValue;
         } else {
@@ -318,7 +332,7 @@ class LandMapNotifier extends Notifier<LandMapState> {
         final displayName = name.isEmpty
             ? 'Land ${now.toIso8601String()}'
             : name;
-        final payload = {
+        final payload = WorkspaceContext.stampRecord({
           'id': id,
           'entityType': 'polygon',
           'type': 'polygon',
@@ -327,7 +341,8 @@ class LandMapNotifier extends Notifier<LandMapState> {
           'syncStatus': 'pending',
           'points': pointsPayload,
           'labels': normalizedLabels,
-        };
+          ...companyDetails,
+        });
         if (placeValue.isNotEmpty) {
           payload['place'] = placeValue;
         }

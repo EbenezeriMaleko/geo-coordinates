@@ -5,6 +5,7 @@ import '../models/land_api_models.dart';
 import '../models/reference_ellipsoid.dart';
 import 'utm_converter.dart';
 import 'land_cloud_service.dart';
+import '../../workspaces/workspace_context.dart';
 
 const _referenceEllipsoidPrefKey = 'prefs_reference_ellipsoid';
 const _syncSchemaVersionKey = 'land_sync_schema_version';
@@ -60,11 +61,17 @@ class LandSyncService {
       ...?existing,
       'id': localId,
       'cloudId': detail.id,
+      'canManage': detail.canManage,
       'entityType': detail.type,
       'type': detail.type,
       'name': detail.name,
       'place': detail.place,
       'phone': detail.phone,
+      'claimant_name': detail.claimantName,
+      'claimant_phone': detail.claimantPhone,
+      'claimant_id_masked': detail.claimantIdMasked,
+      'plot_number': detail.plotNumber,
+      'land_use': detail.landUse,
       'description': detail.description,
       if ((detail.referenceEllipsoid ?? '').trim().isNotEmpty)
         'referenceEllipsoid': detail.referenceEllipsoid,
@@ -72,12 +79,14 @@ class LandSyncService {
       'labels': points.map((point) => point['label'] ?? '').toList(),
       'syncStatus': 'synced',
       'syncError': null,
+      'syncBlockedReason': null,
       'createdAt': detail.createdAt ?? existing?['createdAt'] ?? now,
       'updatedAt': detail.updatedAt ?? now,
       'lastSyncedAt': now,
     };
-    cached.removeWhere((key, value) => value == null);
-    await box.put(localKey, cached);
+    final workspaceCached = WorkspaceContext.stampRecord(cached);
+    workspaceCached.removeWhere((key, value) => value == null);
+    await box.put(localKey, workspaceCached);
     return localId;
   }
 
@@ -115,6 +124,10 @@ class LandSyncService {
     String? place,
     String? phone,
     String? description,
+    String? claimantName,
+    String? claimantPhone,
+    String? plotNumber,
+    String? landUse,
   }) async {
     dynamic localKey;
     Map<String, dynamic>? existing;
@@ -161,6 +174,17 @@ class LandSyncService {
       'place': place?.trim(),
       'phone': phone?.trim(),
       'description': description?.trim(),
+      if (WorkspaceContext.activeCompanyId != null &&
+          detail.claimantIdMasked != null)
+        'claimant_id_masked': detail.claimantIdMasked,
+      if (WorkspaceContext.activeCompanyId != null && claimantName != null)
+        'claimant_name': claimantName.trim(),
+      if (WorkspaceContext.activeCompanyId != null && claimantPhone != null)
+        'claimant_phone': claimantPhone.trim(),
+      if (WorkspaceContext.activeCompanyId != null && plotNumber != null)
+        'plot_number': plotNumber.trim(),
+      if (WorkspaceContext.activeCompanyId != null && landUse != null)
+        'land_use': landUse.trim(),
       'points': points,
       'labels': detail.points.map((point) => point.label ?? '').toList(),
       'syncStatus': 'pending',
@@ -168,14 +192,15 @@ class LandSyncService {
       'createdAt': existing?['createdAt'] ?? detail.createdAt ?? now,
       'updatedAt': now,
     };
-    updated.removeWhere(
+    final workspaceUpdated = WorkspaceContext.stampRecord(updated);
+    workspaceUpdated.removeWhere(
       (key, value) =>
           value == null ||
           (value is String &&
               value.isEmpty &&
               const {'place', 'phone', 'description'}.contains(key)),
     );
-    await box.put(localKey, updated);
+    await box.put(localKey, workspaceUpdated);
   }
 
   Future<LandSyncResult> syncPendingLands({int limit = 10}) async {
@@ -188,10 +213,15 @@ class LandSyncService {
     }
 
     final pending = _pendingLandEntries(limit: limit);
+    final companyAtStart = WorkspaceContext.activeCompanyId;
     int synced = 0;
     int failed = 0;
 
     for (final entry in pending) {
+      if (companyAtStart != WorkspaceContext.activeCompanyId ||
+          token != box.get('auth_token')?.toString().trim()) {
+        break;
+      }
       final key = entry.key;
       final value = entry.value;
       final error = await _syncOneLandRecord(
@@ -240,7 +270,9 @@ class LandSyncService {
           final isPending =
               syncStatus == 'pending' ||
               (syncStatus.isEmpty && cloudId.isEmpty);
-          return isSupported && isPending;
+          return isSupported &&
+              isPending &&
+              WorkspaceContext.belongsToActiveWorkspace(entry.value);
         })
         .toList();
 
@@ -268,6 +300,9 @@ class LandSyncService {
     required String bearerToken,
   }) async {
     final attemptStampedLand = await _markSyncAttempt(key, land);
+    if (!WorkspaceContext.belongsToActiveWorkspace(attemptStampedLand)) {
+      return 'Workspace changed; sync remains pending.';
+    }
 
     final pointEntries = _extractPointEntries(attemptStampedLand);
     final points = pointEntries
@@ -299,6 +334,9 @@ class LandSyncService {
           pointEntries,
           remoteDetail.points,
         );
+        if (!WorkspaceContext.belongsToActiveWorkspace(attemptStampedLand)) {
+          return 'Workspace changed; sync remains pending.';
+        }
         await cloudService.updateLand(bearerToken, cloudId, updateRequest);
         await _markSynced(key, attemptStampedLand, cloudId);
         return null;
@@ -308,13 +346,16 @@ class LandSyncService {
           final err = message.trim().isEmpty
               ? 'Failed to sync land to server.'
               : message;
-          await _markSyncFailed(key, attemptStampedLand, err);
+          await _markSyncFailed(key, attemptStampedLand, err, failure: error);
           return err;
         }
       }
     }
 
     try {
+      if (!WorkspaceContext.belongsToActiveWorkspace(attemptStampedLand)) {
+        return 'Workspace changed; sync remains pending.';
+      }
       final created = await cloudService.createLand(bearerToken, payload);
       await _markSynced(key, attemptStampedLand, created.id);
       return null;
@@ -322,7 +363,7 @@ class LandSyncService {
       final err = error.toString().trim().isEmpty
           ? 'Failed to sync land to server.'
           : error.toString();
-      await _markSyncFailed(key, attemptStampedLand, err);
+      await _markSyncFailed(key, attemptStampedLand, err, failure: error);
       return err;
     }
   }
@@ -471,6 +512,16 @@ class LandSyncService {
       place: _trimOrNull(land['place']?.toString()),
       phone: normalizedPhone,
       description: normalizedDescription,
+      claimantName: land['companyId'] == null
+          ? null
+          : land['claimant_name']?.toString(),
+      claimantPhone: land['companyId'] == null
+          ? null
+          : land['claimant_phone']?.toString(),
+      plotNumber: land['companyId'] == null
+          ? null
+          : land['plot_number']?.toString(),
+      landUse: land['companyId'] == null ? null : land['land_use']?.toString(),
       referenceEllipsoid: ellipsoid.displayName,
       coordinates: pointEntries.map((entry) {
         return _latLngToServerCoordinate(
@@ -510,6 +561,16 @@ class LandSyncService {
       place: _trimOrNull(land['place']?.toString()),
       phone: _trimOrNull(land['phone']?.toString()) ?? fallbackPhone,
       description: _trimOrNull(land['description']?.toString()),
+      claimantName: land['companyId'] == null
+          ? null
+          : land['claimant_name']?.toString(),
+      claimantPhone: land['companyId'] == null
+          ? null
+          : land['claimant_phone']?.toString(),
+      plotNumber: land['companyId'] == null
+          ? null
+          : land['plot_number']?.toString(),
+      landUse: land['companyId'] == null ? null : land['land_use']?.toString(),
       points: pointUpdates,
     );
   }
@@ -633,10 +694,23 @@ class LandSyncService {
     Map<String, dynamic> land,
     dynamic remoteId,
   ) async {
+    final currentRaw = box.get(key);
+    if (currentRaw is! Map) return;
+    final current = Map<String, dynamic>.from(currentRaw);
+    if (current['updatedAt'] != land['updatedAt']) {
+      await box.put(key, {
+        ...current,
+        if (remoteId != null) 'cloudId': remoteId.toString(),
+        'syncStatus': 'pending',
+        'lastSyncedAt': DateTime.now().toIso8601String(),
+      });
+      return;
+    }
     final updated = {
       ...land,
       'syncStatus': 'synced',
       'syncError': null,
+      'syncBlockedReason': null,
       'lastSyncAttemptAt': DateTime.now().toIso8601String(),
       'lastSyncedAt': DateTime.now().toIso8601String(),
     };
@@ -649,12 +723,20 @@ class LandSyncService {
   Future<void> _markSyncFailed(
     dynamic key,
     Map<String, dynamic> land,
-    String error,
-  ) async {
+    String error, {
+    Object? failure,
+  }) async {
+    final currentRaw = box.get(key);
+    if (currentRaw is! Map) return;
+    final current = Map<String, dynamic>.from(currentRaw);
     final updated = {
-      ...land,
+      ...current,
       'syncStatus': 'pending',
       'syncError': error,
+      'syncBlockedReason':
+          failure is LandCloudException && failure.waitingForSpace
+          ? 'waiting_for_space'
+          : null,
       'lastSyncAttemptAt': DateTime.now().toIso8601String(),
     };
     await box.put(key, updated);

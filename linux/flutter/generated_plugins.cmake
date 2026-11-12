@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   ffmpeg_kit_flutter_new_full
+  file_selector_linux
   url_launcher_linux
 )
 

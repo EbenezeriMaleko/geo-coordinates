@@ -4,8 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class ApiClient {
-  static const String baseUrl = 'https://ardhi.co.tz/api/v1';
+  static Future<http.Response> patchJson(
+    String path, {
+    required Map<String, dynamic> body,
+    String? bearerToken,
+  }) => http
+      .patch(
+        uri(path),
+        headers: jsonHeaders(bearerToken: bearerToken),
+        body: jsonEncode(body),
+      )
+      .timeout(timeout);
+  static const String baseUrl = 'http://dev.ardhi.co.tz/api/v1';
   static const Duration timeout = Duration(seconds: 30);
+  static int? _activeCompanyId;
+
+  static void setActiveCompanyId(int? companyId) {
+    _activeCompanyId = companyId;
+  }
 
   static Uri uri(String path, {Map<String, dynamic>? queryParameters}) {
     final normalizedPath = path.startsWith('/') ? path : '/$path';
@@ -29,6 +45,9 @@ class ApiClient {
     if (token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
+    if (_activeCompanyId != null) {
+      headers['X-Company-Id'] = '$_activeCompanyId';
+    }
     return headers;
   }
 
@@ -37,6 +56,9 @@ class ApiClient {
     final token = bearerToken?.trim() ?? '';
     if (token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
+    }
+    if (_activeCompanyId != null) {
+      headers['X-Company-Id'] = '$_activeCompanyId';
     }
     return headers;
   }
@@ -119,9 +141,12 @@ class ApiClient {
     final requestTag = tag?.trim().isNotEmpty == true ? tag!.trim() : path;
     final requestUri = uri(path);
     final encodedBody = jsonEncode(body);
+    final sensitive = path.startsWith('/auth/') || path.startsWith('auth/');
 
     debugPrint('[API][$requestTag] REQUEST PUT $requestUri');
-    debugPrint('[API][$requestTag] REQUEST BODY ${_truncate(encodedBody)}');
+    debugPrint(
+      '[API][$requestTag] REQUEST BODY ${sensitive ? '<redacted>' : _truncate(encodedBody)}',
+    );
 
     try {
       final response = await http
@@ -134,7 +159,7 @@ class ApiClient {
 
       debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
       debugPrint(
-        '[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}',
+        '[API][$requestTag] RESPONSE BODY ${sensitive ? '<redacted>' : _truncate(response.body)}',
       );
       return response;
     } catch (error) {
@@ -179,9 +204,12 @@ class ApiClient {
     final requestTag = tag?.trim().isNotEmpty == true ? tag!.trim() : path;
     final requestUri = uri(path);
     final encodedBody = jsonEncode(body);
+    final sensitive = path.startsWith('/auth/') || path.startsWith('auth/');
 
     debugPrint('[API][$requestTag] REQUEST POST $requestUri');
-    debugPrint('[API][$requestTag] REQUEST BODY ${_truncate(encodedBody)}');
+    debugPrint(
+      '[API][$requestTag] REQUEST BODY ${sensitive ? '<redacted>' : _truncate(encodedBody)}',
+    );
 
     try {
       final response = await http
@@ -194,7 +222,7 @@ class ApiClient {
 
       debugPrint('[API][$requestTag] RESPONSE STATUS ${response.statusCode}');
       debugPrint(
-        '[API][$requestTag] RESPONSE BODY ${_truncate(response.body)}',
+        '[API][$requestTag] RESPONSE BODY ${sensitive ? '<redacted>' : _truncate(response.body)}',
       );
       return response;
     } catch (error) {

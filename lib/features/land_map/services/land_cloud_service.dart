@@ -1,8 +1,23 @@
 import 'dart:convert';
+import '../../workspaces/workspace_context.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../auth/services/auth_service.dart';
 import '../models/land_api_models.dart';
+
+class LandCloudException extends AuthException {
+  const LandCloudException(
+    super.message, {
+    required this.statusCode,
+    this.reason,
+    this.validationFields = const {},
+  });
+  final int statusCode;
+  final String? reason;
+  final Set<String> validationFields;
+  bool get waitingForSpace =>
+      statusCode == 422 && validationFields.contains('records');
+}
 
 class LandCloudService {
   Future<PaginatedLands> listLands(
@@ -10,6 +25,8 @@ class LandCloudService {
     String? search,
     int perPage = 15,
     int page = 1,
+    int? projectId,
+    int? teamId,
   }) async {
     final body = await _requestJson(
       () => ApiClient.getJson(
@@ -20,6 +37,8 @@ class LandCloudService {
           if ((search ?? '').trim().isNotEmpty) 'search': search!.trim(),
           'per_page': perPage,
           'page': page,
+          'project_id': ?projectId,
+          'team_id': ?teamId,
         },
       ),
       fallbackError: 'Failed to load lands.',
@@ -75,6 +94,7 @@ class LandCloudService {
     String landId,
     UpdateLandRequest request,
   ) async {
+    await _ensureManageable(bearerToken, landId);
     final body = await _requestJson(
       () => ApiClient.putJson(
         '/lands/$landId',
@@ -92,6 +112,7 @@ class LandCloudService {
     String bearerToken,
     String landId,
   ) async {
+    await _ensureManageable(bearerToken, landId);
     final body = await _requestJson(
       () => ApiClient.deleteJson(
         '/lands/$landId',
@@ -186,6 +207,21 @@ class LandCloudService {
     return RemoteSettingsOptions.fromJson(data);
   }
 
+  Future<void> _ensureManageable(String token, String landId) async {
+    final company = WorkspaceContext.activeCompanyId;
+    final detail = await getLand(token, landId);
+    if (company != WorkspaceContext.activeCompanyId) {
+      throw const AuthException('Workspace changed. Please try again.');
+    }
+    if (!detail.canManage) {
+      throw const LandCloudException(
+        'This cloud record is read-only after a plan change. Your local copy is retained.',
+        statusCode: 403,
+        reason: 'record_read_only',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> _requestJson(
     Future<dynamic> Function() request, {
     required String fallbackError,
@@ -198,7 +234,14 @@ class LandCloudService {
         return body;
       }
 
-      throw AuthException(_extractErrorMessage(body, fallbackError));
+      throw LandCloudException(
+        _extractErrorMessage(body, fallbackError),
+        statusCode: response.statusCode as int,
+        reason: body['reason']?.toString(),
+        validationFields: body['errors'] is Map
+            ? (body['errors'] as Map).keys.map((key) => key.toString()).toSet()
+            : const {},
+      );
     } on AuthException {
       rethrow;
     } catch (_) {
