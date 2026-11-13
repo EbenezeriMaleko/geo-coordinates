@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import 'land_map_page.dart';
 import 'my_location_page.dart';
 import 'saved_locations_page.dart';
+import 'profile_page.dart';
 import '../services/land_sync_service.dart';
 import '../services/app_review_service.dart';
 import '../services/survey_sync_service.dart';
@@ -26,6 +27,7 @@ import '../../workspaces/workspace_context.dart';
 import '../../workspaces/workspace_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../notifications/services/push_notification_service.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 enum _StartupLocationIssue { serviceOff, permissionDenied, permissionForever }
 
@@ -519,7 +521,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
       if (isSelectionMode) {
         return [
           IconButton(
-            icon: const Icon(Icons.folder_outlined, color: Colors.black87),
+            icon: const HugeIcon(icon: HugeIcons.strokeRoundedFolder01, color: Colors.black87),
             tooltip: context.l10n.t('Set group'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
@@ -528,7 +530,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 : null,
           ),
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: Colors.black87),
+            icon: const HugeIcon(icon: HugeIcons.strokeRoundedShare01, color: Colors.black87),
             tooltip: context.l10n.t('Share selected'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
@@ -537,7 +539,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 : null,
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.black87),
+            icon: const HugeIcon(icon: HugeIcons.strokeRoundedTrash, color: Colors.black87),
             tooltip: context.l10n.t('Delete selected'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
@@ -546,7 +548,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 : null,
           ),
           IconButton(
-            icon: const Icon(Icons.close, color: Colors.black87),
+            icon: const HugeIcon(icon: HugeIcons.strokeRoundedMultiplicationSign, color: Colors.black87),
             tooltip: context.l10n.t('Exit selection'),
             onPressed: () => _savedLocationsToolbarController.dispatch(
               SavedLocationsToolbarAction.exitSelection,
@@ -557,7 +559,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
 
       return [
         IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.black87),
+          icon: const HugeIcon(icon: HugeIcons.strokeRoundedMore, color: Colors.black87),
           tooltip: context.l10n.t('More'),
           onPressed: () => _savedLocationsToolbarController.dispatch(
             SavedLocationsToolbarAction.menu,
@@ -600,6 +602,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
         },
         showEmbeddedToolbar: false,
       ),
+      const ProfilePage(),
       const SettingsPage(),
     ];
 
@@ -612,9 +615,9 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
               title: Text(
                 _currentIndex == 2
                     ? (companyWorkspace ? 'Company library' : 'My library')
-                    : _currentIndex == 3 && companyWorkspace
-                    ? 'Company settings'
-                    : _appBarTitleText(),
+                    : _currentIndex == 3
+                        ? (companyWorkspace ? 'Company profile' : 'Profile')
+                        : 'Settings',
                 style: const TextStyle(
                   color: Colors.black87,
                   fontWeight: FontWeight.w700,
@@ -644,7 +647,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 _BottomNavItem(
                   label: l10n.t('Map'),
                   semanticLabel: l10n.t('Map'),
-                  icon: Icons.public,
+                  icon: HugeIcons.strokeRoundedGlobe02,
                   isSelected: _currentIndex == 0,
                   selectedColor: selectedColor,
                   unselectedColor: _unselectedColor,
@@ -653,7 +656,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 _BottomNavItem(
                   label: l10n.t('Location'),
                   semanticLabel: l10n.t('My location'),
-                  icon: Icons.navigation,
+                  icon: HugeIcons.strokeRoundedLocation01,
                   isSelected: _currentIndex == 1,
                   selectedColor: selectedColor,
                   unselectedColor: _unselectedColor,
@@ -661,21 +664,30 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 ),
                 _BottomNavItem(
                   label: l10n.t('Library'),
-                  semanticLabel: l10n.t('Library'),
-                  icon: Icons.list_alt,
+                  semanticLabel: l10n.t('My library'),
+                  icon: HugeIcons.strokeRoundedLibrary,
                   isSelected: _currentIndex == 2,
                   selectedColor: selectedColor,
                   unselectedColor: _unselectedColor,
                   onTap: () => _navigateToPage(2),
                 ),
                 _BottomNavItem(
-                  label: l10n.t('Settings'),
-                  semanticLabel: l10n.t('Settings'),
-                  icon: Icons.settings,
+                  label: l10n.t('Profile'),
+                  semanticLabel: l10n.t('Profile'),
+                  icon: HugeIcons.strokeRoundedUser,
                   isSelected: _currentIndex == 3,
                   selectedColor: selectedColor,
                   unselectedColor: _unselectedColor,
                   onTap: () => _navigateToPage(3),
+                ),
+                _BottomNavItem(
+                  label: l10n.t('Settings'),
+                  semanticLabel: l10n.t('Settings'),
+                  icon: HugeIcons.strokeRoundedSettings02,
+                  isSelected: _currentIndex == 4,
+                  selectedColor: selectedColor,
+                  unselectedColor: _unselectedColor,
+                  onTap: () => _navigateToPage(4),
                 ),
               ],
             ),
@@ -689,7 +701,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
 class _BottomNavItem extends StatelessWidget {
   final String label;
   final String semanticLabel;
-  final IconData icon;
+  final List<List<dynamic>> icon;
   final bool isSelected;
   final Color selectedColor;
   final Color unselectedColor;
@@ -723,15 +735,15 @@ class _BottomNavItem extends StatelessWidget {
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
-                  width: isSelected ? 68 : 46,
+                  width: isSelected ? 56 : 40,
                   height: 30,
                   decoration: BoxDecoration(
                     color: isSelected ? selectedColor : Colors.transparent,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Icon(
-                    icon,
-                    size: 20,
+                  child: HugeIcon(
+                    icon: icon,
+                    size: 10,
                     color: isSelected ? Colors.white : unselectedColor,
                   ),
                 ),

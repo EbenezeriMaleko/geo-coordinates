@@ -9,9 +9,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../auth/models/auth_models.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../auth/ui/account_page.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../models/coordinate_format.dart';
@@ -26,11 +24,11 @@ import '../../workspaces/workspace_provider.dart';
 import '../../workspaces/company_invitations_page.dart';
 import '../../workspaces/company_members_page.dart';
 import '../../auth/ui/device_sessions_page.dart';
-import '../../workspaces/company_create_page.dart';
 import '../../subscriptions/plans_access_page.dart';
 import '../../workspaces/organization_page.dart';
 import '../../workspaces/field_jobs_page.dart';
 import '../../notifications/ui/notifications_page.dart';
+import '../../widget/settings_widget.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -63,20 +61,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
-    final accountSubtitle = _accountSubtitle(session);
 
     return ColoredBox(
       color: Colors.white,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          _sectionHeader(l10n.t('Account & workspace'), theme),
-          _item(
-            title: l10n.t('Account'),
-            subtitle: accountSubtitle,
-            onTap: _openAccountPage,
-          ),
-          _sectionDivider(),
           if (session.isLoggedIn)
             _item(
               title: 'Signed-in devices',
@@ -105,16 +95,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   builder: (_) => const CompanyInvitationsPage(),
                 ),
               ),
-            ),
-            _item(
-              title: l10n.t('Workspace'),
-              subtitle: workspace.label,
-              onTap: _showWorkspaceSelector,
-            ),
-            _item(
-              title: 'Create company',
-              subtitle: 'Create a company workspace you own',
-              onTap: _createCompany,
             ),
             _item(
               title: 'Plans & Access',
@@ -333,326 +313,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  Widget _sectionHeader(String title, ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 6),
-      child: Text(
-        title,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _createCompany() async {
-    final token = ref.read(authSessionProvider).token;
-    final company = await Navigator.of(context).push<CompanyWorkspace>(
-      MaterialPageRoute(builder: (_) => const CompanyCreatePage()),
-    );
-    if (!mounted ||
-        company == null ||
-        token != ref.read(authSessionProvider).token) {
-      return;
-    }
-    final error = ref.read(workspaceProvider).error;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          error == null
-              ? 'Company created. Select it from Workspace when ready.'
-              : 'Company created. Refresh your workspace list to see it.',
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showWorkspaceSelector() async {
-    ref.read(workspaceProvider.notifier).refresh();
-    if (!mounted) return;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Consumer(
-        builder: (context, ref, _) {
-          final workspace = ref.watch(workspaceProvider);
-          final theme = Theme.of(context);
-          return SafeArea(
-            top: false,
-            child: Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.72,
-              ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 38,
-                    height: 4,
-                    margin: const EdgeInsets.only(top: 12, bottom: 18),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFD5DCE5),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            context.l10n.t('Choose workspace'),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: context.l10n.t('Refresh'),
-                          onPressed: workspace.isLoading
-                              ? null
-                              : () => ref
-                                    .read(workspaceProvider.notifier)
-                                    .refresh(),
-                          icon: const Icon(Icons.refresh_rounded),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
-                    child: Text(
-                      context.l10n.t(
-                        'Personal records and each company workspace stay separate.',
-                      ),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.black54,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                  if (workspace.isLoading)
-                    const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
-                    ),
-                  if (workspace.error != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.cloud_off_outlined, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Unable to refresh workspaces. Your current selection is unchanged.',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (!workspace.isLoading)
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          _workspaceOption(
-                            context: context,
-                            selected: workspace.activeCompanyId == null,
-                            title: context.l10n.t('Personal workspace'),
-                            subtitle: context.l10n.t('Your individual records'),
-                            onTap: () async {
-                              await ref
-                                  .read(workspaceProvider.notifier)
-                                  .selectCompany(null);
-                              if (sheetContext.mounted) {
-                                Navigator.of(sheetContext).pop();
-                              }
-                            },
-                          ),
-                          ...workspace.companies.map(
-                            (company) => _workspaceOption(
-                              context: context,
-                              selected: workspace.activeCompanyId == company.id,
-                              title: company.name,
-                              subtitle: companyRoleLabel(company.role),
-                              onTap: () async {
-                                await ref
-                                    .read(workspaceProvider.notifier)
-                                    .selectCompany(company.id);
-                                if (sheetContext.mounted) {
-                                  Navigator.of(sheetContext).pop();
-                                }
-                              },
-                            ),
-                          ),
-                          if (workspace.companies.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                              child: Text(
-                                context.l10n.t(
-                                  'No company workspace is available for this account.',
-                                ),
-                                style: const TextStyle(
-                                  color: Colors.black54,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _workspaceOption({
-    required BuildContext context,
-    required bool selected,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: selected
-              ? primary.withValues(alpha: 0.1)
-              : const Color(0xFFF1F4F7),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          title == context.l10n.t('Personal workspace')
-              ? Icons.person_outline_rounded
-              : Icons.business_outlined,
-          color: selected ? primary : const Color(0xFF526579),
-        ),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 12, color: Colors.black54),
-      ),
-      trailing: selected
-          ? Icon(Icons.check_circle_rounded, color: primary)
-          : null,
-      onTap: onTap,
-    );
-  }
+  Widget _sectionHeader(String t, ThemeData theme) => SettingsSectionHeader(t);
 
   Widget _item({
     required String title,
     String? subtitle,
     Widget? subtitleWidget,
     required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            if (subtitleWidget != null) ...[
-              const SizedBox(height: 3),
-              subtitleWidget,
-            ] else if (subtitle != null) ...[
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black54,
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  }) => SettingsItem(title: title, subtitle: subtitle, subtitleWidget: subtitleWidget, onTap: onTap);
 
   Widget _switchItem({
     required String title,
     String? subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black54,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Checkbox(
-            value: value,
-            onChanged: (newValue) => onChanged(newValue ?? false),
-            side: const BorderSide(color: Colors.black45, width: 2),
-            activeColor: const Color(0xFF0C8A8C),
-          ),
-        ],
-      ),
-    );
-  }
+  }) => SettingsSwitchItem(title: title, subtitle: subtitle, value: value, onChanged: onChanged);
 
-  Widget _sectionDivider() {
-    return Divider(height: 1, color: Colors.grey.shade300);
-  }
+  Widget _sectionDivider() => const SettingsDivider();
 
   String _languageLabel(Locale? locale, AppLocalizations l10n) {
     if (locale == null) return l10n.t('System default');
@@ -892,30 +569,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return totalSize;
   }
 
-  String _accountSubtitle(AuthSession session) {
-    final user = session.user;
-    final fullName = user?.name.trim() ?? '';
-    final email = user?.email.trim() ?? '';
-
-    if (fullName.isNotEmpty && email.isNotEmpty) {
-      return '$fullName\n$email';
-    }
-    if (fullName.isNotEmpty) {
-      return '$fullName\n${context.l10n.t('Signed in')}';
-    }
-    if (email.isNotEmpty) {
-      return '$email\n${context.l10n.t('Signed in')}';
-    }
-    return context.l10n.t(
-      'Sign in only when you want to sync data to the server.',
-    );
-  }
-
-  Future<void> _openAccountPage() async {
-    await Navigator.of(
-      context,
-    ).push<void>(MaterialPageRoute<void>(builder: (_) => const AccountPage()));
-  }
 
   Future<void> _openContactUsPage() async {
     await showDialog<void>(
