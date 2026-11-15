@@ -602,32 +602,30 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
         },
         showEmbeddedToolbar: false,
       ),
-      const ProfilePage(),
-      const SettingsPage(),
+      const SafeArea(bottom: false, child: ProfilePage()),
+      const SafeArea(bottom: false,child: SettingsPage()),
     ];
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: _currentIndex == 0 || _currentIndex == 1
-          ? null
-          : AppBar(
-              automaticallyImplyLeading: false,
-              title: Text(
-                _currentIndex == 2
-                    ? (companyWorkspace ? 'Company library' : 'My library')
-                    : _currentIndex == 3
-                        ? (companyWorkspace ? 'Company profile' : 'Profile')
-                        : 'Settings',
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 18,
-                ),
-              ),
-              actions: _buildAppBarActions(),
-              backgroundColor: Colors.white,
-              elevation: 0,
+      appBar: (_currentIndex == 2 || _currentIndex == 4)
+      ? AppBar(
+          automaticallyImplyLeading: false,
+          title: Text(
+            _currentIndex == 2 ?
+            companyWorkspace ? 'Company library' : 'My library' : 
+            companyWorkspace ? 'Company settings' : 'Settings',
+            style: const TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
             ),
+          ),
+          actions: _buildAppBarActions(),
+          backgroundColor: Colors.white,
+          elevation: 0,
+        )
+      : null,
       body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
@@ -732,21 +730,22 @@ class _BottomNavItem extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  width: isSelected ? 56 : 40,
+                TweenAnimationBuilder<Color?>(
+                duration: const Duration(milliseconds: 180),
+                tween: ColorTween(
+                  end: isSelected ? selectedColor : unselectedColor,
+                ),
+                builder: (context, color, _) => SizedBox(
+                  width: 25,
                   height: 30,
-                  decoration: BoxDecoration(
-                    color: isSelected ? selectedColor : Colors.transparent,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
                   child: HugeIcon(
                     icon: icon,
-                    size: 10,
-                    color: isSelected ? Colors.white : unselectedColor,
+                    size: 20,
+                    color: color ?? unselectedColor,
                   ),
                 ),
+              ),
+
                 const SizedBox(height: 3),
                 AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 180),

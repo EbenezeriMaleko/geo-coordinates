@@ -9,7 +9,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../auth/providers/auth_provider.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../models/coordinate_format.dart';
@@ -21,14 +20,8 @@ import '../services/app_review_service.dart';
 import '../services/survey_invitation.dart';
 import 'user_survey_page.dart';
 import '../../workspaces/workspace_provider.dart';
-import '../../workspaces/company_invitations_page.dart';
-import '../../workspaces/company_members_page.dart';
-import '../../auth/ui/device_sessions_page.dart';
-import '../../subscriptions/plans_access_page.dart';
-import '../../workspaces/organization_page.dart';
-import '../../workspaces/field_jobs_page.dart';
-import '../../notifications/ui/notifications_page.dart';
-import '../../widget/settings_widget.dart';
+import '../../widget/profile_widget.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -46,290 +39,185 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _packageInfoFuture = PackageInfo.fromPlatform();
   }
 
+    static const Color _personalAccent = Color(0xFF001F3F);
+  static const Color _companyAccent = Color(0xFF197568);
+  static const Color _pageBackground = Color(0xFFF7F7F8);
+
   @override
   Widget build(BuildContext context) {
     final selectedFormat = ref.watch(coordinateFormatProvider);
     final selectedUnit = ref.watch(distanceUnitProvider);
     final saveOriginalPhoto = ref.watch(saveOriginalPhotoProvider);
     final saveToGallery = ref.watch(saveToGalleryProvider);
-    final photoQuality = ref.watch(photoQualityProvider);
-    final captureMode = ref.watch(photoCaptureModeProvider);
     final selectedEllipsoid = ref.watch(referenceEllipsoidProvider);
     final selectedDatum = ref.watch(selectedDatumProvider);
-    final session = ref.watch(authSessionProvider);
-    final workspace = ref.watch(workspaceProvider);
-    final theme = Theme.of(context);
+    final isCompany = ref.watch(workspaceProvider).activeCompanyId != null;
+    final accent = isCompany ? _companyAccent : _personalAccent;
+    final baseTheme = Theme.of(context);
     final l10n = context.l10n;
     final unitLabel = selectedUnit == DistanceUnit.feet ? 'Feet' : 'Meters';
 
-    return ColoredBox(
-      color: Colors.white,
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          if (session.isLoggedIn)
-            _item(
-              title: 'Signed-in devices',
-              subtitle: 'Review sessions and sign out other devices',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const DeviceSessionsPage(),
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: baseTheme.colorScheme.copyWith(primary: accent),
+      ),
+      child: ColoredBox(
+        color: _pageBackground,
+        child: ListView(
+          padding: const EdgeInsets.only(top: 8, bottom: 32),
+          children: [
+            ProfileSection(
+              title: l10n.t('App preferences'),
+              children: [
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedLanguageSquare,
+                  title: l10n.t('Language'),
+                  subtitle: _languageLabel(ref.watch(localeProvider), l10n),
+                  onTap: _showLanguageSelector,
                 ),
-              ),
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedRuler,
+                  title: l10n.t('Units'),
+                  subtitle: l10n.t(unitLabel),
+                  onTap: _showDistanceUnitSelector,
+                ),
+              ],
             ),
-          if (session.isLoggedIn && session.isVerified) ...[
-            _item(
-              title: 'Notifications',
-              subtitle: 'View announcements and manage mobile alerts',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const NotificationsPage(),
+
+            ProfileSection(
+              title: l10n.t('Location Settings'),
+              children: [
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedLocation01,
+                  title: l10n.t('Coordinates format'),
+                  subtitle: l10n.t(selectedFormat.displayName),
+                  onTap: _showCoordinateFormatSelector,
                 ),
-              ),
-            ),
-            _item(
-              title: 'Company invitations',
-              subtitle: 'Review invitations to join a company',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const CompanyInvitationsPage(),
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedGlobe02,
+                  title: l10n.t('Geodetic datum'),
+                  subtitle: selectedDatum == null
+                      ? selectedEllipsoid.displayName
+                      : l10n.t(selectedDatum.displayName),
+                  onTap: _showReferenceEllipsoidSelector,
                 ),
-              ),
-            ),
-            _item(
-              title: 'Plans & Access',
-              subtitle: 'Current plan, usage and approval status',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const PlansAccessPage(),
-                ),
-              ),
-            ),
-            if (workspace.activeCompanyId != null) ...[
-              _sectionDivider(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.business_outlined,
-                      color: Color(0xFF197568),
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            workspace.activeCompany?.name ??
-                                'Company workspace',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF197568),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Company workspace',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (canViewCompanyDirectory(workspace, session.user?.role))
-                _item(
-                  title: 'Company members',
-                  subtitle: 'Members and pending invitations',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const CompanyMembersPage(),
-                    ),
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedCompass01,
+                  title: l10n.t('Compass north reference'),
+                  subtitle: l10n.t(
+                    _compassNorthLabel(ref.watch(compassNorthTypeProvider)),
                   ),
+                  onTap: _showCompassNorthSelector,
                 ),
-              _item(
-                title: 'Projects & Teams',
-                subtitle: 'Company projects and team members',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const OrganizationPage(),
+              ],
+            ),
+
+            ProfileSection(
+              title: l10n.t('Photo'),
+              children: [
+                ProfileSwitchTile(
+                  icon: HugeIcons.strokeRoundedImage01,
+                  title: l10n.t('Save original photo'),
+                  subtitle: l10n.t(
+                    'Save with no data on it. Useful for editing before sharing.',
                   ),
+                  value: saveOriginalPhoto,
+                  onChanged: (v) => ref
+                      .read(saveOriginalPhotoProvider.notifier)
+                      .setValue(v),
                 ),
-              ),
-              _item(
-                title: 'Field jobs',
-                subtitle: 'Company assignments and progress',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const FieldJobsPage(),
+                ProfileSwitchTile(
+                  icon: HugeIcons.strokeRoundedAlbum02,
+                  title: l10n.t('Save to gallery'),
+                  subtitle: l10n.t('Save image with data'),
+                  value: saveToGallery,
+                  onChanged: (v) =>
+                      ref.read(saveToGalleryProvider.notifier).setValue(v),
+                ),
+              ],
+            ),
+
+            ProfileSection(
+              title: l10n.t('Privacy & storage'),
+              children: [
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedShield01,
+                  title: l10n.t('Privacy policy'),
+                  onTap: _openPrivacyPolicy,
+                ),
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedDelete02,
+                  title: l10n.t('Clear cache'),
+                  subtitle: l10n.t('Remove cached data and temporary files'),
+                  onTap: _clearCache,
+                ),
+              ],
+            ),
+
+            ProfileSection(
+              title: l10n.t('Help & feedback'),
+              children: [
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedMail01,
+                  title: l10n.t('Contact us'),
+                  subtitle: l10n.t(
+                    'Send suggestions or report a bug. We appreciate your feedback.',
                   ),
+                  onTap: _openContactUsPage,
                 ),
-              ),
-            ],
-            _sectionDivider(),
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedMessage01,
+                  title: l10n.t('Share your experience'),
+                  subtitle:
+                      l10n.t('Tell us what works and what is difficult.'),
+                  onTap: _openSurveyPage,
+                ),
+                if (kDebugMode)
+                  ProfileTile(
+                    icon: HugeIcons.strokeRoundedBug01,
+                    title: l10n.t('Preview survey invitation'),
+                    subtitle:
+                        l10n.t('Debug only. Open Library after tapping.'),
+                    onTap: _previewSurveyInvitation,
+                  ),
+                ProfileTile(
+                  icon: HugeIcons.strokeRoundedStar,
+                  title: l10n.t('Rate our app'),
+                  subtitle:
+                      l10n.t('Leave a rating or review in the app store.'),
+                  onTap: _openStoreReview,
+                ),
+              ],
+            ),
+
+            ProfileSection(
+              title: l10n.t('About'),
+              children: [
+                FutureBuilder<PackageInfo>(
+                  future: _packageInfoFuture,
+                  builder: (context, snapshot) {
+                    final info = snapshot.data;
+                    final text =
+                        snapshot.connectionState == ConnectionState.waiting
+                            ? l10n.t('Loading version...')
+                            : info == null
+                                ? l10n.t('Version unavailable')
+                                : '${info.version}+${info.buildNumber}';
+                    return ProfileTile(
+                      icon: HugeIcons.strokeRoundedInformationCircle,
+                      title: l10n.t('Version'),
+                      subtitle: text,
+                      onTap: _showVersionDetails,
+                    );
+                  },
+                ),
+              ],
+            ),
           ],
-
-          _sectionHeader(l10n.t('App preferences'), theme),
-          _item(
-            title: l10n.t('Language'),
-            subtitle: _languageLabel(ref.watch(localeProvider), l10n),
-            onTap: _showLanguageSelector,
-          ),
-          _sectionDivider(),
-
-          _sectionHeader(l10n.t('Location Settings'), theme),
-          _item(
-            title: l10n.t('Coordinates format'),
-            subtitle: l10n.t(selectedFormat.displayName),
-            onTap: _showCoordinateFormatSelector,
-          ),
-
-          _item(
-            title: l10n.t('Geodetic datum'),
-            subtitle: selectedDatum == null
-                ? selectedEllipsoid.displayName
-                : l10n.t(selectedDatum.displayName),
-            onTap: _showReferenceEllipsoidSelector,
-          ),
-
-          _item(
-            title: l10n.t('Compass north reference'),
-            subtitle: l10n.t(
-              _compassNorthLabel(ref.watch(compassNorthTypeProvider)),
-            ),
-            onTap: _showCompassNorthSelector,
-          ),
-
-          _sectionDivider(),
-
-          _item(
-            title: l10n.t('Units'),
-            subtitle: l10n.t(unitLabel),
-            onTap: _showDistanceUnitSelector,
-          ),
-          _sectionDivider(),
-          _sectionHeader(l10n.t('Photo'), theme),
-          _switchItem(
-            title: l10n.t('Save original photo'),
-            subtitle: l10n.t(
-              'Save with no data on it. Useful for editing before sharing.',
-            ),
-            value: saveOriginalPhoto,
-            onChanged: (value) =>
-                ref.read(saveOriginalPhotoProvider.notifier).setValue(value),
-          ),
-          _switchItem(
-            title: l10n.t('Save to gallery'),
-            subtitle: l10n.t('Save image with data'),
-            value: saveToGallery,
-            onChanged: (value) =>
-                ref.read(saveToGalleryProvider.notifier).setValue(value),
-          ),
-
-          // _item(
-          //   title: 'Image quality',
-          //   subtitle: _photoQualityLabel(photoQuality),
-          //   onTap: _showPhotoQualitySelector,
-          // ),
-          // _item(
-          //   title: 'Capture mode',
-          //   subtitle: _captureModeLabel(captureMode),
-          //   onTap: _showCaptureModeSelector,
-          // ),
-          _sectionDivider(),
-
-          _sectionHeader(l10n.t('Other'), theme),
-          _item(title: l10n.t('Privacy policy'), onTap: _openPrivacyPolicy),
-          _sectionDivider(),
-
-          _sectionHeader(l10n.t('Cache'), theme),
-          _item(
-            title: l10n.t('Clear cache'),
-            subtitle: l10n.t('Remove cached data and temporary files'),
-            onTap: _clearCache,
-          ),
-          _sectionDivider(),
-
-          _sectionHeader(l10n.t('Information'), theme),
-          _item(
-            title: l10n.t('Contact us'),
-            subtitle: l10n.t(
-              'Send suggestions or report a bug. We appreciate your feedback.',
-            ),
-            onTap: _openContactUsPage,
-          ),
-          _item(
-            title: l10n.t('Share your experience'),
-            subtitle: l10n.t('Tell us what works and what is difficult.'),
-            onTap: _openSurveyPage,
-          ),
-          if (kDebugMode)
-            _item(
-              title: l10n.t('Preview survey invitation'),
-              subtitle: l10n.t('Debug only. Open Library after tapping.'),
-              onTap: _previewSurveyInvitation,
-            ),
-          _item(
-            title: l10n.t('Rate our app'),
-            subtitle: l10n.t('Leave a rating or review in the app store.'),
-            onTap: _openStoreReview,
-          ),
-          _item(
-            title: l10n.t('Version'),
-            subtitleWidget: FutureBuilder<PackageInfo>(
-              future: _packageInfoFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Text(
-                    l10n.t('Loading version...'),
-                    style: TextStyle(fontSize: 14, color: Colors.black54),
-                  );
-                }
-
-                final info = snapshot.data;
-                if (info == null) {
-                  return Text(
-                    l10n.t('Version unavailable'),
-                    style: TextStyle(fontSize: 14, color: Colors.black54),
-                  );
-                }
-
-                return Text(
-                  '${info.version}+${info.buildNumber}',
-                  style: const TextStyle(fontSize: 14, color: Colors.black54),
-                );
-              },
-            ),
-            onTap: _showVersionDetails,
-          ),
-        ],
+        ),
       ),
     );
   }
-
-  Widget _sectionHeader(String t, ThemeData theme) => SettingsSectionHeader(t);
-
-  Widget _item({
-    required String title,
-    String? subtitle,
-    Widget? subtitleWidget,
-    required VoidCallback onTap,
-  }) => SettingsItem(title: title, subtitle: subtitle, subtitleWidget: subtitleWidget, onTap: onTap);
-
-  Widget _switchItem({
-    required String title,
-    String? subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) => SettingsSwitchItem(title: title, subtitle: subtitle, value: value, onChanged: onChanged);
-
-  Widget _sectionDivider() => const SettingsDivider();
 
   String _languageLabel(Locale? locale, AppLocalizations l10n) {
     if (locale == null) return l10n.t('System default');
@@ -1031,26 +919,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       'Example: {coordinates}',
       params: {'coordinates': CoordinateFormatter.format(lat, lon, format)},
     );
-  }
-
-  String _photoQualityLabel(PhotoCaptureQuality quality) {
-    switch (quality) {
-      case PhotoCaptureQuality.low:
-        return 'Low';
-      case PhotoCaptureQuality.medium:
-        return 'Medium';
-      case PhotoCaptureQuality.high:
-        return 'High';
-    }
-  }
-
-  String _captureModeLabel(PhotoCaptureMode mode) {
-    switch (mode) {
-      case PhotoCaptureMode.inApp:
-        return 'Inside the app';
-      case PhotoCaptureMode.systemCamera:
-        return 'System camera';
-    }
   }
 }
 
