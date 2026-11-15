@@ -170,7 +170,7 @@ class PlanSummaryCard extends ConsumerWidget {
 
         final String subtitle;
         if (subscription == null) {
-          subtitle = '${workspace.label} · Tap to view available plans';
+          subtitle = workspace.label;
         } else if (ends != null) {
           subtitle =
               '${workspace.label} · Valid until ${MaterialLocalizations.of(context).formatMediumDate(ends)}';

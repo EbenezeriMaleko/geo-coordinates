@@ -8,7 +8,6 @@ import '../../auth/ui/account_page.dart';
 import '../../auth/ui/device_sessions_page.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../notifications/ui/notifications_page.dart';
-import '../../subscriptions/plans_access_page.dart';
 import '../../workspaces/company_create_page.dart';
 import '../../workspaces/company_invitations_page.dart';
 import '../../workspaces/company_members_page.dart';
@@ -96,13 +95,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     title: 'Notifications',
                     subtitle: 'View announcements and manage mobile alerts',
                     onTap: () => _push(const NotificationsPage()),
-                  ),
-                if (verified)
-                  ProfileTile(
-                    icon: HugeIcons.strokeRoundedCrown,
-                    title: 'Plans & Access',
-                    subtitle: 'Current plan, usage and approval status',
-                    onTap: () => _push(const PlansAccessPage()),
                   ),
               ],
             ),
