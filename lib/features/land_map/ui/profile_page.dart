@@ -16,6 +16,7 @@ import '../../workspaces/field_jobs_page.dart';
 import '../../workspaces/organization_page.dart';
 import '../../workspaces/workspace_provider.dart';
 import '../../widget/profile_widget.dart';
+import '../../widget/plan_summary_cards.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
@@ -65,6 +66,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               onAvatarTap: () => _push(const AccountPage()),
               onWorkspaceTap: _showWorkspaceSelector,
             ),
+
+            if(verified) const PlanSummaryCard(),
 
             // ── Account ────────────────────────────────────────
             ProfileSection(

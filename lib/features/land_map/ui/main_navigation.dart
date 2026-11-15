@@ -494,21 +494,6 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
     return buffer.toString();
   }
 
-  String _appBarTitleText() {
-    if (_currentIndex != 2) {
-      const titles = ['Map', 'My location', 'Saved locations', 'Settings'];
-      return context.l10n.t(titles[_currentIndex]);
-    }
-
-    if (_savedLocationsToolbarController.isSelectionMode) {
-      return context.l10n.t(
-        '{count} selected',
-        params: {'count': '${_savedLocationsToolbarController.selectedCount}'},
-      );
-    }
-    return context.l10n.t('Saved locations');
-  }
-
   List<Widget>? _buildAppBarActions() {
     if (_currentIndex == 0) {
       return null;
@@ -603,7 +588,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
         showEmbeddedToolbar: false,
       ),
       const SafeArea(bottom: false, child: ProfilePage()),
-      const SafeArea(bottom: false,child: SettingsPage()),
+      const SettingsPage(),
     ];
 
     return Scaffold(

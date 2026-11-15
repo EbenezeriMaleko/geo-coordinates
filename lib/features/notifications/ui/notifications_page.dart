@@ -2,9 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../widget/app_backarrow.dart'; // adjust to your file name/path
 import '../services/push_notification_service.dart';
 
 class NotificationsPage extends ConsumerStatefulWidget {
@@ -15,6 +17,9 @@ class NotificationsPage extends ConsumerStatefulWidget {
 }
 
 class _NotificationsPageState extends ConsumerState<NotificationsPage> {
+  static const Color _pageBackground = Color(0xFFF7F7F8);
+  static const Color _cardBorder = Color(0xFFE8ECF0);
+
   final List<_InboxItem> _items = [];
   bool _loading = true;
   bool _loadingMore = false;
@@ -29,6 +34,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     super.initState();
     _load();
   }
+
+  // ── Logic (unchanged) ─────────────────────────────────────────
 
   Future<void> _load({bool more = false}) async {
     final session = ref.read(authSessionProvider);
@@ -175,154 +182,320 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final unread = _unreadCount;
-    final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loading ? null : () => _load(),
-            icon: const Icon(Icons.refresh),
-          ),
-          if (unread > 0)
-            TextButton.icon(
-              onPressed: _markAllRead,
-              icon: const Icon(Icons.done_all, size: 18),
-              label: const Text('Read all'),
-            ),
-          const SizedBox(width: 8),
-        ],
+  // ── UI helpers ────────────────────────────────────────────────
+
+  String _timeAgo(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    return MaterialLocalizations.of(context).formatMediumDate(date);
+  }
+
+  Widget _pushCard() {
+    final accent = Theme.of(context).colorScheme.primary;
+    final available = PushNotificationService.instance.isAvailable;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _cardBorder),
       ),
-      body: Column(
+      child: Row(
         children: [
-          SwitchListTile.adaptive(
-            value: _pushEnabled,
-            onChanged: PushNotificationService.instance.isAvailable
-                ? _setPushEnabled
-                : null,
-            secondary: const Icon(Icons.notifications_active_outlined),
-            title: const Text('Mobile push notifications'),
-            subtitle: Text(
-              PushNotificationService.instance.isAvailable
-                  ? 'Optional alerts on this device'
-                  : 'Push delivery is not configured for this app build',
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            alignment: Alignment.center,
+            child: HugeIcon(
+              icon: HugeIcons.strokeRoundedNotification01,
+              color: accent,
+              size: 20,
             ),
           ),
-          const Divider(height: 1),
+          const SizedBox(width: 14),
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                ? _StatusView(
-                    message: _error!,
-                    action: TextButton(
-                      onPressed: () => _load(),
-                      child: const Text('Retry'),
-                    ),
-                  )
-                : _items.isEmpty
-                ? const _StatusView(message: 'You are all caught up.')
-                : NotificationListener<ScrollNotification>(
-                    onNotification: (notification) {
-                      if (notification.metrics.extentAfter < 240 &&
-                          !_loadingMore &&
-                          _page < _lastPage) {
-                        _load(more: true);
-                      }
-                      return false;
-                    },
-                    child: RefreshIndicator(
-                      onRefresh: () => _load(),
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _items.length + (_loadingMore ? 1 : 0),
-                        separatorBuilder: (_, _) =>
-                            const Divider(height: 1, indent: 72),
-                        itemBuilder: (context, index) {
-                          if (index == _items.length) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Center(
-                                child: SizedBox.square(
-                                  dimension: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                          final item = _items[index];
-                          return ListTile(
-                            onTap: () => _markRead(item),
-                            leading: CircleAvatar(
-                              backgroundColor: item.readAt == null
-                                  ? colors.primaryContainer
-                                  : colors.surfaceContainerHighest,
-                              child: Icon(
-                                Icons.campaign_outlined,
-                                color: item.readAt == null
-                                    ? colors.primary
-                                    : colors.onSurfaceVariant,
-                              ),
-                            ),
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item.title,
-                                    style: TextStyle(
-                                      fontWeight: item.readAt == null
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                if (item.readAt == null)
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      color: colors.primary,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 5),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(item.body),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    _formatDate(item.createdAt),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.labelSmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            isThreeLine: true,
-                          );
-                        },
-                      ),
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Mobile push notifications',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  available
+                      ? 'Optional alerts on this device'
+                      : 'Push delivery is not configured for this app build',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: _pushEnabled,
+            onChanged: available ? _setPushEnabled : null,
+            activeColor: accent,
           ),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime date) =>
-      MaterialLocalizations.of(context).formatMediumDate(date);
+  Widget _notificationCard(_InboxItem item) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final unread = item.readAt == null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: unread ? accent.withValues(alpha: 0.35) : _cardBorder,
+          width: unread ? 1.3 : 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _markRead(item),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: unread
+                        ? accent.withValues(alpha: 0.10)
+                        : const Color(0xFFF1F3F5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: HugeIcon(
+                    icon: HugeIcons.strokeRoundedMegaphone01,
+                    color: unread ? accent : Colors.black45,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight:
+                                    unread ? FontWeight.w700 : FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          if (unread) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (item.body.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          item.body,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.4,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const HugeIcon(
+                            icon: HugeIcons.strokeRoundedClock01,
+                            color: Colors.black38,
+                            size: 13,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _timeAgo(item.createdAt),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: Colors.black45,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _content() {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+
+    if (_error != null) {
+      return _StatusView(
+        icon: HugeIcons.strokeRoundedWifiOff01,
+        message: _error!,
+        action: FilledButton.tonal(
+          onPressed: () => _load(),
+          child: const Text('Retry'),
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return const _StatusView(
+        icon: HugeIcons.strokeRoundedNotification01,
+        message: 'You are all caught up.',
+      );
+    }
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.extentAfter < 240 &&
+            !_loadingMore &&
+            _page < _lastPage) {
+          _load(more: true);
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        onRefresh: () => _load(),
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          itemCount: _items.length + (_loadingMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == _items.length) {
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            }
+            return _notificationCard(_items[index]);
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = _unreadCount;
+    final accent = Theme.of(context).colorScheme.primary;
+
+    return Scaffold(
+      backgroundColor: _pageBackground,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+        leading: const AppBackButton(),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Notifications',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+            if (unread > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$unread',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          if (unread > 0)
+            IconButton(
+              tooltip: 'Mark all as read',
+              onPressed: _markAllRead,
+              icon: const HugeIcon(
+                icon: HugeIcons.strokeRoundedCheckmarkCircle02,
+                color: Colors.black87,
+                size: 22,
+              ),
+            ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _loading ? null : () => _load(),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedRefresh,
+              color: Colors.black87,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: Column(
+        children: [
+          _pushCard(),
+          Expanded(child: _content()),
+        ],
+      ),
+    );
+  }
 }
 
 class _InboxItem {
@@ -355,20 +528,28 @@ class _InboxItem {
 }
 
 class _StatusView extends StatelessWidget {
+  final dynamic icon;
   final String message;
   final Widget? action;
-  const _StatusView({required this.message, this.action});
+  const _StatusView({required this.icon, required this.message, this.action});
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.notifications_none, size: 34),
-        const SizedBox(height: 12),
-        Text(message),
-        ?action,
-      ],
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          HugeIcon(icon: icon, color: Colors.black26, size: 40),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
+          ),
+          if (action != null) ...[const SizedBox(height: 12), action!],
+        ],
+      ),
     ),
   );
 }
