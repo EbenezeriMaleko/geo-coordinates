@@ -34,6 +34,8 @@ import 'record_recovery_page.dart';
 import 'record_export_page.dart';
 import 'parcel_pdf_page.dart';
 import 'record_sharing_page.dart';
+import 'record_custom_fields_page.dart';
+import '../../widget/record_detail_value.dart';
 
 enum _ViewMode { combined, basic, text, photo }
 
@@ -4403,7 +4405,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -4440,6 +4442,22 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             _InfoRow(label: context.l10n.t('Phone'), value: phone!),
           if (description?.trim().isNotEmpty == true)
             _InfoRow(label: context.l10n.t('Description'), value: description!),
+          if ([
+            claimantName,
+            claimantPhone,
+            claimantIdMasked,
+            plotNumber,
+            landUse,
+          ].any((value) => value?.trim().isNotEmpty == true)) ...[
+            const Divider(height: 28),
+            Text(
+              'Customer & parcel',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 14),
+          ],
           if (claimantName?.trim().isNotEmpty == true)
             _InfoRow(label: 'Owner / claimant', value: claimantName!),
           if (claimantPhone?.trim().isNotEmpty == true)
@@ -4450,6 +4468,14 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             _InfoRow(label: 'Plot number', value: plotNumber!),
           if (landUse?.trim().isNotEmpty == true)
             _InfoRow(label: 'Land use', value: landUse!),
+          const Divider(height: 28),
+          Text(
+            'Measurements & dates',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 14),
           if (perimeterText != null)
             _InfoRow(label: context.l10n.t('Perimeter'), value: perimeterText),
           if (areaText != null)
@@ -4696,6 +4722,23 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       child: Column(
         children: [
           // Go to map — always shown
+          if (widget.isCloud ||
+              (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
+            _ActionRow(
+              icon: Icons.list_alt_outlined,
+              label: 'Custom fields',
+              color: theme.colorScheme.primary,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => RecordCustomFieldsPage(
+                    company: _companyAtOpen,
+                    record: widget.isCloud
+                        ? widget.cloudItem!.id
+                        : widget.localItem!['cloudId'].toString(),
+                  ),
+                ),
+              ),
+            ),
           if (widget.isCloud ||
               (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
             _ActionRow(
@@ -5090,15 +5133,17 @@ class _ActionRow extends StatelessWidget {
               child: Icon(icon, size: 18, color: c),
             ),
             const SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: c,
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: c,
+                ),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
           ],
         ),
@@ -5115,35 +5160,7 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return RecordDetailValue(label: label, value: value);
   }
 }
 

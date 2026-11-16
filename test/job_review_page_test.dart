@@ -83,6 +83,11 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Approve'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Request changes'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Request changes'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

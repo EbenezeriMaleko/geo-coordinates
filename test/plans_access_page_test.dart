@@ -38,6 +38,16 @@ void main() {
                 'records': {'used': 10, 'limit': 10},
                 'storage': {'used': 1048576, 'limit': 10485760},
                 'exports': {'used': 0, 'limit': -1},
+                'reports': {
+                  'used': 2,
+                  'limit': 5,
+                  'resets_at': '2026-12-01T00:00:00Z',
+                },
+                'shared_links': {'used': 1, 'limit': 3},
+                'downgrade': {
+                  'restricted_records': 4,
+                  'grace_ends_at': '2026-12-10T00:00:00Z',
+                },
               },
               'has_pending_request': true,
             },
@@ -55,12 +65,24 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Pending approval'), findsOneWidget);
+    expect(find.text('Pending approval'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('4 older records are read-only'),
+      100,
+    );
+    expect(find.text('4 older records are read-only'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Allowance reached'), 100);
     expect(find.text('Allowance reached'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.scrollUntilVisible(find.text('1 / 10 MB'), 100);
     expect(find.text('1 / 10 MB'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(find.text('Monthly parcel reports'), 100);
+    expect(find.text('Monthly parcel reports'), findsOneWidget);
+    expect(find.text('2 / 5'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Active shared links'), 100);
+    expect(find.text('Active shared links'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

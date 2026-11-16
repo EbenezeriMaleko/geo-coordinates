@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "875738250094",
+    "project_id": "a123456gps",
+    "storage_bucket": "a123456gps.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:875738250094:android:7aa6871bae51f36ec15f7f",
+        "android_client_info": {
+          "package_name": "com.databenki.taref_gps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPIkYiSCco6QekwiMM_v54Zl-LM7Bq80Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

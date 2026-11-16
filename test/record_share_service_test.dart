@@ -10,6 +10,45 @@ void main() {
   tearDown(() => ApiClient.setActiveCompanyId(null));
 
   test(
+    'shows the server validation reason instead of a generic error',
+    () async {
+      final service = RecordShareService(
+        client: MockClient(
+          (request) async => http.Response(
+            jsonEncode({
+              'message': 'Validation failed.',
+              'errors': {
+                'sharing': [
+                  'Sharing is disabled or the allowance has been reached.',
+                ],
+              },
+            }),
+            422,
+          ),
+        ),
+      );
+      addTearDown(service.dispose);
+      await expectLater(
+        service.request(
+          token: 'token',
+          record: 5,
+          company: null,
+          isCurrent: () => true,
+          method: 'POST',
+          body: {'expires_days': 30},
+        ),
+        throwsA(
+          isA<Exception>().having(
+            (error) => error.toString(),
+            'message',
+            contains('Sharing is disabled or the allowance has been reached.'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'sharing requests pin the company and send explicit privacy settings',
     () async {
       ApiClient.setActiveCompanyId(99);

@@ -289,6 +289,11 @@ class _FieldJobFormState extends ConsumerState<FieldJobForm> {
                   child: ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
+                      Text(
+                        'Job details',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: title,
                         enabled: !busy,
@@ -296,7 +301,6 @@ class _FieldJobFormState extends ConsumerState<FieldJobForm> {
                         maxLength: 150,
                         decoration: const InputDecoration(
                           labelText: 'Job title',
-                          border: OutlineInputBorder(),
                         ),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
@@ -312,10 +316,15 @@ class _FieldJobFormState extends ConsumerState<FieldJobForm> {
                         maxLength: 5000,
                         decoration: const InputDecoration(
                           labelText: 'Description (optional)',
-                          border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 20),
+                      const Divider(height: 24),
+                      Text(
+                        'Project & record',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
                       linkedItem(true),
                       linkedItem(false),
                       const Divider(height: 32),

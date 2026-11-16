@@ -60,8 +60,18 @@ class RecordShareService {
       throw Exception('Invalid sharing response.');
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      final errors = decoded is Map ? decoded['errors'] : null;
+      final messages = errors is Map
+          ? errors.values
+                .whereType<List>()
+                .expand((values) => values)
+                .whereType<String>()
+                .toList()
+          : <String>[];
       throw Exception(
-        decoded is Map && decoded['message'] is String
+        messages.isNotEmpty
+            ? messages.first
+            : decoded is Map && decoded['message'] is String
             ? decoded['message']
             : 'Unable to update sharing.',
       );

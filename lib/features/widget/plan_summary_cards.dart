@@ -141,6 +141,8 @@ class PlanSummaryCard extends ConsumerWidget {
     }
 
     return overview.when(
+      skipLoadingOnRefresh: false,
+      skipLoadingOnReload: false,
       loading: () => shell(
         name: 'Loading plan…',
         subtitle: workspace.label,

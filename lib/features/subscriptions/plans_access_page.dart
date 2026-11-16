@@ -35,7 +35,8 @@ String _date(dynamic value) {
 String _money(dynamic currency, dynamic price) {
   final n = num.tryParse('$price');
   final c = currency?.toString() ?? '';
-  if (n == null) return [c, price?.toString() ?? ''].where((e) => e.isNotEmpty).join(' ');
+  if (n == null)
+    return [c, price?.toString() ?? ''].where((e) => e.isNotEmpty).join(' ');
   if (n == 0) return 'Free';
   var s = n == n.roundToDouble() ? n.toInt().toString() : n.toStringAsFixed(2);
   final parts = s.split('.');
@@ -122,6 +123,8 @@ class PlansAccessPage extends ConsumerWidget {
         body: ColoredBox(
           color: _pageBackground,
           child: overview.when(
+            skipLoadingOnRefresh: false,
+            skipLoadingOnReload: false,
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (_, _) => Center(
               child: Padding(
@@ -196,6 +199,16 @@ class PlansAccessPage extends ConsumerWidget {
                   'Monthly exports',
                   HugeIcons.strokeRoundedShare01,
                 ),
+                _UsageKind(
+                  'reports',
+                  'Monthly parcel reports',
+                  HugeIcons.strokeRoundedDatabase,
+                ),
+                _UsageKind(
+                  'shared_links',
+                  'Active shared links',
+                  HugeIcons.strokeRoundedShare01,
+                ),
               ];
               final usageTiles = <Widget>[
                 for (final k in usageKinds)
@@ -236,6 +249,58 @@ class PlansAccessPage extends ConsumerWidget {
                             ),
                     ),
                     if (pending) const _PendingBanner(),
+                    if (usage['downgrade'] is Map &&
+                        (num.tryParse(
+                                  '${usage['downgrade']['restricted_records']}',
+                                ) ??
+                                0) >
+                            0)
+                      ProfileSection(
+                        title: 'Record access',
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.lock_outline),
+                            title: Text(
+                              '${usage['downgrade']['restricted_records']} older records are read-only',
+                            ),
+                            subtitle: Text(
+                              'Only the newest records within your allowance can be managed.'
+                              '${usage['downgrade']['grace_ends_at'] == null ? '' : ' Grace period ends ${_date(usage['downgrade']['grace_ends_at'])}.'}'
+                              ' Permanent deletion is not enabled.',
+                            ),
+                          ),
+                        ],
+                      ),
+                    for (final key in [
+                      'notices',
+                      'usage_alerts',
+                      'cleanup_notices',
+                    ])
+                      if (data[key] is List &&
+                          (data[key] as List).whereType<Map>().any(
+                            (notice) => notice['message'] is String,
+                          ))
+                        ProfileSection(
+                          title: key == 'usage_alerts'
+                              ? 'Usage alerts'
+                              : key == 'cleanup_notices'
+                              ? 'Recovery notices'
+                              : 'Workspace notices',
+                          children: [
+                            for (final notice
+                                in (data[key] as List).whereType<Map>())
+                              if (notice['message'] is String)
+                                ListTile(
+                                  leading: const Icon(Icons.info_outline),
+                                  title: Text(notice['message'] as String),
+                                  subtitle: notice['grace_ends_at'] == null
+                                      ? null
+                                      : Text(
+                                          'Grace period ends ${_date(notice['grace_ends_at'])}',
+                                        ),
+                                ),
+                          ],
+                        ),
                     if (usageTiles.isNotEmpty)
                       ProfileSection(
                         title: 'Workspace usage',
@@ -407,11 +472,15 @@ class _PlanHero extends StatelessWidget {
                                     size: 15,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    footer,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: Colors.white.withValues(alpha: 0.9),
+                                  Flexible(
+                                    child: Text(
+                                      footer,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -481,6 +550,7 @@ class _PlanHero extends StatelessWidget {
     );
   }
 }
+
 class _PendingBanner extends StatelessWidget {
   const _PendingBanner();
 
@@ -654,6 +724,20 @@ class _UsageTile extends StatelessWidget {
               ),
             ),
           ],
+          if (data['resets_at'] != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Resets ${_date(data['resets_at'])}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (label == 'Active shared links') ...[
+            const SizedBox(height: 8),
+            Text(
+              'Unexpired, unrevoked links. Revoke a link to free capacity.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           if (reached || warning) ...[
             const SizedBox(height: 8),
             Row(
@@ -664,12 +748,14 @@ class _UsageTile extends StatelessWidget {
                   size: 14,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  reached ? 'Allowance reached' : 'Approaching allowance',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
+                Expanded(
+                  child: Text(
+                    reached ? 'Allowance reached' : 'Approaching allowance',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
                   ),
                 ),
               ],
@@ -834,10 +920,7 @@ class _PlanRequestsState extends ConsumerState<_PlanRequests> {
                 if (interval.isNotEmpty)
                   TextSpan(
                     text: '  / $interval',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Colors.black54,
-                    ),
+                    style: const TextStyle(fontSize: 13, color: Colors.black54),
                   ),
               ],
             ),
@@ -972,10 +1055,7 @@ class _RequestRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     _date(created),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black54,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                 ],
               ],

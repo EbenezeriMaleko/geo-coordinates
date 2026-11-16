@@ -16,6 +16,12 @@ const Color _fieldFill = Color(0xFFF7F7F8);
 const Color _amber = Color(0xFFB26A00);
 const Color _amberSoft = Color(0xFFFFF4E0);
 
+bool validInvitationEmail(String value) {
+  final email = value.trim();
+  return email.length <= 255 &&
+      RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
+}
+
 List<String> parseCompanyInvitationRoles(dynamic raw) => raw is List
     ? raw
           .whereType<String>()
@@ -33,6 +39,41 @@ List<String> parseCompanyInvitationRoles(dynamic raw) => raw is List
     : [];
 
 class CompanyInviteService {
+  Future<bool?> inviteEmail(
+    String token,
+    int company,
+    String email,
+    String role,
+  ) async {
+    final response = await ApiClient.postJson(
+      '/companies/$company/invitations',
+      bearerToken: token,
+      body: {'email': email.trim(), 'role': role},
+    );
+    final body = jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final errors = body is Map ? body['errors'] : null;
+      final messages = errors is Map
+          ? errors.values
+                .whereType<List>()
+                .expand((v) => v)
+                .whereType<String>()
+                .toList()
+          : <String>[];
+      throw Exception(
+        messages.isNotEmpty
+            ? messages.first
+            : body is Map
+            ? body['message'] ?? 'Unable to create invitation.'
+            : 'Unable to create invitation.',
+      );
+    }
+    final data = body is Map ? body['data'] : null;
+    return data is Map && data['email_delivered'] is bool
+        ? data['email_delivered'] as bool
+        : null;
+  }
+
   Future<Map<String, dynamic>> get(
     String path,
     String token, {
@@ -150,7 +191,8 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
   Future<void> send(List<String> roles, String selectedRole) async {
     if (busy || selected == null || !roles.contains(selectedRole)) return;
     final user = int.tryParse(selected!['id'].toString());
-    if (user == null) return;
+    final email = selected!['email']?.toString().trim() ?? '';
+    if (user == null && !validInvitationEmail(email)) return;
     final session = ref.read(authSessionProvider);
     final workspace = ref.read(workspaceProvider);
     if (!session.isLoggedIn ||
@@ -170,9 +212,13 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
       error = null;
     });
     try {
-      final delivered = await ref
-          .read(companyInviteServiceProvider)
-          .invite(session.token, widget.company, user, selectedRole);
+      final delivered = user == null
+          ? await ref
+                .read(companyInviteServiceProvider)
+                .inviteEmail(session.token, widget.company, email, selectedRole)
+          : await ref
+                .read(companyInviteServiceProvider)
+                .invite(session.token, widget.company, user, selectedRole);
       if (!mounted ||
           session.token != ref.read(authSessionProvider).token ||
           widget.company != ref.read(workspaceProvider).activeCompanyId) {
@@ -183,7 +229,7 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
         delivered == true
             ? 'Invitation created and email delivered.'
             : delivered == false
-            ? 'Invitation created. Email delivery failed; the user can still accept it in the app.'
+            ? 'Invitation created. Email delivery failed; ask the recipient to register or sign in with the invited email and check invitations.'
             : 'Invitation created. Email delivery is not confirmed.',
       );
     } catch (failure) {
@@ -299,10 +345,7 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
         borderSide: BorderSide(color: color, width: width),
       );
 
-  Widget _userRow(
-    Map<String, dynamic> user, {
-    required VoidCallback? onTap,
-  }) {
+  Widget _userRow(Map<String, dynamic> user, {required VoidCallback? onTap}) {
     final name = user['name']?.toString() ?? 'Account';
     final email = user['email']?.toString() ?? '';
     return InkWell(
@@ -566,7 +609,7 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
                               ),
 
                             // Step 1: account
-                            _sectionLabel('FIND ACCOUNT'),
+                            _sectionLabel('ACCOUNT OR EMAIL'),
                             _card(
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,16 +651,33 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
                                       error = null;
                                     }),
                                   ),
+                                  if (selected == null &&
+                                      validInvitationEmail(search))
+                                    Material(
+                                      color: Colors.white,
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: const Icon(
+                                          Icons.mail_outline,
+                                          color: _accent,
+                                        ),
+                                        title: const Text('Invite by email'),
+                                        subtitle: Text(search),
+                                        onTap: allowed && !busy
+                                            ? () => setState(
+                                                () => selected = {
+                                                  'name': search,
+                                                  'email': search,
+                                                },
+                                              )
+                                            : null,
+                                      ),
+                                    ),
                                   if (selected == null && search.length < 2)
                                     const Padding(
-                                      padding: EdgeInsets.fromLTRB(
-                                        4,
-                                        10,
-                                        4,
-                                        0,
-                                      ),
+                                      padding: EdgeInsets.fromLTRB(4, 10, 4, 0),
                                       child: Text(
-                                        'Type at least 2 characters to search for an account.',
+                                        'Enter an email address or search for an existing account.',
                                         style: TextStyle(
                                           fontSize: 12.5,
                                           color: Colors.black54,
@@ -681,6 +741,12 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
                               ),
                             ),
 
+                            if (selected != null && selected!['id'] == null)
+                              _notice(
+                                icon: HugeIcons.strokeRoundedMail01,
+                                text:
+                                    'The recipient must register or sign in with ${selected!['email']} to accept the invitation.',
+                              ),
                             if (selected != null) ...[
                               const SizedBox(height: 12),
                               _card(
@@ -717,8 +783,7 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
                                               color: Colors.black87,
                                             ),
                                           ),
-                                          if ((selected!['email']
-                                                      ?.toString() ??
+                                          if ((selected!['email']?.toString() ??
                                                   '')
                                               .isNotEmpty)
                                             Text(
@@ -863,8 +928,8 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
                                             ),
                                           )
                                         : HugeIcon(
-                                            icon:
-                                                HugeIcons.strokeRoundedUserAdd01,
+                                            icon: HugeIcons
+                                                .strokeRoundedUserAdd01,
                                             color: canSend
                                                 ? Colors.white
                                                 : Colors.black38,

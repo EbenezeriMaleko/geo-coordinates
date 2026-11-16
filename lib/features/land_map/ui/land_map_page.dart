@@ -2808,9 +2808,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 _cameraController.updateGooglePosition(position);
                 _providerCenter = fromGoogleLatLng(position.target);
                 _providerZoom = position.zoom;
-                if (mounted && position.zoom != _currentZoom) {
-                  setState(() => _currentZoom = position.zoom);
-                }
+                // Camera bookkeeping does not affect the Flutter UI. Rebuilding
+                // here regenerates all survey overlays on every zoom frame.
+                _currentZoom = position.zoom;
               },
               onLongPress: _handleMapLongPress,
             ),
@@ -2860,9 +2860,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               },
               onPositionChanged: (position, _) {
                 final zoom = position.zoom;
-                if (zoom != _currentZoom && mounted) {
-                  setState(() => _currentZoom = zoom);
-                }
+                _currentZoom = zoom;
               },
               onLongPress: (_, latLng) => _handleMapLongPress(latLng),
             ),
@@ -3313,6 +3311,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
               child: Column(
                 children: [
                   _MapControlButton(
+                    tooltip: _isFullscreen ? 'Exit full screen' : 'Full screen',
                     icon: _isFullscreen
                         ? Icons.fullscreen_exit
                         : Icons.fullscreen,
@@ -3322,6 +3321,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   const SizedBox(height: 8),
                   _MapControlButton(
                     icon: Icons.my_location_rounded,
+                    tooltip: _isLocating
+                        ? 'Finding your location'
+                        : 'Center on my location',
                     isLoading: _isLocating,
                     enabled: !_isLocating,
                     isActive: _followCurrentLocation,
@@ -3332,12 +3334,16 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     icon: _orientationLocked
                         ? Icons.explore_rounded
                         : Icons.explore_off_rounded,
+                    tooltip: _orientationLocked
+                        ? 'Unlock orientation'
+                        : 'Lock orientation',
                     isActive: _orientationLocked,
                     onPressed: _toggleOrientation,
                   ),
                   const SizedBox(height: 8),
                   _MapControlButton(
                     icon: Icons.layers,
+                    tooltip: 'Map provider, type & layers',
                     onPressed: () => _showMapTypeSelector(),
                   ),
                 ],
@@ -3460,198 +3466,229 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => StatefulBuilder(
-        builder: (context, modalSetState) => Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                l10n.t('Map Type'),
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              if (!kIsWeb &&
-                  (defaultTargetPlatform == TargetPlatform.android ||
-                      defaultTargetPlatform == TargetPlatform.iOS))
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(value: false, label: Text('Standard')),
-                    ButtonSegment(value: true, label: Text('Google Maps')),
-                  ],
-                  selected: {_useGoogleMap},
-                  onSelectionChanged: (selection) =>
-                      _changeMapProvider(selection.first, context),
-                ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        builder: (context, modalSetState) => ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+          ),
+          child: SingleChildScrollView(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _MapTypeOption(
-                    label: l10n.t('Normal'),
-                    preview: Image.asset(
-                      'lib/assets/mapsImages/Normal.jpg',
-                      fit: BoxFit.cover,
-                    ),
-                    isSelected: _currentMapType == MapType.normal,
-                    onTap: () {
-                      _changeMapType(MapType.normal, context);
-                    },
+                  Text(
+                    l10n.t('Map Type'),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  _MapTypeOption(
-                    label: l10n.t('Satellite'),
-                    preview: Image.asset(
-                      'lib/assets/mapsImages/satellite.png',
-                      fit: BoxFit.cover,
+                  const SizedBox(height: 16),
+                  if (!kIsWeb &&
+                      (defaultTargetPlatform == TargetPlatform.android ||
+                          defaultTargetPlatform == TargetPlatform.iOS))
+                    SegmentedButton<bool>(
+                      direction:
+                          MediaQuery.sizeOf(context).width < 360 ||
+                              MediaQuery.textScalerOf(context).scale(14) > 19
+                          ? Axis.vertical
+                          : Axis.horizontal,
+                      segments: const [
+                        ButtonSegment(
+                          value: false,
+                          icon: Icon(Icons.map_outlined),
+                          label: Text('Standard'),
+                        ),
+                        ButtonSegment(
+                          value: true,
+                          icon: Icon(Icons.public),
+                          label: Text('Google Maps'),
+                        ),
+                      ],
+                      selected: {_useGoogleMap},
+                      onSelectionChanged: (selection) =>
+                          _changeMapProvider(selection.first, context),
                     ),
-                    isSelected: _currentMapType == MapType.satellite,
-                    onTap: () {
-                      _changeMapType(MapType.satellite, context);
-                    },
-                  ),
-                  _MapTypeOption(
-                    label: l10n.t('Terrain'),
-                    preview: Image.asset(
-                      'lib/assets/mapsImages/terrain.jpg',
-                      fit: BoxFit.cover,
-                    ),
-                    isSelected: _currentMapType == MapType.terrain,
-                    onTap: () {
-                      _changeMapType(MapType.terrain, context);
-                    },
-                  ),
-                  _MapTypeOption(
-                    label: l10n.t('Hybrid'),
-                    preview: Image.asset(
-                      'lib/assets/mapsImages/satellite.png',
-                      fit: BoxFit.cover,
-                    ),
-                    isSelected: _currentMapType == MapType.hybrid,
-                    onTap: () {
-                      _changeMapType(MapType.hybrid, context);
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 16),
-              Text(
-                l10n.t('Layers'),
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _LayerOption(
-                    label: l10n.t('Field'),
-                    icon: SvgPicture.asset(
-                      'lib/assets/icons/golf-hole.svg',
-                      width: 28,
-                      height: 28,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white,
-                        BlendMode.srcIn,
+                  const SizedBox(height: 20),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 18,
+                    runSpacing: 16,
+                    children: [
+                      _MapTypeOption(
+                        label: l10n.t('Normal'),
+                        preview: Image.asset(
+                          'lib/assets/mapsImages/Normal.jpg',
+                          fit: BoxFit.cover,
+                        ),
+                        isSelected: _currentMapType == MapType.normal,
+                        onTap: () {
+                          _changeMapType(MapType.normal, context);
+                        },
                       ),
-                    ),
-                    color: Colors.blue,
-                    isSelected: _showFieldLayer,
-                    count: ref.read(landMapProvider).points.length,
-                    onClear: ref.read(landMapProvider).points.isNotEmpty
-                        ? () {
-                            ref.read(landMapProvider.notifier).clearPoints();
-                            ref
-                                .read(landMapProvider.notifier)
-                                .exitEditingMode();
-                            setState(() {});
-                            modalSetState(() {});
-                          }
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _showFieldLayer = !_showFieldLayer;
-                      });
-                      _saveLayerPreference(_layerFieldPrefKey, _showFieldLayer);
-                      modalSetState(() {});
-                    },
-                  ),
-                  _LayerOption(
-                    label: l10n.t('Distance'),
-                    icon: SvgPicture.asset(
-                      'lib/assets/icons/map-location-track.svg',
-                      width: 28,
-                      height: 28,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white,
-                        BlendMode.srcIn,
+                      _MapTypeOption(
+                        label: l10n.t('Satellite'),
+                        preview: Image.asset(
+                          'lib/assets/mapsImages/satellite.png',
+                          fit: BoxFit.cover,
+                        ),
+                        isSelected: _currentMapType == MapType.satellite,
+                        onTap: () {
+                          _changeMapType(MapType.satellite, context);
+                        },
                       ),
-                    ),
-                    color: Colors.orange,
-                    isSelected: _showDistanceLayer,
-                    count: _distancePoints.length,
-                    onClear: _distancePoints.isNotEmpty
-                        ? () {
-                            setState(() {
-                              _distancePoints = const [];
-                              _distanceLabels = const [];
-                              if (_activeTool == _MapTool.distance) {
-                                _activeTool = _MapTool.none;
+                      _MapTypeOption(
+                        label: l10n.t('Terrain'),
+                        preview: Image.asset(
+                          'lib/assets/mapsImages/terrain.jpg',
+                          fit: BoxFit.cover,
+                        ),
+                        isSelected: _currentMapType == MapType.terrain,
+                        onTap: () {
+                          _changeMapType(MapType.terrain, context);
+                        },
+                      ),
+                      _MapTypeOption(
+                        label: l10n.t('Hybrid'),
+                        preview: Image.asset(
+                          'lib/assets/mapsImages/satellite.png',
+                          fit: BoxFit.cover,
+                        ),
+                        isSelected: _currentMapType == MapType.hybrid,
+                        onTap: () {
+                          _changeMapType(MapType.hybrid, context);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.t('Layers'),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 24,
+                    runSpacing: 16,
+                    children: [
+                      _LayerOption(
+                        label: l10n.t('Field'),
+                        icon: SvgPicture.asset(
+                          'lib/assets/icons/golf-hole.svg',
+                          width: 28,
+                          height: 28,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                        color: Colors.blue,
+                        isSelected: _showFieldLayer,
+                        count: ref.read(landMapProvider).points.length,
+                        onClear: ref.read(landMapProvider).points.isNotEmpty
+                            ? () {
+                                ref
+                                    .read(landMapProvider.notifier)
+                                    .clearPoints();
+                                ref
+                                    .read(landMapProvider.notifier)
+                                    .exitEditingMode();
+                                setState(() {});
+                                modalSetState(() {});
                               }
-                            });
-                            modalSetState(() {});
-                          }
-                        : null,
-                    onTap: () {
-                      setState(() {
-                        _showDistanceLayer = !_showDistanceLayer;
-                        if (!_showDistanceLayer &&
-                            _activeTool == _MapTool.distance) {
-                          _activeTool = _MapTool.none;
-                        }
-                      });
-                      _saveLayerPreference(
-                        _layerDistancePrefKey,
-                        _showDistanceLayer,
-                      );
-                      modalSetState(() {});
-                    },
-                  ),
-                  _LayerOption(
-                    label: l10n.t('Marker'),
-                    icon: SvgPicture.asset(
-                      'lib/assets/icons/marker.svg',
-                      width: 28,
-                      height: 28,
-                      colorFilter: const ColorFilter.mode(
-                        Colors.white,
-                        BlendMode.srcIn,
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _showFieldLayer = !_showFieldLayer;
+                          });
+                          _saveLayerPreference(
+                            _layerFieldPrefKey,
+                            _showFieldLayer,
+                          );
+                          modalSetState(() {});
+                        },
                       ),
-                    ),
-                    color: Colors.red,
-                    isSelected: _showMarkerLayer,
-                    count: _savedMarkers.length,
-                    onTap: () {
-                      setState(() {
-                        _showMarkerLayer = !_showMarkerLayer;
-                        if (!_showMarkerLayer &&
-                            _activeTool == _MapTool.marker) {
-                          _activeTool = _MapTool.none;
-                        }
-                      });
-                      _saveLayerPreference(
-                        _layerMarkerPrefKey,
-                        _showMarkerLayer,
-                      );
-                      modalSetState(() {});
-                    },
+                      _LayerOption(
+                        label: l10n.t('Distance'),
+                        icon: SvgPicture.asset(
+                          'lib/assets/icons/map-location-track.svg',
+                          width: 28,
+                          height: 28,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                        color: Colors.orange,
+                        isSelected: _showDistanceLayer,
+                        count: _distancePoints.length,
+                        onClear: _distancePoints.isNotEmpty
+                            ? () {
+                                setState(() {
+                                  _distancePoints = const [];
+                                  _distanceLabels = const [];
+                                  if (_activeTool == _MapTool.distance) {
+                                    _activeTool = _MapTool.none;
+                                  }
+                                });
+                                modalSetState(() {});
+                              }
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _showDistanceLayer = !_showDistanceLayer;
+                            if (!_showDistanceLayer &&
+                                _activeTool == _MapTool.distance) {
+                              _activeTool = _MapTool.none;
+                            }
+                          });
+                          _saveLayerPreference(
+                            _layerDistancePrefKey,
+                            _showDistanceLayer,
+                          );
+                          modalSetState(() {});
+                        },
+                      ),
+                      _LayerOption(
+                        label: l10n.t('Marker'),
+                        icon: SvgPicture.asset(
+                          'lib/assets/icons/marker.svg',
+                          width: 28,
+                          height: 28,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                        color: Colors.red,
+                        isSelected: _showMarkerLayer,
+                        count: _savedMarkers.length,
+                        onTap: () {
+                          setState(() {
+                            _showMarkerLayer = !_showMarkerLayer;
+                            if (!_showMarkerLayer &&
+                                _activeTool == _MapTool.marker) {
+                              _activeTool = _MapTool.none;
+                            }
+                          });
+                          _saveLayerPreference(
+                            _layerMarkerPrefKey,
+                            _showMarkerLayer,
+                          );
+                          modalSetState(() {});
+                        },
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 20),
                 ],
               ),
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
         ),
       ),
@@ -4608,6 +4645,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
 // Helper Widgets
 class _MapControlButton extends StatelessWidget {
+  final String? tooltip;
   final IconData icon;
   final VoidCallback onPressed;
   final bool enabled;
@@ -4617,6 +4655,7 @@ class _MapControlButton extends StatelessWidget {
   const _MapControlButton({
     required this.icon,
     required this.onPressed,
+    this.tooltip,
     this.enabled = true,
     this.isLoading = false,
     this.isActive = false,
@@ -4626,8 +4665,11 @@ class _MapControlButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isActive ? const Color(0xFFE8F1F7) : Colors.white,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isActive ? const Color(0xFF709BB8) : const Color(0xFFE8ECF0),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.1),
@@ -4637,6 +4679,8 @@ class _MapControlButton extends StatelessWidget {
         ],
       ),
       child: IconButton(
+        tooltip: tooltip,
+        isSelected: isActive,
         icon: isLoading
             ? const SizedBox(
                 width: 18,
@@ -4667,52 +4711,60 @@ class _MapTypeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFF0EA5E9)
-                    : Colors.grey.shade300,
-                width: isSelected ? 3 : 1.5,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: 76,
+          child: Column(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFF0EA5E9)
+                        : Colors.grey.shade300,
+                    width: isSelected ? 3 : 1.5,
+                  ),
+                  boxShadow: [
+                    if (isSelected)
+                      BoxShadow(
+                        color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    preview,
+                    if (isSelected)
+                      Container(
+                        color: const Color(0xFF0EA5E9).withValues(alpha: 0.18),
+                      ),
+                  ],
+                ),
               ),
-              boxShadow: [
-                if (isSelected)
-                  BoxShadow(
-                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                preview,
-                if (isSelected)
-                  Container(
-                    color: const Color(0xFF0EA5E9).withValues(alpha: 0.18),
-                  ),
-              ],
-            ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected ? const Color(0xFF0B3B5A) : Colors.grey,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color: isSelected ? const Color(0xFF0B3B5A) : Colors.grey,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

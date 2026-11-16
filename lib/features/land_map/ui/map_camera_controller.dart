@@ -92,6 +92,7 @@ class MapCameraController {
   }
 
   void _moveGoogle(google.CameraPosition position) {
+    if (!_pendingMove && _googlePosition == position) return;
     _googlePosition = position;
     final controller = _googleMap;
     if (controller == null) {

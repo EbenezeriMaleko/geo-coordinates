@@ -130,6 +130,51 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
     if (confirmed == true && current) await refresh(method: 'DELETE', link: id);
   }
 
+  Future<void> createLink() async {
+    if (!current || busy || RecordRecoveryService().pending(widget.record)) {
+      return;
+    }
+    if (password.text.isNotEmpty && password.text.length < 8) {
+      setState(() => error = 'Password must contain at least 8 characters.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create public record link?'),
+        content: Text(
+          'Anyone with this link${password.text.isNotEmpty ? ' and its password' : ''} can view the saved record and its geometry until it expires or is revoked. '
+          '${includeClaimant ? 'Customer name, phone, plot number and land use will also be included. ' : 'Customer details will not be included. '}'
+          'The link expires in $days day${days == 1 ? '' : 's'}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Create link'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true ||
+        !current ||
+        RecordRecoveryService().pending(widget.record)) {
+      return;
+    }
+    await refresh(
+      method: 'POST',
+      targetPage: 1,
+      body: {
+        'expires_days': days,
+        if (password.text.isNotEmpty) 'password': password.text,
+        'include_claimant_details': includeClaimant,
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(authSessionProvider);
@@ -185,6 +230,15 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                   if (policy['available'] != true)
                     const Text('Shared links are unavailable.'),
                   if (policy['available'] == true) ...[
+                    if (policy['workspace_enabled'] == false)
+                      const Text(
+                        'Public sharing is disabled for this workspace. Contact a company administrator.',
+                      ),
+                    if (policy['workspace_enabled'] != false &&
+                        policy['allowed'] != true)
+                      const Text(
+                        'The shared-link allowance has been reached. Revoke an existing link or request a different plan.',
+                      ),
                     DropdownButtonFormField<int>(
                       initialValue: days,
                       decoration: const InputDecoration(
@@ -230,25 +284,7 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                     FilledButton.icon(
                       onPressed: busy || pending || policy['allowed'] != true
                           ? null
-                          : () {
-                              if (password.text.isNotEmpty &&
-                                  password.text.length < 8) {
-                                setState(
-                                  () => error =
-                                      'Password must contain at least 8 characters.',
-                                );
-                                return;
-                              }
-                              refresh(
-                                method: 'POST',
-                                body: {
-                                  'expires_days': days,
-                                  if (password.text.isNotEmpty)
-                                    'password': password.text,
-                                  'include_claimant_details': includeClaimant,
-                                },
-                              );
-                            },
+                          : createLink,
                       icon: const Icon(Icons.add_link),
                       label: const Text('Create link'),
                     ),

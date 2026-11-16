@@ -17,6 +17,9 @@ final subscriptionOverviewProvider =
       final response = await ApiClient.getJson(
         '/billing',
         bearerToken: session.token,
+        queryParameters: workspace.activeCompanyId == null
+            ? null
+            : {'company_id': workspace.activeCompanyId},
         tag: 'subscription_overview',
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -26,5 +29,15 @@ final subscriptionOverviewProvider =
       if (body is! Map || body['data'] is! Map) {
         throw Exception('The server returned an unexpected response.');
       }
-      return Map<String, dynamic>.from(body['data'] as Map);
+      final data = Map<String, dynamic>.from(body['data'] as Map);
+      final company = data['company'];
+      final responseCompanyId = company is Map
+          ? int.tryParse('${company['id']}')
+          : null;
+      if (responseCompanyId != workspace.activeCompanyId) {
+        throw Exception(
+          'The server returned billing for another workspace. Refresh and try again.',
+        );
+      }
+      return data;
     });

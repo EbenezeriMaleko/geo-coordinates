@@ -205,11 +205,68 @@ class _JobReviewPageState extends ConsumerState<JobReviewPage> {
                     widget.job['title']?.toString() ?? 'Field job',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 12),
-                  Text(state?.replaceAll('_', ' ') ?? 'Not submitted'),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFE8ECF0)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          state == 'approved'
+                              ? Icons.task_alt
+                              : state == 'changes_requested'
+                              ? Icons.edit_note
+                              : Icons.fact_check_outlined,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(switch (state) {
+                                'submitted' => 'Awaiting review',
+                                'approved' => 'Approved',
+                                'changes_requested' => 'Changes requested',
+                                'correcting' => 'Corrections in progress',
+                                _ => 'Not submitted',
+                              }, style: Theme.of(context).textTheme.titleSmall),
+                              const SizedBox(height: 4),
+                              Text(switch (state) {
+                                'submitted' =>
+                                  'Waiting for an authorized company reviewer.',
+                                'approved' =>
+                                  'The submitted job has been approved.',
+                                'changes_requested' =>
+                                  'Review the feedback before reopening the job.',
+                                'correcting' =>
+                                  'Complete the corrections before submitting again.',
+                                _ =>
+                                  'Complete the job before submitting it for review.',
+                              }, style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const Divider(height: 32),
-                  if (data?['review_note'] != null)
+                  if (data?['review_note'] != null) ...[
+                    Text(
+                      'Review feedback',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
                     Text(data!['review_note'].toString()),
+                    const SizedBox(height: 20),
+                  ],
                   if (access.hasError)
                     const Text(
                       'Feature access could not be verified. Refresh to retry.',
@@ -230,17 +287,19 @@ class _JobReviewPageState extends ConsumerState<JobReviewPage> {
                       !reopened &&
                       widget.job['status'] == 'completed' &&
                       (state == null || state == 'correcting'))
-                    FilledButton(
+                    FilledButton.icon(
+                      icon: const Icon(Icons.send_outlined),
                       onPressed: busy ? null : () => act('submit'),
-                      child: const Text('Submit for review'),
+                      label: const Text('Submit for review'),
                     ),
                   if (allowed &&
                       data?['permissions'] is Map &&
                       data!['permissions']['can_reopen'] == true &&
                       state == 'changes_requested')
-                    FilledButton(
+                    FilledButton.icon(
+                      icon: const Icon(Icons.edit_note),
                       onPressed: busy ? null : () => act('reopen'),
-                      child: const Text('Reopen for corrections'),
+                      label: const Text('Reopen for corrections'),
                     ),
                   if (state == 'correcting')
                     const Padding(
@@ -267,18 +326,19 @@ class _JobReviewPageState extends ConsumerState<JobReviewPage> {
                       maxLines: 6,
                       decoration: const InputDecoration(
                         labelText: 'Review note',
-                        border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    FilledButton(
+                    FilledButton.icon(
+                      icon: const Icon(Icons.check_circle_outline),
                       onPressed: busy ? null : () => act('approved'),
-                      child: const Text('Approve'),
+                      label: const Text('Approve'),
                     ),
                     const SizedBox(height: 12),
-                    OutlinedButton(
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.edit_note),
                       onPressed: busy ? null : () => act('changes_requested'),
-                      child: const Text('Request changes'),
+                      label: const Text('Request changes'),
                     ),
                   ],
                   const SizedBox(height: 20),

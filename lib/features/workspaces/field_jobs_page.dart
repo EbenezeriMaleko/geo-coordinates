@@ -226,6 +226,32 @@ class _FieldJobsPageState extends ConsumerState<FieldJobsPage> {
                           ),
                         ],
                       ),
+                      if (job['company_project_id'] != null ||
+                          job['land_id'] != null) ...[
+                        const SizedBox(height: 8),
+                        if (job['company_project_id'] != null)
+                          Text(
+                            job['project_name']?.toString() ??
+                                'Unavailable project',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        if (job['land_id'] != null)
+                          Text(
+                            job['record_name']?.toString() ??
+                                'Unavailable record',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black45,
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),
@@ -293,10 +319,7 @@ class _FieldJobsPageState extends ConsumerState<FieldJobsPage> {
                   const SizedBox(height: 1),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black54,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                 ],
               ],

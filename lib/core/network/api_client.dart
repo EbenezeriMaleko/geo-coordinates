@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'api_config.dart';
 
 class ApiClient {
   static Future<http.Response> patchJson(
@@ -15,7 +16,7 @@ class ApiClient {
         body: jsonEncode(body),
       )
       .timeout(timeout);
-  static const String baseUrl = 'http://dev.ardhi.co.tz/api/v1';
+  static final String baseUrl = ApiConfig.baseUrl;
   static const Duration timeout = Duration(seconds: 30);
   static int? _activeCompanyId;
 

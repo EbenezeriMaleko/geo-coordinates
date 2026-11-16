@@ -20,9 +20,8 @@ build setting. Restrict this key to the application's iOS bundle identifier.
 No keys are required for the existing map provider. Native Google Maps support
 also requires Android/iOS device testing and the `map.google_maps` entitlement.
 
-To expose the experimental provider selector in the map type sheet, run a
-mobile debug build with `flutter run --dart-define=GOOGLE_MAPS_EXPERIMENTAL=true`.
-Without this flag, Google Maps is not offered. Switching back to Standard is
+The provider selector is available in the map Layers sheet on Android/iOS;
+no experimental build flag is required. Switching back to Standard is
 manual; an invalid key or failed tile loading does not trigger automatic
 fallback. The native SDK does not report successful imagery loading through the
 map-created callback.

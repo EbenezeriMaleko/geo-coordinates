@@ -29,6 +29,21 @@ class _Invite extends CompanyInviteService {
   bool? delivered = false;
   int calls = 0;
   String? invitedRole;
+  String? invitedEmail;
+  @override
+  Future<bool?> inviteEmail(
+    String token,
+    int company,
+    String email,
+    String role,
+  ) async {
+    calls++;
+    invitedEmail = email;
+    invitedRole = role;
+    if (failure != null) throw Exception(failure);
+    return delivered;
+  }
+
   @override
   Future<List<String>> roles(String token, int company) async => allowed;
   @override
@@ -100,6 +115,42 @@ Future<void> selectAccount(WidgetTester tester) async {
 }
 
 void main() {
+  test('invitation email validation rejects incomplete addresses', () {
+    expect(validInvitationEmail(' new.person@example.test '), isTrue);
+    for (final value in [
+      '',
+      'person',
+      'person@',
+      'person@example',
+      'a b@example.test',
+    ]) {
+      expect(validInvitationEmail(value), isFalse);
+    }
+  });
+  testWidgets(
+    'invites an unregistered person by email without choosing an account',
+    (tester) async {
+      final service = _Invite();
+      String? result;
+      await tester.pumpWidget(
+        form(service, onResult: (value) => result = value),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'new.person@example.test');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Invite by email'));
+      await tester.tap(find.text('Invite by email'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send invitation'));
+      await tester.pumpAndSettle();
+      expect(service.invitedEmail, 'new.person@example.test');
+      expect(service.invitedRole, 'reviewer');
+      expect(service.calls, 1);
+      expect(result, contains('Invitation created'));
+      expect(tester.takeException(), isNull);
+    },
+  );
   test('invitation role parsing excludes owner and unknown roles', () {
     expect(
       parseCompanyInvitationRoles(['owner', 'reviewer', 'unknown', 'reviewer']),
@@ -124,7 +175,7 @@ void main() {
       expect(service.calls, 1);
       expect(service.invitedRole, 'reviewer');
       expect(result, contains('Invitation created. Email delivery failed'));
-      expect(result, contains('accept it in the app'));
+      expect(result, contains('invited email'));
       expect(tester.takeException(), isNull);
     },
   );
@@ -138,6 +189,11 @@ void main() {
     await selectAccount(tester);
     await tester.tap(find.text('Send invitation'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('This user already has a pending invitation.'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.text('This user already has a pending invitation.'),
       findsOneWidget,
