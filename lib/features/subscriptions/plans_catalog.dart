@@ -12,7 +12,7 @@ import 'entitlement_provider.dart';
 import 'subscription_provider.dart';
 
 const Color _personalAccent = Color(0xFF001F3F);
-const Color _companyAccent = Color(0xFF245B83);
+const Color _companyAccent = Color(0xFF001F3F);
 const Color _pageBackground = Color(0xFFF7F7F8);
 const Color _cardBorder = Color(0xFFE8ECF0);
 const Color _green = Color(0xFF1B7F4B);

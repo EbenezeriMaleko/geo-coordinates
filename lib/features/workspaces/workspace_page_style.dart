@@ -14,7 +14,7 @@ class WorkspaceScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = Theme.of(context);
-    final navy = company ? const Color(0xFF245B83) : const Color(0xFF001F3F);
+    final navy = company ? const Color(0xFF001F3F) : const Color(0xFF001F3F);
     const border = Color(0xFFE2E7ED);
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(8),

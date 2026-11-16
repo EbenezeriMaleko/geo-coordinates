@@ -12,7 +12,7 @@ import 'company_member_editor.dart';
 import 'company_ownership_page.dart';
 import '../subscriptions/entitlement_provider.dart';
 
-const Color _accent = Color(0xFF245B83); // company accent
+const Color _accent = Color(0xFF001F3F); // company accent
 const Color _pageBackground = Color(0xFFF7F7F8);
 const Color _cardBorder = Color(0xFFE8ECF0);
 const Color _fieldFill = Color(0xFFF7F7F8);

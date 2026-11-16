@@ -27,7 +27,7 @@ class ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<ProfilePage> {
   // One accent per workspace. Everything on this page uses it.
   static const Color _personalAccent = Color(0xFF001F3F);
-  static const Color _companyAccent = Color(0xFF245B83);
+  static const Color _companyAccent = Color(0xFF001F3F);
   static const Color _pageBackground = Color(0xFFF3F3F4);
 
   Color _accentFor(bool isCompany) =>

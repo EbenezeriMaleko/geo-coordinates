@@ -580,7 +580,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
     final companyWorkspace =
         ref.watch(workspaceProvider).activeCompanyId != null;
     final selectedColor = companyWorkspace
-        ? const Color(0xFF245B83)
+        ? const Color(0xFF001F3F)
         : _selectedColor;
     final bottomInset =
         _bottomNavHeight + 12 + MediaQuery.of(context).padding.bottom;

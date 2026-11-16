@@ -28,6 +28,7 @@ import '../services/map_tile_cache.dart';
 import '../services/measurement_formatter.dart';
 import 'map_camera_controller.dart';
 import 'google_map_geometry.dart';
+import 'polygon_label_layout.dart';
 import 'google_map_surface.dart';
 import 'google_marker_icons.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -279,6 +280,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
   bool _isFullscreen = false;
   bool _isMapTypeSwitching = false;
   double _currentZoom = _defaultMapZoom;
+  double _measurementRotation = 0;
   String? _locationError;
   List<_PlacedMarker> _savedMarkers = const [];
   StreamSubscription<Position>? _fieldTrackingSubscription;
@@ -1255,6 +1257,73 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     return out;
   }
 
+  List<Marker> _buildFieldMeasurements(
+    List<LatLng> points,
+    DistanceUnit unit,
+    Color color,
+  ) {
+    if (points.length < 3) {
+      return _buildSegmentDistanceMarkers(points, unit: unit, color: color);
+    }
+    final area = _calculateAreaSqm(points);
+    if (area <= 0) {
+      return _buildSegmentDistanceMarkers(
+        points,
+        unit: unit,
+        color: color,
+        closeLoop: true,
+      );
+    }
+    final areaText =
+        '${context.l10n.t('Area')} · ${MeasurementFormatter.area(area, unit)}';
+    final edgeTexts = List.generate(
+      points.length,
+      (i) => _formatDistance(
+        _distanceCalculator.as(
+          LengthUnit.Meter,
+          points[i],
+          points[(i + 1) % points.length],
+        ),
+        unit,
+      ),
+    );
+    Size labelSize(String text) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final size = Size(painter.width + 24, painter.height + 16);
+      painter.dispose();
+      return size;
+    }
+
+    final areaSize = labelSize(areaText);
+    final edgeSizes = edgeTexts.map(labelSize).toList();
+    final layout = layoutPolygonLabels(
+      points: points,
+      zoom: _currentZoom,
+      rotation: _measurementRotation,
+      areaSize: areaSize,
+      edgeSizes: edgeSizes,
+    );
+    Marker label(LatLng point, String text, Size size) => Marker(
+      point: point,
+      width: size.width,
+      height: size.height,
+      rotate: true,
+      child: _SegmentDistancePill(text: text, color: color, centered: true),
+    );
+    return [
+      for (final edge in layout.edges)
+        label(edge.point, edgeTexts[edge.edge], edgeSizes[edge.edge]),
+      if (layout.area != null) label(layout.area!, areaText, areaSize),
+    ];
+  }
+
   Future<void> _toggleFullscreen() async {
     if (_isFullscreen) {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -1476,7 +1545,9 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         google.Marker(
           markerId: google.MarkerId('overlay_$i'),
           position: toGoogleLatLng(marker.point),
-          anchor: kind == GoogleMarkerIconKind.label
+          anchor:
+              kind == GoogleMarkerIconKind.label &&
+                  !(child is _SegmentDistancePill && child.centered)
               ? const Offset(0.5, 1)
               : const Offset(0.5, 0.5),
           icon: _googleMarkerIcons.get(
@@ -2448,7 +2519,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   Color get _workspaceAccent =>
       ref.read(workspaceProvider).activeCompanyId != null
-      ? const Color(0xFF245B83)
+      ? const Color(0xFF001F3F)
       : const Color(0xFF001F3F);
 
   InputDecoration _sheetInputDecoration({
@@ -2566,7 +2637,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       if (decisions != null) _applyMapAccess(decisions);
     });
     final accent = ref.watch(workspaceProvider).activeCompanyId != null
-        ? const Color(0xFF245B83)
+        ? const Color(0xFF001F3F)
         : const Color(0xFF001F3F);
     final baseTheme = Theme.of(context);
     final st = ref.watch(landMapProvider);
@@ -2604,12 +2675,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         : _navigationPointForCurrent(navigationCurrent, navigationTarget);
 
     final fieldSegmentLabels = _showFieldLayer
-        ? _buildSegmentDistanceMarkers(
-            st.points,
-            unit: distanceUnit,
-            color: accent,
-            closeLoop: st.points.length >= 3,
-          )
+        ? _buildFieldMeasurements(st.points, distanceUnit, accent)
         : const <Marker>[];
 
     final distanceSegmentLabels = _showDistanceLayer
@@ -2835,6 +2901,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   // Camera bookkeeping does not affect the Flutter UI. Rebuilding
                   // here regenerates all survey overlays on every zoom frame.
                   _currentZoom = position.zoom;
+                  _measurementRotation = -position.bearing;
+                },
+                onCameraIdle: () {
+                  if (mounted && _showFieldLayer) setState(() {});
                 },
                 onLongPress: _handleMapLongPress,
               ),
@@ -2859,6 +2929,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   }
                   if (event is MapEventMoveEnd ||
                       event is MapEventFlingAnimationEnd) {
+                    if (mounted && _showFieldLayer) setState(() {});
                     if (isUserEvent) {
                       _interactionCooldownTimer?.cancel();
                       _interactionCooldownTimer = Timer(
@@ -2885,6 +2956,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 onPositionChanged: (position, _) {
                   final zoom = position.zoom;
                   _currentZoom = zoom;
+                  _measurementRotation = position.rotation;
                 },
                 onLongPress: (_, latLng) => _handleMapLongPress(latLng),
               ),
@@ -5175,12 +5247,17 @@ class _SegmentDistancePill extends StatelessWidget {
   final String text;
   final Color color;
 
-  const _SegmentDistancePill({required this.text, required this.color});
+  final bool centered;
+  const _SegmentDistancePill({
+    required this.text,
+    required this.color,
+    this.centered = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Transform.translate(
-      offset: const Offset(0, -14),
+      offset: centered ? Offset.zero : const Offset(0, -14),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

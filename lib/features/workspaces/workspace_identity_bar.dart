@@ -16,9 +16,9 @@ class WorkspaceIdentityBar extends ConsumerWidget {
     }
     final workspace = ref.watch(workspaceProvider);
     final company = workspace.activeCompanyId != null;
-    final accent = company ? const Color(0xFF245B83) : const Color(0xFF001F3F);
+    final accent = company ? const Color(0xFF001F3F) : const Color(0xFF001F3F);
     return Material(
-      color: company ? const Color(0xFFEEF3F8) : const Color(0xFFF5F7FA),
+      color: const Color(0xFFF5F7FA),
       child: Container(
         decoration: BoxDecoration(
           border: Border(

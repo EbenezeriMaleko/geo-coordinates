@@ -149,7 +149,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
   ProviderSubscription<WorkspaceState>? _workspaceSubscription;
 
   Color get _accent => ref.read(workspaceProvider).activeCompanyId != null
-      ? const Color(0xFF245B83)
+      ? const Color(0xFF001F3F)
       : const Color(0xFF001F3F);
 
   @override
@@ -5537,7 +5537,7 @@ class _ManualCoordinateEntrySheetState
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
     final accent = ref.watch(workspaceProvider).activeCompanyId != null
-        ? const Color(0xFF245B83)
+        ? const Color(0xFF001F3F)
         : const Color(0xFF001F3F);
     final theme = baseTheme.copyWith(
       colorScheme: baseTheme.colorScheme.copyWith(primary: accent),
