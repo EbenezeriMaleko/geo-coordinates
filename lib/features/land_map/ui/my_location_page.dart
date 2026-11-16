@@ -20,6 +20,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 
 import '../../auth/providers/auth_provider.dart';
+import '../../workspaces/workspace_provider.dart';
 import '../../auth/services/auth_service.dart';
 import '../models/coordinate_format.dart';
 import '../models/location_media_models.dart';
@@ -143,10 +144,10 @@ class _LocationRequiredDialogState extends State<_LocationRequiredDialog>
                     color: primary.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    isService
-                        ? Icons.location_off_rounded
-                        : Icons.location_disabled_rounded,
+                  child: HugeIcon(
+                    icon: isService
+                        ? HugeIcons.strokeRoundedLocationOffline01
+                        : HugeIcons.strokeRoundedLocationOffline01,
                     size: 36,
                     color: primary,
                   ),
@@ -1262,7 +1263,13 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
   Widget build(BuildContext context) {
     super.build(context);
     final l10n = context.l10n;
-    final theme = Theme.of(context);
+    final baseTheme = Theme.of(context);
+    final accent = ref.watch(workspaceProvider).activeCompanyId != null
+        ? const Color(0xFF197568)
+        : const Color(0xFF001F3F);
+    final theme = baseTheme.copyWith(
+      colorScheme: baseTheme.colorScheme.copyWith(primary: accent),
+    );
     final st = ref.watch(landMapProvider);
     final ellipsoid = ref.watch(referenceEllipsoidProvider);
     final selectedDatum = ref.watch(selectedDatumProvider);
@@ -1332,24 +1339,24 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Top row: refresh + title + menu
+                      // Live status with compass and location actions
                       Row(
                         children: [
                           _HeaderCompassButton(onTap: _openCompassPage),
-                          const Spacer(),
-                          Text(
-                            l10n.t('My Location'),
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Center(
+                              child: _LiveStatusPill(
+                                isLive: isLive,
+                                isLoading: _isInitializing,
+                              ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           if (widget.onMenuAction != null)
                             PopupMenuButton<MyLocationAction>(
-                              icon: const Icon(
-                                Icons.more_vert_rounded,
+                              icon: const HugeIcon(
+                                icon: HugeIcons.strokeRoundedMoreVertical,
                                 color: Colors.white,
                               ),
                               color: Colors.white,
@@ -1373,13 +1380,6 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                           else
                             const SizedBox(width: 40),
                         ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Status pill
-                      _LiveStatusPill(
-                        isLive: isLive,
-                        isLoading: _isInitializing,
                       ),
                       const SizedBox(height: 24),
 
@@ -1483,8 +1483,8 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.location_off_outlined,
+                        HugeIcon(
+                          icon: HugeIcons.strokeRoundedLocationOffline01,
                           color: theme.colorScheme.primary,
                         ),
                         const SizedBox(width: 12),
@@ -1653,8 +1653,8 @@ class _HeaderCompassButton extends StatelessWidget {
               children: [
                 Transform.rotate(
                   angle: hasHeading ? -(heading * pi / 180) : 0,
-                  child: const Icon(
-                    Icons.explore_rounded,
+                  child: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedCompass01,
                     color: Colors.white,
                     size: 22,
                   ),
@@ -2042,7 +2042,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                     children: [
                                       // Compass accuracy
                                       _CompassDetailRow(
-                                        icon: Icons.adjust_rounded,
+                                        icon: HugeIcons.strokeRoundedLocation01,
                                         iconColor: _accuracyColor(),
                                         label: context.l10n.t(
                                           'Compass accuracy',
@@ -2054,7 +2054,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                       const Divider(height: 20),
                                       // UTM Zone
                                       _CompassDetailRow(
-                                        icon: Icons.grid_on_rounded,
+                                        icon: HugeIcons.strokeRoundedGrid,
                                         iconColor: const Color(0xFF667085),
                                         label: context.l10n.t('UTM Zone'),
                                         value: _utmZoneText,
@@ -2062,7 +2062,8 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                       const Divider(height: 20),
                                       // Easting
                                       _CompassDetailRow(
-                                        icon: Icons.arrow_forward_rounded,
+                                        icon:
+                                            HugeIcons.strokeRoundedArrowRight01,
                                         iconColor: primary,
                                         label: context.l10n.t('Easting'),
                                         value: _eastingText,
@@ -2072,7 +2073,7 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                       const Divider(height: 20),
                                       // Northing
                                       _CompassDetailRow(
-                                        icon: Icons.arrow_upward_rounded,
+                                        icon: HugeIcons.strokeRoundedArrowUp01,
                                         iconColor: primary,
                                         label: context.l10n.t('Northing'),
                                         value: _northingText,
@@ -2105,10 +2106,10 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(
-                                        _heading == null
-                                            ? Icons.explore_off_rounded
-                                            : Icons.explore_rounded,
+                                      HugeIcon(
+                                        icon: _heading == null
+                                            ? HugeIcons.strokeRoundedCompass01
+                                            : HugeIcons.strokeRoundedCompass01,
                                         color: _heading == null
                                             ? Colors.orange.shade700
                                             : Colors.green.shade700,
@@ -2159,8 +2160,8 @@ class _CompassPageState extends ConsumerState<_CompassPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.location_off_rounded,
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedLocationOffline01,
               size: 48,
               color: Colors.grey.shade400,
             ),
@@ -2395,7 +2396,7 @@ class _NorthTrianglePainter extends CustomPainter {
 }
 
 class _CompassDetailRow extends StatelessWidget {
-  final IconData icon;
+  final dynamic icon;
   final Color iconColor;
   final String label;
   final String value;
@@ -2415,7 +2416,7 @@ class _CompassDetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: iconColor, size: 18),
+        HugeIcon(icon: icon, color: iconColor, size: 18),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -2527,13 +2528,16 @@ class _LiveStatusPill extends StatelessWidget {
               ),
             ),
           if (isLoading) const SizedBox(width: 7),
-          Text(
-            context.l10n.t(label),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
+          Flexible(
+            child: Text(
+              context.l10n.t(label),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
         ],
@@ -2665,6 +2669,7 @@ class _CameraFab extends StatelessWidget {
             ),
           ],
         ),
+        alignment: Alignment.center,
         child: isLoading
             ? const Padding(
                 padding: EdgeInsets.all(16),
@@ -2673,10 +2678,10 @@ class _CameraFab extends StatelessWidget {
                   color: Colors.white,
                 ),
               )
-            : const Icon(
-                Icons.camera_alt_rounded,
+            : const HugeIcon(
+                icon: HugeIcons.strokeRoundedCamera01,
                 color: Colors.white,
-                size: 24,
+                size: 22,
               ),
       ),
     );
@@ -2714,7 +2719,7 @@ class _StatsGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _StatCard(
-                icon: Icons.landscape_rounded,
+                icon: HugeIcons.strokeRoundedMountain,
                 label: context.l10n.t('Altitude'),
                 value: altitude,
                 iconColor: const Color(0xFF0284C7),
@@ -2723,7 +2728,7 @@ class _StatsGrid extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _StatCard(
-                icon: Icons.gps_fixed_rounded,
+                icon: HugeIcons.strokeRoundedLocation01,
                 label: context.l10n.t('Accuracy'),
                 value: accuracy,
                 valueColor: qualityColor,
@@ -2737,7 +2742,7 @@ class _StatsGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _StatCard(
-                icon: Icons.signal_cellular_alt_rounded,
+                icon: HugeIcons.strokeRoundedSignal,
                 label: context.l10n.t('Signal'),
                 value: quality,
                 valueColor: qualityColor,
@@ -2747,7 +2752,7 @@ class _StatsGrid extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _StatCard(
-                icon: Icons.schedule_rounded,
+                icon: HugeIcons.strokeRoundedClock01,
                 label: context.l10n.t('Location age'),
                 value: age,
                 iconColor: const Color(0xFF7C3AED),
@@ -2760,7 +2765,7 @@ class _StatsGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _StatCard(
-                icon: Icons.wifi_tethering_rounded,
+                icon: HugeIcons.strokeRoundedGps01,
                 label: context.l10n.t('Tracking'),
                 value: isStreaming ? 'Live' : 'Stopped',
                 valueColor: isStreaming
@@ -2774,7 +2779,7 @@ class _StatsGrid extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _StatCard(
-                icon: Icons.speed_rounded,
+                icon: HugeIcons.strokeRoundedDashboardSpeed01,
                 label: context.l10n.t('Speed'),
                 value: speed,
                 iconColor: const Color(0xFF0369A1),
@@ -2788,7 +2793,7 @@ class _StatsGrid extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  final IconData icon;
+  final dynamic icon;
   final String label;
   final String value;
   final Color? valueColor;
@@ -2827,7 +2832,8 @@ class _StatCard extends StatelessWidget {
               color: iconColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 18, color: iconColor),
+            alignment: Alignment.center,
+            child: HugeIcon(icon: icon, size: 18, color: iconColor),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -3047,7 +3053,9 @@ class _CapturedPhotoDetailsSheet extends ConsumerWidget {
                     children: [
                       IconButton(
                         onPressed: () => _shareMedia(capture),
-                        icon: const Icon(Icons.share),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedShare01,
+                        ),
                         color: Colors.black54,
                       ),
                       if (onDelete != null)
@@ -3056,12 +3064,16 @@ class _CapturedPhotoDetailsSheet extends ConsumerWidget {
                             Navigator.of(context).pop();
                             onDelete!();
                           },
-                          icon: const Icon(Icons.delete_outline),
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedDelete02,
+                          ),
                           color: Colors.red.shade600,
                         ),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedCancel01,
+                        ),
                         color: Colors.black54,
                       ),
                     ],
@@ -3078,16 +3090,16 @@ class _CapturedPhotoDetailsSheet extends ConsumerWidget {
                       capture.mediaType == 'video' ? 'Video' : 'Photo',
                     ),
                     icon: capture.mediaType == 'video'
-                        ? Icons.videocam
-                        : Icons.photo_camera,
+                        ? HugeIcons.strokeRoundedVideo01
+                        : HugeIcons.strokeRoundedCamera01,
                   ),
                   _MetaChip(
                     label: '${context.l10n.t('Accuracy')} $accuracyText',
-                    icon: Icons.gps_fixed,
+                    icon: HugeIcons.strokeRoundedLocation01,
                   ),
                   _MetaChip(
                     label: '${context.l10n.t('Altitude')} $altitudeText',
-                    icon: Icons.landscape,
+                    icon: HugeIcons.strokeRoundedMountain,
                   ),
                 ],
               ),
@@ -3117,8 +3129,8 @@ class _CapturedPhotoDetailsSheet extends ConsumerWidget {
                               height: 300,
                               color: Colors.grey.shade200,
                               child: const Center(
-                                child: Icon(
-                                  Icons.broken_image_outlined,
+                                child: HugeIcon(
+                                  icon: HugeIcons.strokeRoundedImage01,
                                   size: 42,
                                   color: Colors.black38,
                                 ),
@@ -3226,7 +3238,7 @@ class _DetailSection extends StatelessWidget {
 
 class _MetaChip extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final dynamic icon;
   const _MetaChip({required this.label, required this.icon});
 
   @override
@@ -3241,7 +3253,7 @@ class _MetaChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.black54),
+          HugeIcon(icon: icon, size: 16, color: Colors.black54),
           const SizedBox(width: 6),
           Text(
             label,
@@ -3606,10 +3618,10 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        _setupError == 'camera_permanently_denied'
-                            ? Icons.no_photography_outlined
-                            : Icons.camera_alt_outlined,
+                      HugeIcon(
+                        icon: _setupError == 'camera_permanently_denied'
+                            ? HugeIcons.strokeRoundedCamera01
+                            : HugeIcons.strokeRoundedCamera01,
                         color: Colors.white70,
                         size: 48,
                       ),
@@ -3655,7 +3667,10 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                             });
                             await _initialize();
                           },
-                          icon: const Icon(Icons.settings_outlined, size: 18),
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedSettings01,
+                            size: 18,
+                          ),
                           label: Text(context.l10n.t('Open Settings')),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
@@ -3678,7 +3693,10 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                             });
                             _initialize();
                           },
-                          icon: const Icon(Icons.refresh_rounded, size: 18),
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedRefresh,
+                            size: 18,
+                          ),
                           label: Text(
                             context.l10n.t(
                               _setupError == 'camera_denied'
@@ -3748,7 +3766,7 @@ class _GeoCameraCapturePageState extends State<_GeoCameraCapturePage> {
                     child: Row(
                       children: [
                         _TopIconButton(
-                          icon: Icons.close,
+                          icon: HugeIcons.strokeRoundedCancel01,
                           onTap: () => Navigator.of(context).pop(),
                         ),
                         Expanded(
@@ -3922,7 +3940,11 @@ class _CameraBottomControls extends StatelessWidget {
           if (locationError != null) ...[
             Row(
               children: [
-                const Icon(Icons.info_outline, color: Colors.white70, size: 16),
+                const HugeIcon(
+                  icon: HugeIcons.strokeRoundedInformationCircle,
+                  color: Colors.white70,
+                  size: 16,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -4039,8 +4061,10 @@ class _CameraBottomControls extends StatelessWidget {
                                   ),
                                 ),
                               )
-                            : Icon(
-                                videoMode ? Icons.videocam : Icons.photo_camera,
+                            : HugeIcon(
+                                icon: videoMode
+                                    ? HugeIcons.strokeRoundedVideo01
+                                    : HugeIcons.strokeRoundedCamera01,
                                 color: videoMode
                                     ? const Color(0xFFC94835)
                                     : Colors.black87,
@@ -4204,8 +4228,8 @@ class _GeoPhotoCanvas extends StatelessWidget {
           Container(
             color: Colors.black,
             child: const Center(
-              child: Icon(
-                Icons.play_circle_fill,
+              child: HugeIcon(
+                icon: HugeIcons.strokeRoundedPlayCircle,
                 color: Colors.white,
                 size: 74,
               ),
@@ -4288,7 +4312,7 @@ class _OverlayTextBlock extends StatelessWidget {
 }
 
 class _TopIconButton extends StatelessWidget {
-  final IconData icon;
+  final dynamic icon;
   final VoidCallback onTap;
   const _TopIconButton({required this.icon, required this.onTap});
 
@@ -4304,7 +4328,7 @@ class _TopIconButton extends StatelessWidget {
           color: Colors.black.withValues(alpha: 0.42),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: Colors.white),
+        child: HugeIcon(icon: icon, color: Colors.white),
       ),
     );
   }
@@ -4387,8 +4411,8 @@ class _DetailVideoPlayerState extends State<_DetailVideoPlayer> {
                       color: Colors.black.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
+                    child: const HugeIcon(
+                      icon: HugeIcons.strokeRoundedPlay,
                       color: Colors.white,
                       size: 36,
                     ),
@@ -4501,8 +4525,8 @@ class _CapturedMediaPreviewState extends State<_CapturedMediaPreview> {
               child: const ColoredBox(
                 color: Colors.transparent,
                 child: Center(
-                  child: Icon(
-                    Icons.play_circle_fill,
+                  child: HugeIcon(
+                    icon: HugeIcons.strokeRoundedPlayCircle,
                     color: Colors.white,
                     size: 74,
                   ),
@@ -4591,10 +4615,10 @@ class _RecentMediaStrip extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    isLoggedIn
-                        ? Icons.photo_library_outlined
-                        : Icons.camera_alt_outlined,
+                  HugeIcon(
+                    icon: isLoggedIn
+                        ? HugeIcons.strokeRoundedAlbum02
+                        : HugeIcons.strokeRoundedCamera01,
                     color: Colors.grey.shade400,
                     size: 28,
                   ),
@@ -4629,8 +4653,8 @@ class _RecentMediaStrip extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
-                  Icon(
-                    Icons.arrow_forward_ios,
+                  HugeIcon(
+                    icon: HugeIcons.strokeRoundedArrowRight01,
                     size: 14,
                     color: theme.colorScheme.primary,
                   ),

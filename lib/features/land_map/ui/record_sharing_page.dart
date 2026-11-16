@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
+import '../../widget/library_record_style.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -185,13 +187,26 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
         : <Map>[];
     final pending = RecordRecoveryService().pending(widget.record);
     final lastPage = (data?['last_page'] as num?)?.toInt() ?? 1;
-    return Scaffold(
+    return LibraryRecordScaffold(
+      company: widget.company != null,
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const HugeIcon(
+            icon: HugeIcons.strokeRoundedArrowLeft01,
+            size: 22,
+          ),
+        ),
+        centerTitle: true,
         title: const Text('Share record'),
         actions: [
           IconButton(
             onPressed: busy ? null : () => refresh(),
-            icon: const Icon(Icons.refresh),
+            icon: const HugeIcon(
+              size: 20,
+              icon: HugeIcons.strokeRoundedRefresh,
+            ),
             tooltip: 'Refresh',
           ),
         ],
@@ -203,6 +218,11 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                const LibraryRecordHeader(
+                  icon: HugeIcons.strokeRoundedLink01,
+                  title: 'Share this record',
+                  subtitle: 'Manage link expiry, passwords, and access.',
+                ),
                 if (busy && data == null)
                   const Center(child: CircularProgressIndicator()),
                 if (error != null)
@@ -243,6 +263,17 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                       initialValue: days,
                       decoration: const InputDecoration(
                         labelText: 'Expires in',
+                        prefixIcon: SizedBox(
+                          width: 48,
+                          child: Center(
+                            widthFactor: 1,
+                            heightFactor: 1,
+                            child: HugeIcon(
+                              icon: HugeIcons.strokeRoundedClock01,
+                              size: 20,
+                            ),
+                          ),
+                        ),
                       ),
                       items: const [
                         DropdownMenuItem(value: 1, child: Text('1 day')),
@@ -263,6 +294,17 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                       maxLength: 128,
                       decoration: InputDecoration(
                         labelText: 'Password (optional)',
+                        prefixIcon: const SizedBox(
+                          width: 48,
+                          child: Center(
+                            widthFactor: 1,
+                            heightFactor: 1,
+                            child: HugeIcon(
+                              icon: HugeIcons.strokeRoundedLockKey,
+                              size: 20,
+                            ),
+                          ),
+                        ),
                         helperText: policy['password_allowed'] == true
                             ? 'At least 8 characters'
                             : 'Not included in this plan',
@@ -285,7 +327,10 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                       onPressed: busy || pending || policy['allowed'] != true
                           ? null
                           : createLink,
-                      icon: const Icon(Icons.add_link),
+                      icon: const HugeIcon(
+                        size: 20,
+                        icon: HugeIcons.strokeRoundedLink01,
+                      ),
                       label: const Text('Create link'),
                     ),
                   ],
@@ -341,7 +386,10 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                                           );
                                         }
                                       },
-                                icon: const Icon(Icons.copy),
+                                icon: const HugeIcon(
+                                  size: 20,
+                                  icon: HugeIcons.strokeRoundedCopy01,
+                                ),
                               ),
                               IconButton(
                                 tooltip: 'Share link',
@@ -367,14 +415,20 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                                           ),
                                         );
                                       },
-                                icon: const Icon(Icons.share_outlined),
+                                icon: const HugeIcon(
+                                  size: 20,
+                                  icon: HugeIcons.strokeRoundedShare01,
+                                ),
                               ),
                               IconButton(
                                 tooltip: 'Revoke link',
                                 onPressed: id == null || busy
                                     ? null
                                     : () => revoke(id),
-                                icon: const Icon(Icons.link_off),
+                                icon: const HugeIcon(
+                                  size: 20,
+                                  icon: HugeIcons.strokeRoundedUnlink01,
+                                ),
                               ),
                             ],
                           ),
@@ -390,7 +444,10 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                           onPressed: busy || page <= 1
                               ? null
                               : () => refresh(targetPage: page - 1),
-                          icon: const Icon(Icons.chevron_left),
+                          icon: const HugeIcon(
+                            size: 20,
+                            icon: HugeIcons.strokeRoundedArrowLeft01,
+                          ),
                         ),
                         Text('Page $page of $lastPage'),
                         IconButton(
@@ -398,7 +455,10 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
                           onPressed: busy || page >= lastPage
                               ? null
                               : () => refresh(targetPage: page + 1),
-                          icon: const Icon(Icons.chevron_right),
+                          icon: const HugeIcon(
+                            size: 20,
+                            icon: HugeIcons.strokeRoundedArrowRight01,
+                          ),
                         ),
                       ],
                     ),

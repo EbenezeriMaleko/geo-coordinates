@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
+import '../../widget/library_record_style.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../subscriptions/entitlement_provider.dart';
 import '../../workspaces/workspace_provider.dart';
-import '../../workspaces/workspace_page_style.dart';
 import '../providers/land_cloud_provider.dart';
 import '../services/record_recovery_service.dart';
 
@@ -172,15 +173,27 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
 
     return PopScope(
       canPop: !busy,
-      child: WorkspaceScaffold(
+      child: LibraryRecordScaffold(
         company: widget.company != null,
         appBar: AppBar(
+          leading: IconButton(
+            tooltip: 'Back',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowLeft01,
+              size: 22,
+            ),
+          ),
+          centerTitle: true,
           title: Text(history ? 'Record history' : 'Recycle bin'),
           actions: [
             IconButton(
               tooltip: 'Refresh recovery',
               onPressed: available && !busy ? refresh : null,
-              icon: const Icon(Icons.refresh),
+              icon: const HugeIcon(
+                size: 20,
+                icon: HugeIcons.strokeRoundedRefresh,
+              ),
             ),
           ],
         ),
@@ -196,13 +209,15 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
             : Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        workspace.label,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: LibraryRecordHeader(
+                      icon: history
+                          ? HugeIcons.strokeRoundedClock01
+                          : HugeIcons.strokeRoundedRestoreBin,
+                      title: workspace.label,
+                      subtitle: history
+                          ? 'Review saved versions of this record.'
+                          : 'Review and restore deleted records.',
                     ),
                   ),
                   if (!history)
@@ -213,7 +228,17 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                         maxLength: 255,
                         decoration: const InputDecoration(
                           hintText: 'Search deleted records',
-                          prefixIcon: Icon(Icons.search),
+                          prefixIcon: SizedBox(
+                            width: 48,
+                            child: Center(
+                              widthFactor: 1,
+                              heightFactor: 1,
+                              child: HugeIcon(
+                                size: 20,
+                                icon: HugeIcons.strokeRoundedSearch01,
+                              ),
+                            ),
+                          ),
                         ),
                         onSubmitted: (value) => setState(() {
                           search = value.trim();
@@ -239,7 +264,10 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                       error: (_, _) => Center(
                         child: TextButton.icon(
                           onPressed: refresh,
-                          icon: const Icon(Icons.refresh),
+                          icon: const HugeIcon(
+                            size: 20,
+                            icon: HugeIcons.strokeRoundedRefresh,
+                          ),
                           label: const Text('Unable to load records. Retry'),
                         ),
                       ),
@@ -292,7 +320,10 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                                     if (history) {
                                       return ListTile(
                                         contentPadding: EdgeInsets.zero,
-                                        leading: const Icon(Icons.history),
+                                        leading: const HugeIcon(
+                                          size: 20,
+                                          icon: HugeIcons.strokeRoundedClock01,
+                                        ),
                                         title: Text(
                                           item['record_name']?.toString() ??
                                               'Saved version',
@@ -300,8 +331,10 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                                         subtitle: Text(
                                           '${recoveryDate(context, item['created_at'])}\n${item['actor'] is Map ? item['actor']['name'] ?? 'Unavailable account' : 'Unavailable account'} - ${item['point_count'] ?? 0} points',
                                         ),
-                                        trailing: const Icon(
-                                          Icons.chevron_right,
+                                        trailing: const HugeIcon(
+                                          size: 20,
+                                          icon: HugeIcons
+                                              .strokeRoundedArrowRight01,
                                         ),
                                         onTap: busy
                                             ? null
@@ -369,8 +402,9 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                                               onPressed: busy
                                                   ? null
                                                   : () => restore(item),
-                                              icon: const Icon(
-                                                Icons.restore,
+                                              icon: const HugeIcon(
+                                                icon: HugeIcons
+                                                    .strokeRoundedRestoreBin,
                                                 size: 18,
                                               ),
                                               label: const Text(
@@ -392,7 +426,10 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                                   onPressed: !busy && page > 1
                                       ? () => setState(() => page--)
                                       : null,
-                                  icon: const Icon(Icons.chevron_left),
+                                  icon: const HugeIcon(
+                                    size: 20,
+                                    icon: HugeIcons.strokeRoundedArrowLeft01,
+                                  ),
                                 ),
                                 Flexible(child: Text('Page $page of $last')),
                                 IconButton(
@@ -400,7 +437,10 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                                   onPressed: !busy && page < last
                                       ? () => setState(() => page++)
                                       : null,
-                                  icon: const Icon(Icons.chevron_right),
+                                  icon: const HugeIcon(
+                                    size: 20,
+                                    icon: HugeIcons.strokeRoundedArrowRight01,
+                                  ),
                                 ),
                               ],
                             ),
@@ -540,9 +580,19 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
     final writable = recoveryWriteAccess(ref, widget.company, trash: false);
     return PopScope(
       canPop: !busy,
-      child: WorkspaceScaffold(
+      child: LibraryRecordScaffold(
         company: widget.company != null,
-        appBar: AppBar(title: const Text('Saved version')),
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: 'Back',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowLeft01,
+              size: 22,
+            ),
+          ),
+          title: const Text('Saved version'),
+        ),
         body: !available
             ? const Center(
                 child: Text('Workspace or account changed. Reopen history.'),
@@ -570,12 +620,11 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
                   return ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
-                      Text(
-                        attributes['name']?.toString() ?? 'Saved record',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        'Saved ${recoveryDate(context, data['created_at'])}',
+                      LibraryRecordHeader(
+                        icon: HugeIcons.strokeRoundedClock01,
+                        title: attributes['name']?.toString() ?? 'Saved record',
+                        subtitle:
+                            'Saved ${recoveryDate(context, data['created_at'])}',
                       ),
                       const Divider(height: 32),
                       for (final entry in const {
@@ -632,7 +681,10 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
                             onPressed: pointsPage > 1
                                 ? () => setState(() => pointsPage--)
                                 : null,
-                            icon: const Icon(Icons.chevron_left),
+                            icon: const HugeIcon(
+                              size: 20,
+                              icon: HugeIcons.strokeRoundedArrowLeft01,
+                            ),
                           ),
                           Flexible(child: Text('Page $pointsPage of $last')),
                           IconButton(
@@ -640,7 +692,10 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
                             onPressed: pointsPage < last
                                 ? () => setState(() => pointsPage++)
                                 : null,
-                            icon: const Icon(Icons.chevron_right),
+                            icon: const HugeIcon(
+                              size: 20,
+                              icon: HugeIcons.strokeRoundedArrowRight01,
+                            ),
                           ),
                         ],
                       ),
@@ -662,7 +717,10 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
                                   ref.invalidate(recoveryListProvider);
                                   Navigator.pop(context);
                                 },
-                          icon: const Icon(Icons.refresh, size: 18),
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedRefresh,
+                            size: 18,
+                          ),
                           label: const Text('Reload history'),
                         ),
                       if (widget.canRestore &&
@@ -672,7 +730,10 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
                           ).hasMatch(widget.revision ?? ''))
                         FilledButton.icon(
                           onPressed: busy ? null : restore,
-                          icon: const Icon(Icons.restore, size: 18),
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedRestoreBin,
+                            size: 18,
+                          ),
                           label: Text(
                             busy ? 'Restoring...' : 'Restore version',
                           ),

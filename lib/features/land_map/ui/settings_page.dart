@@ -21,6 +21,7 @@ import '../services/survey_invitation.dart';
 import 'user_survey_page.dart';
 import '../../workspaces/workspace_provider.dart';
 import '../../widget/profile_widget.dart';
+import '../../widget/settings_sheet.dart';
 import 'package:hugeicons/hugeicons.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -39,9 +40,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _packageInfoFuture = PackageInfo.fromPlatform();
   }
 
-    static const Color _personalAccent = Color(0xFF001F3F);
+  static const Color _personalAccent = Color(0xFF001F3F);
   static const Color _companyAccent = Color(0xFF197568);
   static const Color _pageBackground = Color(0xFFF7F7F8);
+  static const Color _green = Color(0xFF1B7F4B);
+  static const Color _greenSoft = Color(0xFFE6F5EC);
+  static const Color _amber = Color(0xFFB26A00);
+  static const Color _amberSoft = Color(0xFFFFF4E0);
+
+  /// Sheets open above this page's Theme, so they take the accent explicitly.
+  Color get _accent => ref.read(workspaceProvider).activeCompanyId != null
+      ? _companyAccent
+      : _personalAccent;
 
   @override
   Widget build(BuildContext context) {
@@ -168,23 +178,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ProfileTile(
                   icon: HugeIcons.strokeRoundedMessage01,
                   title: l10n.t('Share your experience'),
-                  subtitle:
-                      l10n.t('Tell us what works and what is difficult.'),
+                  subtitle: l10n.t('Tell us what works and what is difficult.'),
                   onTap: _openSurveyPage,
                 ),
                 if (kDebugMode)
                   ProfileTile(
                     icon: HugeIcons.strokeRoundedBug01,
                     title: l10n.t('Preview survey invitation'),
-                    subtitle:
-                        l10n.t('Debug only. Open Library after tapping.'),
+                    subtitle: l10n.t('Debug only. Open Library after tapping.'),
                     onTap: _previewSurveyInvitation,
                   ),
                 ProfileTile(
                   icon: HugeIcons.strokeRoundedStar,
                   title: l10n.t('Rate our app'),
-                  subtitle:
-                      l10n.t('Leave a rating or review in the app store.'),
+                  subtitle: l10n.t('Leave a rating or review in the app store.'),
                   onTap: _openStoreReview,
                 ),
               ],
@@ -199,10 +206,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     final info = snapshot.data;
                     final text =
                         snapshot.connectionState == ConnectionState.waiting
-                            ? l10n.t('Loading version...')
-                            : info == null
-                                ? l10n.t('Version unavailable')
-                                : '${info.version}+${info.buildNumber}';
+                        ? l10n.t('Loading version...')
+                        : info == null
+                        ? l10n.t('Version unavailable')
+                        : '${info.version}+${info.buildNumber}';
                     return ProfileTile(
                       icon: HugeIcons.strokeRoundedInformationCircle,
                       title: l10n.t('Version'),
@@ -226,220 +233,221 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return l10n.t('English');
   }
 
+  // ── Language ──────────────────────────────────────────────────
+
   void _showLanguageSelector() {
     final current = ref.read(localeProvider);
     final l10n = context.l10n;
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
+    final accent = _accent;
+
+    Future<void> choose(BuildContext sheetContext, Locale? locale) async {
+      await ref.read(localeProvider.notifier).setLocale(locale);
+      if (mounted && sheetContext.mounted) Navigator.pop(sheetContext);
+    }
+
+    showAppSheet<void>(
+      context,
+      (sheetContext) => SheetFrame(
+        accent: accent,
+        icon: HugeIcons.strokeRoundedLanguageSquare,
+        title: l10n.t('Language'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 10),
-            Text(
-              l10n.t('Language'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingIcon(
+                icon: HugeIcons.strokeRoundedSmartPhone01,
+                accent: accent,
+                selected: current == null,
+              ),
+              title: l10n.t('System default'),
+              selected: current == null,
+              onTap: () => choose(sheetContext, null),
             ),
-            ListTile(
-              title: Text(l10n.t('System default')),
-              trailing: current == null
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
-              onTap: () async {
-                await ref.read(localeProvider.notifier).setLocale(null);
-                if (mounted) Navigator.pop(context);
-              },
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingText(
+                'EN',
+                accent: accent,
+                selected: current?.languageCode == 'en',
+              ),
+              title: l10n.t('English'),
+              selected: current?.languageCode == 'en',
+              onTap: () => choose(sheetContext, const Locale('en')),
             ),
-            ListTile(
-              title: Text(l10n.t('English')),
-              trailing: current?.languageCode == 'en'
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
-              onTap: () async {
-                await ref
-                    .read(localeProvider.notifier)
-                    .setLocale(const Locale('en'));
-                if (mounted) Navigator.pop(context);
-              },
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingText(
+                'FR',
+                accent: accent,
+                selected: current?.languageCode == 'fr',
+              ),
+              title: l10n.t('French'),
+              selected: current?.languageCode == 'fr',
+              onTap: () => choose(sheetContext, const Locale('fr')),
             ),
-            ListTile(
-              title: Text(l10n.t('French')),
-              trailing: current?.languageCode == 'fr'
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
-              onTap: () async {
-                await ref
-                    .read(localeProvider.notifier)
-                    .setLocale(const Locale('fr'));
-                if (mounted) Navigator.pop(context);
-              },
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingText(
+                'AR',
+                accent: accent,
+                selected: current?.languageCode == 'ar',
+              ),
+              title: l10n.t('Arabic'),
+              selected: current?.languageCode == 'ar',
+              onTap: () => choose(sheetContext, const Locale('ar')),
             ),
-            ListTile(
-              title: Text(l10n.t('Arabic')),
-              trailing: current?.languageCode == 'ar'
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
-              onTap: () async {
-                await ref
-                    .read(localeProvider.notifier)
-                    .setLocale(const Locale('ar'));
-                if (mounted) Navigator.pop(context);
-              },
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
 
-  void _showVersionDetails() {
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: FutureBuilder<PackageInfo>(
-              future: _packageInfoFuture,
-              builder: (context, snapshot) {
-                final info = snapshot.data;
-                final versionText = info == null
-                    ? context.l10n.t('Loading version...')
-                    : info.version;
+  // ── Version ───────────────────────────────────────────────────
 
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  void _showVersionDetails() {
+    final l10n = context.l10n;
+    final accent = _accent;
+    showAppSheet<void>(
+      context,
+      (sheetContext) => SheetFrame(
+        accent: accent,
+        icon: HugeIcons.strokeRoundedInformationCircle,
+        title: l10n.t('Version'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: FutureBuilder<PackageInfo>(
+            future: _packageInfoFuture,
+            builder: (context, snapshot) {
+              final info = snapshot.data;
+              final loading =
+                  snapshot.connectionState == ConnectionState.waiting;
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: _pageBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE8ECF0)),
+                ),
+                child: Column(
                   children: [
                     Text(
-                      context.l10n.t('Version'),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                      info == null
+                          ? l10n.t('Loading version...')
+                          : info.version,
+                      style: TextStyle(
+                        fontSize: info == null ? 15 : 30,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
                       ),
                     ),
+                    if (info != null) ...[
+                      const SizedBox(height: 8),
+                      SheetBadge(
+                        '+${info.buildNumber}',
+                        fg: accent,
+                        bg: accent.withValues(alpha: 0.10),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Text(
-                      versionText,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      snapshot.connectionState == ConnectionState.waiting
-                          ? context.l10n.t(
+                      loading
+                          ? l10n.t(
                               'Reading build metadata from the app package...',
                             )
-                          : context.l10n.t(
+                          : l10n.t(
                               'This comes from the installed app metadata.',
                             ),
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12.5,
+                        height: 1.4,
                         color: Colors.black54,
                       ),
                     ),
                   ],
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  void _clearCache() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.l10n.t('Clear cache?')),
-        content: Text(
-          context.l10n.t(
-            'This will clear all cached data including images, temporary files, and app cache storage. Your saved locations will not be affected.',
-          ),
+  // ── Clear cache ───────────────────────────────────────────────
+
+  Future<void> _clearCache() async {
+    final l10n = context.l10n;
+    final confirmed = await showAppSheet<bool>(
+      context,
+      (_) => ConfirmSheet(
+        accent: _accent,
+        destructive: true,
+        icon: HugeIcons.strokeRoundedDelete02,
+        title: l10n.t('Clear cache?'),
+        body: l10n.t(
+          'This will clear all cached data including images, temporary files, and app cache storage. Your saved locations will not be affected.',
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(context.l10n.t('Cancel')),
-          ),
-          TextButton(
-            onPressed: () async {
-              final l10n = context.l10n;
-              Navigator.pop(context);
-
-              final messenger = ScaffoldMessenger.of(context);
-
-              try {
-                // Clear Flutter image cache
-                imageCache.clear();
-                imageCache.clearLiveImages();
-
-                // Calculate freed space
-                int freedBytes = 0;
-
-                final tempDir = await getTemporaryDirectory();
-                if (tempDir.existsSync()) {
-                  freedBytes += _getTotalSize(tempDir);
-                  await tempDir.delete(recursive: true);
-                  await tempDir.create(recursive: true);
-                }
-
-                try {
-                  final cacheDir = await getApplicationCacheDirectory();
-                  if (cacheDir.existsSync()) {
-                    freedBytes += _getTotalSize(cacheDir);
-                    await cacheDir.delete(recursive: true);
-                    await cacheDir.create(recursive: true);
-                  }
-                } catch (_) {}
-
-                if (!mounted) return;
-
-                final freedMB = (freedBytes / (1024 * 1024)).toStringAsFixed(2);
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      freedBytes > 0
-                          ? l10n.t(
-                              'Cache cleared successfully (~{size} MB freed)',
-                              params: {'size': freedMB},
-                            )
-                          : l10n.t('Cache cleared successfully'),
-                    ),
-                  ),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      l10n.t(
-                        'Error clearing cache: {error}',
-                        params: {'error': '$e'},
-                      ),
-                    ),
-                  ),
-                );
-              }
-            },
-            child: Text(
-              context.l10n.t('Clear'),
-              style: const TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
+        confirmLabel: l10n.t('Clear'),
+        cancelLabel: l10n.t('Cancel'),
       ),
     );
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      // Clear Flutter image cache
+      imageCache.clear();
+      imageCache.clearLiveImages();
+
+      // Calculate freed space
+      int freedBytes = 0;
+
+      final tempDir = await getTemporaryDirectory();
+      if (tempDir.existsSync()) {
+        freedBytes += _getTotalSize(tempDir);
+        await tempDir.delete(recursive: true);
+        await tempDir.create(recursive: true);
+      }
+
+      try {
+        final cacheDir = await getApplicationCacheDirectory();
+        if (cacheDir.existsSync()) {
+          freedBytes += _getTotalSize(cacheDir);
+          await cacheDir.delete(recursive: true);
+          await cacheDir.create(recursive: true);
+        }
+      } catch (_) {}
+
+      if (!mounted) return;
+
+      final freedMB = (freedBytes / (1024 * 1024)).toStringAsFixed(2);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            freedBytes > 0
+                ? l10n.t(
+                    'Cache cleared successfully (~{size} MB freed)',
+                    params: {'size': freedMB},
+                  )
+                : l10n.t('Cache cleared successfully'),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            l10n.t('Error clearing cache: {error}', params: {'error': '$e'}),
+          ),
+        ),
+      );
+    }
   }
 
   // Helper method to calculate total size of directory
@@ -457,13 +465,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return totalSize;
   }
 
+  // ── Contact / survey / store / privacy ────────────────────────
 
   Future<void> _openContactUsPage() async {
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.transparent,
-      builder: (_) => const _ContactDialog(),
+      builder: (_) => _ContactDialog(accent: _accent),
     );
   }
 
@@ -518,98 +526,109 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  // ── Coordinates format ────────────────────────────────────────
+
   void _showCoordinateFormatSelector() {
     final current = ref.read(coordinateFormatProvider);
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
+    final l10n = context.l10n;
+    final accent = _accent;
+    showAppSheet<void>(
+      context,
+      (sheetContext) => SheetFrame(
+        accent: accent,
+        icon: HugeIcons.strokeRoundedLocation01,
+        title: l10n.t('Coordinates format'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 10),
-            Text(
-              context.l10n.t('Coordinates format'),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            ...CoordinateFormat.values.map((format) {
-              final isSelected = format == current;
-              return ListTile(
-                title: Text(context.l10n.t(format.displayName)),
-                subtitle: Text(_getFormatExample(format)),
-                trailing: isSelected
-                    ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                    : const Icon(Icons.circle_outlined),
+            for (final format in CoordinateFormat.values)
+              SheetOptionTile(
+                accent: accent,
+                leading: SheetLeadingIcon(
+                  icon: HugeIcons.strokeRoundedLocation01,
+                  accent: accent,
+                  selected: format == current,
+                ),
+                title: l10n.t(format.displayName),
+                subtitle: _getFormatExample(format),
+                selected: format == current,
                 onTap: () {
                   ref.read(coordinateFormatProvider.notifier).setFormat(format);
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                 },
-              );
-            }),
-            const SizedBox(height: 8),
+              ),
           ],
         ),
       ),
     );
   }
 
+  // ── Units ─────────────────────────────────────────────────────
+
   void _showDistanceUnitSelector() {
     final current = ref.read(distanceUnitProvider);
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
+    final l10n = context.l10n;
+    final accent = _accent;
+    showAppSheet<void>(
+      context,
+      (sheetContext) => SheetFrame(
+        accent: accent,
+        icon: HugeIcons.strokeRoundedRuler,
+        title: l10n.t('Units'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 10),
-            Text(
-              context.l10n.t('Units'),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            ListTile(
-              title: Text(context.l10n.t('Meters')),
-              subtitle: Text(context.l10n.t('Use meters (m)')),
-              trailing: current == DistanceUnit.meters
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingText(
+                'm',
+                accent: accent,
+                selected: current == DistanceUnit.meters,
+              ),
+              title: l10n.t('Meters'),
+              subtitle: l10n.t('Use meters (m)'),
+              selected: current == DistanceUnit.meters,
               onTap: () {
                 ref
                     .read(distanceUnitProvider.notifier)
                     .setUnit(DistanceUnit.meters);
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
               },
             ),
-            ListTile(
-              title: Text(context.l10n.t('Feet')),
-              subtitle: Text(context.l10n.t('Use feet (ft)')),
-              trailing: current == DistanceUnit.feet
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingText(
+                'ft',
+                accent: accent,
+                selected: current == DistanceUnit.feet,
+              ),
+              title: l10n.t('Feet'),
+              subtitle: l10n.t('Use feet (ft)'),
+              selected: current == DistanceUnit.feet,
               onTap: () {
                 ref
                     .read(distanceUnitProvider.notifier)
                     .setUnit(DistanceUnit.feet);
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
               },
             ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
+
+  // ── Geodetic datum ────────────────────────────────────────────
+
+  /// The original strings carry a leading bullet (" • Approximate").
+  /// Strip it so the text can be shown inside a badge, keeping translations.
+  String _badgeText(String translated) => translated.replaceAll('•', '').trim();
 
   void _showReferenceEllipsoidSelector() {
     final currentEllipsoid = ref.read(referenceEllipsoidProvider);
     final currentDatum = ref.read(selectedDatumProvider);
     final currentLocation = ref.read(landMapProvider).current;
+    final accent = _accent;
     final datums = ReferenceEllipsoid.values
         .expand(GeodeticDatumRegistry.forEllipsoid)
         .toList();
@@ -631,159 +650,125 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         )
         .toList();
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.75,
-          child: Column(
+    showAppSheet<void>(
+      context,
+      (sheetContext) {
+        final l10n = sheetContext.l10n;
+        final wgsSelected =
+            currentDatum == null &&
+            currentEllipsoid == ReferenceEllipsoid.wgs84;
+        return SheetFrame(
+          accent: accent,
+          icon: HugeIcons.strokeRoundedGlobe02,
+          title: l10n.t('Select datum'),
+          subtitle: l10n.t(
+            'Choose the datum used by your survey. Its reference ellipsoid is shown below the datum name.',
+          ),
+          height: MediaQuery.of(sheetContext).size.height * 0.8,
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 16),
             children: [
-              const SizedBox(height: 10),
-              Text(
-                sheetContext.l10n.t('Select datum'),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+              SheetOptionTile(
+                accent: accent,
+                leading: SheetLeadingText(
+                  'WGS',
+                  accent: accent,
+                  selected: wgsSelected,
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                child: Text(
-                  sheetContext.l10n.t(
-                    'Choose the datum used by your survey. Its reference ellipsoid is shown below the datum name.',
-                  ),
-                  textAlign: TextAlign.center,
+                title: ReferenceEllipsoid.wgs84.displayName,
+                subtitle: l10n.t(
+                  'WGS 84 ellipsoid • Global reference system (default; valid everywhere)',
                 ),
+                selected: wgsSelected,
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _handleEllipsoidOrDatumChange(
+                    ReferenceEllipsoid.wgs84,
+                    null,
+                  );
+                },
               ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView(
-                  children: [
-                    ListTile(
-                      title: Text(ReferenceEllipsoid.wgs84.displayName),
-                      subtitle: Text(
-                        sheetContext.l10n.t(
-                          'WGS 84 ellipsoid • Global reference system (default; valid everywhere)',
-                        ),
-                      ),
-                      trailing:
-                          currentDatum == null &&
-                              currentEllipsoid == ReferenceEllipsoid.wgs84
-                          ? const Icon(
-                              Icons.check_circle,
-                              color: Color(0xFF0C8A8C),
-                            )
-                          : const Icon(Icons.near_me, color: Color(0xFF0C8A8C)),
-                      onTap: () async {
-                        Navigator.of(sheetContext).pop();
-                        await _handleEllipsoidOrDatumChange(
-                          ReferenceEllipsoid.wgs84,
-                          null,
-                        );
+              for (final datum in datums)
+                () {
+                  final isSelected = currentDatum?.id == datum.id;
+                  final validHere =
+                      currentLocation != null &&
+                      datum.isValidAt(currentLocation);
+                  return SheetOptionTile(
+                    accent: accent,
+                    leading: SheetLeadingIcon(
+                      icon: validHere
+                          ? HugeIcons.strokeRoundedLocation01
+                          : HugeIcons.strokeRoundedGlobe02,
+                      accent: accent,
+                      selected: isSelected,
+                    ),
+                    title: l10n.t(datum.displayName),
+                    subtitle: l10n.t(
+                      '{ellipsoid} ellipsoid • {area}\nEPSG:{code} • {accuracy} m accuracy',
+                      params: {
+                        'ellipsoid': datum.parentEllipsoid.displayName,
+                        'area': l10n.t(datum.areaOfUse),
+                        'code': '${datum.epsgOperationCode}',
+                        'accuracy': datum.accuracyMeters.toStringAsFixed(0),
                       },
                     ),
-                    ...datums.map((datum) {
-                      final isSelected = currentDatum?.id == datum.id;
-                      final validHere =
-                          currentLocation != null &&
-                          datum.isValidAt(currentLocation);
-                      return ListTile(
-                        title: Text(sheetContext.l10n.t(datum.displayName)),
-                        subtitle: Text(
-                          sheetContext.l10n.t(
-                                '{ellipsoid} ellipsoid • {area}\nEPSG:{code} • {accuracy} m accuracy',
-                                params: {
-                                  'ellipsoid':
-                                      datum.parentEllipsoid.displayName,
-                                  'area': sheetContext.l10n.t(datum.areaOfUse),
-                                  'code': '${datum.epsgOperationCode}',
-                                  'accuracy': datum.accuracyMeters
-                                      .toStringAsFixed(0),
-                                },
-                              ) +
-                              (datum.isApproximate
-                                  ? sheetContext.l10n.t(' • Approximate')
-                                  : '') +
-                              (validHere
-                                  ? sheetContext.l10n.t(' • Valid here')
-                                  : ''),
+                    badges: [
+                      if (validHere)
+                        SheetBadge(
+                          _badgeText(l10n.t(' • Valid here')),
+                          fg: _green,
+                          bg: _greenSoft,
                         ),
-                        isThreeLine: true,
-                        trailing: isSelected
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: Color(0xFF0C8A8C),
-                              )
-                            : validHere
-                            ? const Icon(
-                                Icons.near_me,
-                                color: Color(0xFF0C8A8C),
-                              )
-                            : const Icon(Icons.circle_outlined),
-                        onTap: () async {
-                          Navigator.of(sheetContext).pop();
-                          await _handleEllipsoidOrDatumChange(
-                            datum.parentEllipsoid,
-                            datum,
-                          );
-                        },
-                      );
-                    }),
-                    if (datumlessEllipsoids.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-                        child: Text(
-                          sheetContext.l10n.t(
-                            'REFERENCE / ELLIPSOID-ONLY OPTIONS',
-                          ),
-                          style: const TextStyle(
-                            color: Colors.black54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
+                      if (datum.isApproximate)
+                        SheetBadge(
+                          _badgeText(l10n.t(' • Approximate')),
+                          fg: _amber,
+                          bg: _amberSoft,
                         ),
-                      ),
-                      ...datumlessEllipsoids.map((ellipsoid) {
-                        final isSelected =
-                            currentDatum == null &&
-                            currentEllipsoid == ellipsoid;
-                        return ListTile(
-                          title: Text(ellipsoid.displayName),
-                          subtitle: Text(
-                            sheetContext.l10n.t(
-                              '{ellipsoid} ellipsoid • No verified datum transformation; ellipsoid-shape-only conversion',
-                              params: {'ellipsoid': ellipsoid.displayName},
-                            ),
-                          ),
-                          trailing: isSelected
-                              ? const Icon(
-                                  Icons.check_circle,
-                                  color: Color(0xFF0C8A8C),
-                                )
-                              : const Icon(Icons.circle_outlined),
-                          onTap: () async {
-                            Navigator.of(sheetContext).pop();
-                            await _handleEllipsoidOrDatumChange(
-                              ellipsoid,
-                              null,
-                            );
-                          },
-                        );
-                      }),
                     ],
-                    const SizedBox(height: 8),
-                  ],
+                    selected: isSelected,
+                    onTap: () async {
+                      Navigator.of(sheetContext).pop();
+                      await _handleEllipsoidOrDatumChange(
+                        datum.parentEllipsoid,
+                        datum,
+                      );
+                    },
+                  );
+                }(),
+              if (datumlessEllipsoids.isNotEmpty) ...[
+                SheetSectionLabel(
+                  l10n.t('REFERENCE / ELLIPSOID-ONLY OPTIONS'),
                 ),
-              ),
+                for (final ellipsoid in datumlessEllipsoids)
+                  () {
+                    final isSelected =
+                        currentDatum == null && currentEllipsoid == ellipsoid;
+                    return SheetOptionTile(
+                      accent: accent,
+                      leading: SheetLeadingIcon(
+                        icon: HugeIcons.strokeRoundedGlobe02,
+                        accent: accent,
+                        selected: isSelected,
+                      ),
+                      title: ellipsoid.displayName,
+                      subtitle: l10n.t(
+                        '{ellipsoid} ellipsoid • No verified datum transformation; ellipsoid-shape-only conversion',
+                        params: {'ellipsoid': ellipsoid.displayName},
+                      ),
+                      selected: isSelected,
+                      onTap: () async {
+                        Navigator.of(sheetContext).pop();
+                        await _handleEllipsoidOrDatumChange(ellipsoid, null);
+                      },
+                    );
+                  }(),
+              ],
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -845,6 +830,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  // ── Compass ───────────────────────────────────────────────────
+
   String _compassNorthLabel(CompassNorthType type) {
     switch (type) {
       case CompassNorthType.magnetic:
@@ -856,56 +843,55 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   void _showCompassNorthSelector() {
     final current = ref.read(compassNorthTypeProvider);
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
+    final l10n = context.l10n;
+    final accent = _accent;
+    showAppSheet<void>(
+      context,
+      (sheetContext) => SheetFrame(
+        accent: accent,
+        icon: HugeIcons.strokeRoundedCompass01,
+        title: l10n.t('Compass north reference'),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 10),
-            Text(
-              context.l10n.t('Compass north reference'),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            ListTile(
-              title: Text(context.l10n.t('Magnetic North')),
-              subtitle: Text(
-                context.l10n.t(
-                  'Uses raw compass sensor reading. No correction applied.',
-                ),
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingIcon(
+                icon: HugeIcons.strokeRoundedCompass01,
+                accent: accent,
+                selected: current == CompassNorthType.magnetic,
               ),
-              trailing: current == CompassNorthType.magnetic
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
+              title: l10n.t('Magnetic North'),
+              subtitle: l10n.t(
+                'Uses raw compass sensor reading. No correction applied.',
+              ),
+              selected: current == CompassNorthType.magnetic,
               onTap: () {
                 ref
                     .read(compassNorthTypeProvider.notifier)
                     .setNorthType(CompassNorthType.magnetic);
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
               },
             ),
-            ListTile(
-              title: Text(context.l10n.t('True North')),
-              subtitle: Text(
-                context.l10n.t(
-                  'Corrects for magnetic declination to point to geographic north.',
-                ),
+            SheetOptionTile(
+              accent: accent,
+              leading: SheetLeadingIcon(
+                icon: HugeIcons.strokeRoundedGlobe02,
+                accent: accent,
+                selected: current == CompassNorthType.trueNorth,
               ),
-              trailing: current == CompassNorthType.trueNorth
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0C8A8C))
-                  : const Icon(Icons.circle_outlined),
+              title: l10n.t('True North'),
+              subtitle: l10n.t(
+                'Corrects for magnetic declination to point to geographic north.',
+              ),
+              selected: current == CompassNorthType.trueNorth,
               onTap: () {
                 ref
                     .read(compassNorthTypeProvider.notifier)
                     .setNorthType(CompassNorthType.trueNorth);
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
               },
             ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -922,8 +908,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
+// ── Contact dialog ─────────────────────────────────────────────────
+
 class _ContactDialog extends StatefulWidget {
-  const _ContactDialog();
+  const _ContactDialog({required this.accent});
+  final Color accent;
 
   @override
   State<_ContactDialog> createState() => _ContactDialogState();
@@ -1029,17 +1018,20 @@ class _ContactDialogState extends State<_ContactDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
+    final accent = widget.accent;
+
+    OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: c, width: w),
+    );
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: Colors.white,
-      elevation: 12,
-      shadowColor: Colors.black.withValues(alpha: 0.25),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1048,16 +1040,17 @@ class _ContactDialogState extends State<_ContactDialog> {
             Row(
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(13),
                   ),
-                  child: Icon(
-                    Icons.mail_outline_rounded,
-                    color: primary,
-                    size: 20,
+                  alignment: Alignment.center,
+                  child: HugeIcon(
+                    icon: HugeIcons.strokeRoundedMail01,
+                    color: accent,
+                    size: 22,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1067,14 +1060,18 @@ class _ContactDialogState extends State<_ContactDialog> {
                     children: [
                       Text(
                         context.l10n.t('Send feedback'),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         context.l10n.t('We read every message'),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.black45,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.black54,
                         ),
                       ),
                     ],
@@ -1082,47 +1079,38 @@ class _ContactDialogState extends State<_ContactDialog> {
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                  color: Colors.black38,
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedCancel01,
+                    color: Colors.black45,
+                    size: 20,
+                  ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
 
             // Message field
             TextField(
               controller: _controller,
-              minLines: 3,
-              maxLines: 5,
+              minLines: 4,
+              maxLines: 6,
               textCapitalization: TextCapitalization.sentences,
               autofocus: true,
               decoration: InputDecoration(
                 hintText: context.l10n.t(
                   'Tell us what\'s on your mind — a bug, suggestion, or question…',
                 ),
-                hintStyle: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontSize: 13,
+                hintStyle: const TextStyle(
+                  color: Colors.black38,
+                  fontSize: 13.5,
                   height: 1.5,
                 ),
                 filled: true,
-                fillColor: const Color(0xFFF5F7FA),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: primary, width: 1.8),
-                ),
+                fillColor: const Color(0xFFF7F7F8),
+                border: border(const Color(0xFFE8ECF0)),
+                enabledBorder: border(const Color(0xFFE8ECF0)),
+                focusedBorder: border(accent, 1.6),
                 contentPadding: const EdgeInsets.all(14),
               ),
             ),
@@ -1132,33 +1120,36 @@ class _ContactDialogState extends State<_ContactDialog> {
             // Send button
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: FilledButton.icon(
                 onPressed: _isSending ? null : _send,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
+                style: FilledButton.styleFrom(
+                  backgroundColor: accent,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  elevation: 0,
                 ),
-                child: _isSending
+                icon: _isSending
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
                       )
-                    : Text(
-                        context.l10n.t('Send'),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
+                    : const HugeIcon(
+                        icon: HugeIcons.strokeRoundedSent,
+                        color: Colors.white,
+                        size: 18,
                       ),
+                label: Text(
+                  context.l10n.t('Send'),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                  ),
+                ),
               ),
             ),
           ],

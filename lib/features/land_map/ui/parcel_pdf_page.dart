@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
+import '../../widget/library_record_style.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../workspaces/workspace_provider.dart';
-import '../../workspaces/workspace_page_style.dart';
 import '../services/parcel_pdf_service.dart';
 
 class ParcelPdfPage extends ConsumerStatefulWidget {
@@ -327,15 +328,26 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
     final date = report?.generatedAt?.toLocal();
     return PopScope(
       canPop: !busy,
-      child: WorkspaceScaffold(
+      child: LibraryRecordScaffold(
         company: widget.company != null,
         appBar: AppBar(
+          leading: IconButton(
+            tooltip: 'Back',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowLeft01,
+              size: 22,
+            ),
+          ),
           title: const Text('Parcel PDF'),
           actions: [
             IconButton(
               tooltip: 'Refresh saved report',
               onPressed: available && !busy && !loading ? refresh : null,
-              icon: const Icon(Icons.refresh),
+              icon: const HugeIcon(
+                size: 20,
+                icon: HugeIcons.strokeRoundedRefresh,
+              ),
             ),
           ],
         ),
@@ -353,20 +365,15 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
             : ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
-                  Text(
-                    widget.name,
-                    style: Theme.of(context).textTheme.titleMedium,
+                  LibraryRecordHeader(
+                    icon: HugeIcons.strokeRoundedPdf01,
+                    title: widget.name,
+                    subtitle: workspace.label,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    workspace.label,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 24),
                   Row(
                     children: [
-                      Icon(
-                        Icons.picture_as_pdf_outlined,
+                      HugeIcon(
+                        icon: HugeIcons.strokeRoundedPdf01,
                         size: 24,
                         color: Theme.of(context).colorScheme.primary,
                       ),
@@ -392,7 +399,10 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
                     const Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.warning_amber_rounded, size: 20),
+                        HugeIcon(
+                          icon: HugeIcons.strokeRoundedAlertCircle,
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -446,7 +456,10 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
                         onPressed: busy ? null : chooseLogo,
-                        icon: const Icon(Icons.image_outlined),
+                        icon: const HugeIcon(
+                          size: 20,
+                          icon: HugeIcons.strokeRoundedImage01,
+                        ),
                         label: Text(
                           logoName == null
                               ? 'Choose optional logo'
@@ -471,7 +484,10 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
                                       logo = null;
                                       logoName = null;
                                     }),
-                              icon: const Icon(Icons.close),
+                              icon: const HugeIcon(
+                                size: 20,
+                                icon: HugeIcons.strokeRoundedCancel01,
+                              ),
                             ),
                           ],
                         ),
@@ -481,7 +497,10 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
                       onPressed: busy || !policy!.available || !policy!.allowed
                           ? null
                           : generate,
-                      icon: const Icon(Icons.picture_as_pdf_outlined),
+                      icon: const HugeIcon(
+                        size: 20,
+                        icon: HugeIcons.strokeRoundedPdf01,
+                      ),
                       label: Text(
                         report?.available == true
                             ? 'Generate updated PDF'
@@ -502,10 +521,10 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : Icon(
-                                file == null
-                                    ? Icons.download_outlined
-                                    : Icons.ios_share,
+                            : HugeIcon(
+                                icon: file == null
+                                    ? HugeIcons.strokeRoundedDownload01
+                                    : HugeIcons.strokeRoundedShare01,
                                 size: 18,
                               ),
                         label: Text(
@@ -520,7 +539,10 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
                   if (error != null && report == null)
                     OutlinedButton.icon(
                       onPressed: refresh,
-                      icon: const Icon(Icons.refresh, size: 18),
+                      icon: const HugeIcon(
+                        icon: HugeIcons.strokeRoundedRefresh,
+                        size: 18,
+                      ),
                       label: const Text('Retry'),
                     ),
                 ],

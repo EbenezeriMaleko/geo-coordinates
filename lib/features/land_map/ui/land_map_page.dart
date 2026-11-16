@@ -23,7 +23,6 @@ import '../services/coordinate_converter.dart';
 import '../state/land_map_notifier.dart';
 import '../state/land_map_state.dart';
 import '../state/settings_provider.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import '../services/map_tile_cache.dart';
 import '../services/measurement_formatter.dart';
@@ -33,6 +32,7 @@ import 'google_map_surface.dart';
 import 'google_marker_icons.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../workspaces/workspace_context.dart';
+import '../../workspaces/workspace_provider.dart';
 
 enum MapType { normal, satellite, terrain, hybrid }
 
@@ -142,12 +142,14 @@ class _MapLocationRequiredDialogState extends State<_MapLocationRequiredDialog>
                     color: primary.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    isService
-                        ? Icons.location_off_rounded
-                        : Icons.location_disabled_rounded,
-                    size: 36,
-                    color: primary,
+                  child: Center(
+                    child: HugeIcon(
+                      icon: isService
+                          ? HugeIcons.strokeRoundedLocationOffline01
+                          : HugeIcons.strokeRoundedLocationOffline01,
+                      size: 36,
+                      color: primary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -1016,7 +1018,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     hint: sheetContext.l10n.t(
                       'e.g. Home, Office, Farm Entrace',
                     ),
-                    icon: Icons.place_outlined,
+                    icon: HugeIcons.strokeRoundedLocation01,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -1036,7 +1038,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   },
                   decoration: _sheetInputDecoration(
                     hint: sheetContext.l10n.t('Point label (e.g. A1, P1)'),
-                    icon: Icons.label_outline,
+                    icon: HugeIcons.strokeRoundedTag01,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -1439,6 +1441,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       var rotation = 0.0;
       VoidCallback? onTap;
       if (child is _PointMarker) {
+        color = child.color;
         text = '${child.index}';
       } else if (child is _SegmentDistancePill) {
         kind = GoogleMarkerIconKind.label;
@@ -2443,14 +2446,26 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     );
   }
 
+  Color get _workspaceAccent =>
+      ref.read(workspaceProvider).activeCompanyId != null
+      ? const Color(0xFF197568)
+      : const Color(0xFF001F3F);
+
   InputDecoration _sheetInputDecoration({
     required String hint,
-    required IconData icon,
+    required dynamic icon,
   }) {
     return InputDecoration(
       hintText: hint,
       hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 14),
-      prefixIcon: Icon(icon, color: Colors.grey.shade500, size: 20),
+      prefixIcon: SizedBox(
+        width: 48,
+        child: Center(
+          widthFactor: 1,
+          heightFactor: 1,
+          child: HugeIcon(icon: icon, color: Colors.grey.shade500, size: 20),
+        ),
+      ),
       filled: true,
       fillColor: const Color(0xFFF9FAFB),
       border: OutlineInputBorder(
@@ -2463,7 +2478,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF001F3F), width: 1.8),
+        borderSide: BorderSide(color: _workspaceAccent, width: 1.8),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -2493,7 +2508,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF001F3F), width: 1.6),
+        borderSide: BorderSide(color: _workspaceAccent, width: 1.6),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       isDense: true,
@@ -2514,6 +2529,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             children: [
               ListTile(
                 leading: const HugeIcon(
+                  size: 20,
                   icon: HugeIcons.strokeRoundedPinLocation02,
                 ),
                 title: Text(sheetContext.l10n.t('Center here')),
@@ -2523,7 +2539,11 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                leading: const HugeIcon(
+                  size: 20,
+                  icon: HugeIcons.strokeRoundedDelete02,
+                  color: Colors.red,
+                ),
                 title: Text(sheetContext.l10n.t('Delete marker')),
                 textColor: Colors.red,
                 onTap: () async {
@@ -2545,6 +2565,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       final decisions = next.asData?.value;
       if (decisions != null) _applyMapAccess(decisions);
     });
+    final accent = ref.watch(workspaceProvider).activeCompanyId != null
+        ? const Color(0xFF197568)
+        : const Color(0xFF001F3F);
+    final baseTheme = Theme.of(context);
     final st = ref.watch(landMapProvider);
     final hasLiveLocationAccess = !_isLocationAccessError(_locationError);
     final coordinateFormat = ref.watch(coordinateFormatProvider);
@@ -2583,7 +2607,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         ? _buildSegmentDistanceMarkers(
             st.points,
             unit: distanceUnit,
-            color: const Color(0xFF001F3F),
+            color: accent,
             closeLoop: st.points.length >= 3,
           )
         : const <Marker>[];
@@ -2604,7 +2628,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             width: 40,
             height: 40,
             point: st.points[i],
-            child: _PointMarker(index: i + 1),
+            child: _PointMarker(index: i + 1, color: accent),
           ),
       ...fieldSegmentLabels,
 
@@ -2693,8 +2717,8 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         Polygon(
           points: st.points,
           borderStrokeWidth: 3,
-          color: const Color(0xFF001F3F).withValues(alpha: 0.3),
-          borderColor: const Color(0xFF001F3F),
+          color: accent.withValues(alpha: 0.3),
+          borderColor: accent,
         ),
       if (navigationTargetKind == 'polygon' &&
           navigationTargetPoints.length >= 3)
@@ -2708,11 +2732,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
     final polylines = <Polyline>[
       if (_showFieldLayer && st.points.length >= 2)
-        Polyline(
-          points: st.points,
-          strokeWidth: 3,
-          color: const Color(0xFF001F3F),
-        ),
+        Polyline(points: st.points, strokeWidth: 3, color: accent),
       if (_showDistanceLayer && _distancePoints.length >= 2)
         Polyline(
           points: _distancePoints,
@@ -2773,603 +2793,138 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
         ? _buildGoogleMarkers(markers)
         : <google.Marker>{};
 
-    return Stack(
-      children: [
-        // Map
-        if (_useGoogleMap)
-          Listener(
-            onPointerDown: (_) => _startGoogleMapInteraction(),
-            onPointerUp: (_) => _endGoogleMapInteraction(),
-            onPointerCancel: (_) => _endGoogleMapInteraction(),
-            child: GoogleMapSurface(
-              initialCenter: _providerCenter ?? center,
-              initialZoom: _providerZoom ?? _defaultMapZoom,
-              mapType: switch (_currentMapType) {
-                MapType.normal => google.MapType.normal,
-                MapType.satellite => google.MapType.satellite,
-                MapType.terrain => google.MapType.terrain,
-                MapType.hybrid => google.MapType.hybrid,
-              },
-              markers: googleMarkers,
-              polygons: googlePolygons(polygons),
-              polylines: googlePolylines(polylines),
-              onMapCreated: (controller) {
-                if (!mounted || !_useGoogleMap) return;
-                _cameraController.useGoogle(
-                  controller,
-                  google.CameraPosition(
-                    target: toGoogleLatLng(_providerCenter ?? center),
-                    zoom: _providerZoom ?? _defaultMapZoom,
-                  ),
-                );
-              },
-              onCameraMove: (position) {
-                if (!_useGoogleMap) return;
-                _cameraController.updateGooglePosition(position);
-                _providerCenter = fromGoogleLatLng(position.target);
-                _providerZoom = position.zoom;
-                // Camera bookkeeping does not affect the Flutter UI. Rebuilding
-                // here regenerates all survey overlays on every zoom frame.
-                _currentZoom = position.zoom;
-              },
-              onLongPress: _handleMapLongPress,
-            ),
-          )
-        else
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _providerCenter ?? center,
-              initialZoom: _providerZoom ?? _defaultMapZoom,
-              onMapEvent: (event) {
-                final isUserEvent = _isUserMapEventSource(event.source);
-                if (event is MapEventMoveStart ||
-                    event is MapEventFlingAnimationStart) {
-                  if (isUserEvent) {
-                    _interactionCooldownTimer?.cancel();
-                    setState(() {
-                      _userIsInteracting = true;
-                      _followCurrentLocation = false;
-                    });
+    return Theme(
+      data: baseTheme.copyWith(
+        colorScheme: baseTheme.colorScheme.copyWith(primary: accent),
+      ),
+      child: Stack(
+        children: [
+          // Map
+          if (_useGoogleMap)
+            Listener(
+              onPointerDown: (_) => _startGoogleMapInteraction(),
+              onPointerUp: (_) => _endGoogleMapInteraction(),
+              onPointerCancel: (_) => _endGoogleMapInteraction(),
+              child: GoogleMapSurface(
+                initialCenter: _providerCenter ?? center,
+                initialZoom: _providerZoom ?? _defaultMapZoom,
+                mapType: switch (_currentMapType) {
+                  MapType.normal => google.MapType.normal,
+                  MapType.satellite => google.MapType.satellite,
+                  MapType.terrain => google.MapType.terrain,
+                  MapType.hybrid => google.MapType.hybrid,
+                },
+                markers: googleMarkers,
+                polygons: googlePolygons(polygons),
+                polylines: googlePolylines(polylines),
+                onMapCreated: (controller) {
+                  if (!mounted || !_useGoogleMap) return;
+                  _cameraController.useGoogle(
+                    controller,
+                    google.CameraPosition(
+                      target: toGoogleLatLng(_providerCenter ?? center),
+                      zoom: _providerZoom ?? _defaultMapZoom,
+                    ),
+                  );
+                },
+                onCameraMove: (position) {
+                  if (!_useGoogleMap) return;
+                  _cameraController.updateGooglePosition(position);
+                  _providerCenter = fromGoogleLatLng(position.target);
+                  _providerZoom = position.zoom;
+                  // Camera bookkeeping does not affect the Flutter UI. Rebuilding
+                  // here regenerates all survey overlays on every zoom frame.
+                  _currentZoom = position.zoom;
+                },
+                onLongPress: _handleMapLongPress,
+              ),
+            )
+          else
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _providerCenter ?? center,
+                initialZoom: _providerZoom ?? _defaultMapZoom,
+                onMapEvent: (event) {
+                  final isUserEvent = _isUserMapEventSource(event.source);
+                  if (event is MapEventMoveStart ||
+                      event is MapEventFlingAnimationStart) {
+                    if (isUserEvent) {
+                      _interactionCooldownTimer?.cancel();
+                      setState(() {
+                        _userIsInteracting = true;
+                        _followCurrentLocation = false;
+                      });
+                    }
                   }
-                }
-                if (event is MapEventMoveEnd ||
-                    event is MapEventFlingAnimationEnd) {
-                  if (isUserEvent) {
-                    _interactionCooldownTimer?.cancel();
-                    _interactionCooldownTimer = Timer(
-                      // Longer cooldown during navigation so user can look around
-                      // then camera snaps back after 5 seconds
-                      _navigationCameraActive
-                          ? const Duration(seconds: 5)
-                          : const Duration(seconds: 2),
-                      () {
-                        if (mounted) {
-                          setState(() => _userIsInteracting = false);
-                          // Re-engage navigation camera after user stops
-                          if (_navigationCameraActive) {
-                            _updateNavigationCamera();
-                          } else if (_orientationLocked) {
-                            _applyOrientationRotation();
+                  if (event is MapEventMoveEnd ||
+                      event is MapEventFlingAnimationEnd) {
+                    if (isUserEvent) {
+                      _interactionCooldownTimer?.cancel();
+                      _interactionCooldownTimer = Timer(
+                        // Longer cooldown during navigation so user can look around
+                        // then camera snaps back after 5 seconds
+                        _navigationCameraActive
+                            ? const Duration(seconds: 5)
+                            : const Duration(seconds: 2),
+                        () {
+                          if (mounted) {
+                            setState(() => _userIsInteracting = false);
+                            // Re-engage navigation camera after user stops
+                            if (_navigationCameraActive) {
+                              _updateNavigationCamera();
+                            } else if (_orientationLocked) {
+                              _applyOrientationRotation();
+                            }
                           }
-                        }
-                      },
-                    );
+                        },
+                      );
+                    }
                   }
-                }
-              },
-              onPositionChanged: (position, _) {
-                final zoom = position.zoom;
-                _currentZoom = zoom;
-              },
-              onLongPress: (_, latLng) => _handleMapLongPress(latLng),
-            ),
-            children: [
-              ..._buildMapTileLayers(),
-              if (polygons.isNotEmpty) PolygonLayer(polygons: polygons),
-              if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
-              MarkerLayer(markers: markers),
-
-              // Compass — left side, aligned with first tool button
-              Positioned(
-                left: 16,
-                top: _isFullscreen
-                    ? 90
-                    : 160 + MediaQuery.of(context).padding.top,
-                child: MapCompass.cupertino(hideIfRotatedNorth: true),
+                },
+                onPositionChanged: (position, _) {
+                  final zoom = position.zoom;
+                  _currentZoom = zoom;
+                },
+                onLongPress: (_, latLng) => _handleMapLongPress(latLng),
               ),
-
-              RichAttributionWidget(
-                showFlutterMapAttribution: false,
-                attributions: [TextSourceAttribution('OSM contributors')],
-              ),
-            ],
-          ),
-        if (_isFetchingRoute)
-          Positioned(
-            top: 110 + MediaQuery.of(context).padding.top,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.teal.shade700,
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    context.l10n.t('Finding best route...'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-        if (_isMapTypeSwitching)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.18),
-              alignment: Alignment.center,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      context.l10n.t('Switching map type...'),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-        // GPS Info Card
-        if (!_isFullscreen)
-          Positioned(
-            top: 16 + MediaQuery.of(context).padding.top,
-            left: 16,
-            right: 16,
-            child: Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF001F3F).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          hasLiveLocationAccess
-                              ? Icons.gps_fixed
-                              : Icons.location_off_outlined,
-                          color: const Color(0xFF001F3F),
-                          size: 16,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (st.current != null && hasLiveLocationAccess)
-                              Text(
-                                utmText ?? context.l10n.t('UTM unavailable'),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            if (st.current != null && hasLiveLocationAccess)
-                              Text(
-                                context.l10n.t(
-                                  '{reference} • Accuracy: {accuracy}',
-                                  params: {
-                                    'reference': ref.watch(
-                                      selectedReferenceNameProvider,
-                                    ),
-                                    'accuracy': st.accuracyMeters == null
-                                        ? '—'
-                                        : _formatDistance(
-                                            st.accuracyMeters!,
-                                            distanceUnit,
-                                          ),
-                                  },
-                                ),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            Text(
-                              !hasLiveLocationAccess
-                                  ? _locationStatusMessage(_locationError)
-                                  : st.current == null
-                                  ? (_isLocating
-                                        ? context.l10n.t('Locating...')
-                                        : context.l10n.t('Waiting for GPS...'))
-                                  : CoordinateFormatter.format(
-                                      st.current!.latitude,
-                                      st.current!.longitude,
-                                      coordinateFormat,
-                                    ),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (st.points.isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF001F3F),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            context.l10n.t(
-                              '{count} pts',
-                              params: {'count': '${st.points.length}'},
-                            ),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                ..._buildMapTileLayers(),
+                if (polygons.isNotEmpty) PolygonLayer(polygons: polygons),
+                if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
+                MarkerLayer(markers: markers),
+
+                // Compass — left side, aligned with first tool button
+                Positioned(
+                  left: 16,
+                  top: _isFullscreen
+                      ? 90
+                      : 160 + MediaQuery.of(context).padding.top,
+                  child: MapCompass.cupertino(hideIfRotatedNorth: true),
                 ),
-                // Navigation pill — below GPS info card
-                if (navigationTarget != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.shade700,
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.navigation,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            [
-                              navigationTarget.label,
-                              if (_isFetchingRoute)
-                                context.l10n.t('Calculating...')
-                              else if (_routePoints.length >= 2)
-                                _formatDistance(
-                                  _remainingRouteDistanceMeters(),
-                                  distanceUnit,
-                                )
-                              else if (st.current != null &&
-                                  navigationGuidancePoint != null)
-                                _formatDistance(
-                                  _distanceCalculator.as(
-                                    LengthUnit.Meter,
-                                    st.current!,
-                                    navigationGuidancePoint,
-                                  ),
-                                  distanceUnit,
-                                ),
-                            ].join(' · '),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: _clearNavigationTarget,
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.white.withValues(alpha: 0.75),
-                            size: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                // Viewing pill — shows when viewing a saved record (not navigating)
-                if (navigationTarget == null &&
-                    st.activeFieldId != null &&
-                    st.points.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF001F3F),
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.remove_red_eye_outlined,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            context.l10n.t(
-                              'Viewing: {name} · {count} pts',
-                              params: {
-                                'name':
-                                    st.activeFieldName ??
-                                    context.l10n.t('Saved location'),
-                                'count': '${st.points.length}',
-                              },
-                            ),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: _clearViewedRecord,
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.white.withValues(alpha: 0.75),
-                            size: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+
+                RichAttributionWidget(
+                  showFlutterMapAttribution: false,
+                  attributions: [TextSourceAttribution('OSM contributors')],
+                ),
               ],
             ),
-          ),
-
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: AnimatedSlide(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            offset: _showBottomActionBar ? Offset.zero : const Offset(0, 1),
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 180),
-              opacity: _showBottomActionBar ? 1 : 0,
-              child: IgnorePointer(
-                ignoring: !_showBottomActionBar,
-                child: _BottomActionBar(
-                  activeTool: _activeTool,
-                  distancePoints: _distancePoints,
-                  totalDistanceMeters: _totalDistanceMeters(),
-                  fieldPoints: st.points,
-                  perimeterMeters: _calculatePerimeterMeters(st.points),
-                  areaSqm: _calculateAreaSqm(st.points),
-                  isLocating: _isLocating,
-                  isMarkerSaving: _isMarkerSaving,
-                  navigationTarget: navigationTarget,
-                  navigationDistanceText: _isFetchingRoute
-                      ? 'Calculating...'
-                      : _routePoints.length >= 2
-                      ? _formatDistance(
-                          _remainingRouteDistanceMeters(),
-                          distanceUnit,
-                        )
-                      : st.current != null && navigationGuidancePoint != null
-                      ? _formatDistance(
-                          _distanceCalculator.as(
-                            LengthUnit.Meter,
-                            st.current!,
-                            navigationGuidancePoint,
-                          ),
-                          distanceUnit,
-                        )
-                      : null,
-                  navigationDurationText: _currentRoute?.formattedDuration,
-                  distanceUnit: distanceUnit,
-                  onClearNavigation: _clearNavigationTarget,
-                  onToolChanged: (tool) => setState(() => _activeTool = tool),
-                  onAddGpsPoint: _addCurrentPointToDistance,
-                  onUndoDistance: _undoDistancePoint,
-                  onClearDistance: _clearDistancePoints,
-                  onSaveDistance: _showDistanceDialog,
-                  onAddFieldPoint: () async {
-                    if (!_showFieldLayer) {
-                      _snack(
-                        context.l10n.t(
-                          'Turn on the Field layer to add area points.',
-                        ),
-                      );
-                      return;
-                    }
-                    final err = await ref
-                        .read(landMapProvider.notifier)
-                        .addPointFromCurrent();
-                    if (err != null && mounted) _snack(err);
-                  },
-                  onUndoField: ref.read(landMapProvider.notifier).undoLastPoint,
-                  onClearField: ref.read(landMapProvider.notifier).clearPoints,
-                  onSaveField: _showFieldDialog,
-                  onAddMarkerAtGps: _addMarkerAtCurrentLocation,
-                  onExpandedChanged: (expanded) {
-                    setState(() => _bottomBarExpanded = expanded);
-                  },
-                  onClose: () {
-                    setState(() {
-                      _showBottomActionBar = false;
-                    });
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // Map Controls (right side)
-        Positioned(
-          right: 16,
-          top: _isFullscreen
-              ? 90
-              : (isCompactHeight ? 130 : 160) +
-                    MediaQuery.of(context).padding.top,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: _showBottomActionBar && _bottomBarExpanded ? 0.0 : 1.0,
-            child: IgnorePointer(
-              ignoring: _showBottomActionBar && _bottomBarExpanded,
-              child: Column(
-                children: [
-                  _MapControlButton(
-                    tooltip: _isFullscreen ? 'Exit full screen' : 'Full screen',
-                    icon: _isFullscreen
-                        ? Icons.fullscreen_exit
-                        : Icons.fullscreen,
-                    isActive: _isFullscreen,
-                    onPressed: _toggleFullscreen,
-                  ),
-                  const SizedBox(height: 8),
-                  _MapControlButton(
-                    icon: Icons.my_location_rounded,
-                    tooltip: _isLocating
-                        ? 'Finding your location'
-                        : 'Center on my location',
-                    isLoading: _isLocating,
-                    enabled: !_isLocating,
-                    isActive: _followCurrentLocation,
-                    onPressed: _recenterToCurrentLocation,
-                  ),
-                  const SizedBox(height: 8),
-                  _MapControlButton(
-                    icon: _orientationLocked
-                        ? Icons.explore_rounded
-                        : Icons.explore_off_rounded,
-                    tooltip: _orientationLocked
-                        ? 'Unlock orientation'
-                        : 'Lock orientation',
-                    isActive: _orientationLocked,
-                    onPressed: _toggleOrientation,
-                  ),
-                  const SizedBox(height: 8),
-                  _MapControlButton(
-                    icon: Icons.layers,
-                    tooltip: 'Map provider, type & layers',
-                    onPressed: () => _showMapTypeSelector(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-
-        if (!_showBottomActionBar)
-          Positioned(
-            right: 16,
-            bottom: widget.bottomInset + 16,
-            child: GestureDetector(
-              onTap: _toggleBottomActionBar,
+          if (_isFetchingRoute)
+            Positioned(
+              top: 110 + MediaQuery.of(context).padding.top,
+              left: 16,
+              right: 16,
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
-                  vertical: 10,
+                  vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Colors.teal.shade700,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.grey.shade200),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
+                      color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -3377,27 +2932,516 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.tune_rounded,
-                      size: 16,
-                      color: Colors.grey.shade700,
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Text(
-                      context.l10n.t('Tools'),
-                      style: TextStyle(
+                      context.l10n.t('Finding best route...'),
+                      style: const TextStyle(
+                        color: Colors.white,
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+
+          if (_isMapTypeSwitching)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.18),
+                alignment: Alignment.center,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        context.l10n.t('Switching map type...'),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // GPS Info Card
+          if (!_isFullscreen)
+            Positioned(
+              top: 16 + MediaQuery.of(context).padding.top,
+              left: 16,
+              right: 16,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF001F3F,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Center(
+                            child: HugeIcon(
+                              icon: hasLiveLocationAccess
+                                  ? HugeIcons.strokeRoundedLocation01
+                                  : HugeIcons.strokeRoundedLocationOffline01,
+                              color: const Color(0xFF001F3F),
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (st.current != null && hasLiveLocationAccess)
+                                Text(
+                                  utmText ?? context.l10n.t('UTM unavailable'),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              if (st.current != null && hasLiveLocationAccess)
+                                Text(
+                                  context.l10n.t(
+                                    '{reference} • Accuracy: {accuracy}',
+                                    params: {
+                                      'reference': ref.watch(
+                                        selectedReferenceNameProvider,
+                                      ),
+                                      'accuracy': st.accuracyMeters == null
+                                          ? '—'
+                                          : _formatDistance(
+                                              st.accuracyMeters!,
+                                              distanceUnit,
+                                            ),
+                                    },
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              Text(
+                                !hasLiveLocationAccess
+                                    ? _locationStatusMessage(_locationError)
+                                    : st.current == null
+                                    ? (_isLocating
+                                          ? context.l10n.t('Locating...')
+                                          : context.l10n.t(
+                                              'Waiting for GPS...',
+                                            ))
+                                    : CoordinateFormatter.format(
+                                        st.current!.latitude,
+                                        st.current!.longitude,
+                                        coordinateFormat,
+                                      ),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (st.points.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF001F3F),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              context.l10n.t(
+                                '{count} pts',
+                                params: {'count': '${st.points.length}'},
+                              ),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Navigation pill — below GPS info card
+                  if (navigationTarget != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade700,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const HugeIcon(
+                            icon: HugeIcons.strokeRoundedNavigation01,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              [
+                                navigationTarget.label,
+                                if (_isFetchingRoute)
+                                  context.l10n.t('Calculating...')
+                                else if (_routePoints.length >= 2)
+                                  _formatDistance(
+                                    _remainingRouteDistanceMeters(),
+                                    distanceUnit,
+                                  )
+                                else if (st.current != null &&
+                                    navigationGuidancePoint != null)
+                                  _formatDistance(
+                                    _distanceCalculator.as(
+                                      LengthUnit.Meter,
+                                      st.current!,
+                                      navigationGuidancePoint,
+                                    ),
+                                    distanceUnit,
+                                  ),
+                              ].join(' · '),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: _clearNavigationTarget,
+                            child: Center(
+                              child: HugeIcon(
+                                icon: HugeIcons.strokeRoundedCancel01,
+                                color: Colors.white.withValues(alpha: 0.75),
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  // Viewing pill — shows when viewing a saved record (not navigating)
+                  if (navigationTarget == null &&
+                      st.activeFieldId != null &&
+                      st.points.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF001F3F),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const HugeIcon(
+                            icon: HugeIcons.strokeRoundedView,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              context.l10n.t(
+                                'Viewing: {name} · {count} pts',
+                                params: {
+                                  'name':
+                                      st.activeFieldName ??
+                                      context.l10n.t('Saved location'),
+                                  'count': '${st.points.length}',
+                                },
+                              ),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: _clearViewedRecord,
+                            child: Center(
+                              child: HugeIcon(
+                                icon: HugeIcons.strokeRoundedCancel01,
+                                color: Colors.white.withValues(alpha: 0.75),
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              offset: _showBottomActionBar ? Offset.zero : const Offset(0, 1),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: _showBottomActionBar ? 1 : 0,
+                child: IgnorePointer(
+                  ignoring: !_showBottomActionBar,
+                  child: _BottomActionBar(
+                    activeTool: _activeTool,
+                    distancePoints: _distancePoints,
+                    totalDistanceMeters: _totalDistanceMeters(),
+                    fieldPoints: st.points,
+                    perimeterMeters: _calculatePerimeterMeters(st.points),
+                    areaSqm: _calculateAreaSqm(st.points),
+                    isLocating: _isLocating,
+                    isMarkerSaving: _isMarkerSaving,
+                    navigationTarget: navigationTarget,
+                    navigationDistanceText: _isFetchingRoute
+                        ? 'Calculating...'
+                        : _routePoints.length >= 2
+                        ? _formatDistance(
+                            _remainingRouteDistanceMeters(),
+                            distanceUnit,
+                          )
+                        : st.current != null && navigationGuidancePoint != null
+                        ? _formatDistance(
+                            _distanceCalculator.as(
+                              LengthUnit.Meter,
+                              st.current!,
+                              navigationGuidancePoint,
+                            ),
+                            distanceUnit,
+                          )
+                        : null,
+                    navigationDurationText: _currentRoute?.formattedDuration,
+                    distanceUnit: distanceUnit,
+                    onClearNavigation: _clearNavigationTarget,
+                    onToolChanged: (tool) => setState(() => _activeTool = tool),
+                    onAddGpsPoint: _addCurrentPointToDistance,
+                    onUndoDistance: _undoDistancePoint,
+                    onClearDistance: _clearDistancePoints,
+                    onSaveDistance: _showDistanceDialog,
+                    onAddFieldPoint: () async {
+                      if (!_showFieldLayer) {
+                        _snack(
+                          context.l10n.t(
+                            'Turn on the Field layer to add area points.',
+                          ),
+                        );
+                        return;
+                      }
+                      final err = await ref
+                          .read(landMapProvider.notifier)
+                          .addPointFromCurrent();
+                      if (err != null && mounted) _snack(err);
+                    },
+                    onUndoField: ref
+                        .read(landMapProvider.notifier)
+                        .undoLastPoint,
+                    onClearField: ref
+                        .read(landMapProvider.notifier)
+                        .clearPoints,
+                    onSaveField: _showFieldDialog,
+                    onAddMarkerAtGps: _addMarkerAtCurrentLocation,
+                    onExpandedChanged: (expanded) {
+                      setState(() => _bottomBarExpanded = expanded);
+                    },
+                    onClose: () {
+                      setState(() {
+                        _showBottomActionBar = false;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ),
           ),
-      ],
+
+          // Map Controls (right side)
+          Positioned(
+            right: 16,
+            top: _isFullscreen
+                ? 90
+                : (isCompactHeight ? 130 : 160) +
+                      MediaQuery.of(context).padding.top,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _showBottomActionBar && _bottomBarExpanded ? 0.0 : 1.0,
+              child: IgnorePointer(
+                ignoring: _showBottomActionBar && _bottomBarExpanded,
+                child: Column(
+                  children: [
+                    _MapControlButton(
+                      tooltip: _isFullscreen
+                          ? 'Exit full screen'
+                          : 'Full screen',
+                      icon: _isFullscreen
+                          ? HugeIcons.strokeRoundedMinimizeScreen
+                          : HugeIcons.strokeRoundedFullScreen,
+                      isActive: _isFullscreen,
+                      onPressed: _toggleFullscreen,
+                    ),
+                    const SizedBox(height: 8),
+                    _MapControlButton(
+                      icon: HugeIcons.strokeRoundedGps01,
+                      tooltip: _isLocating
+                          ? 'Finding your location'
+                          : 'Center on my location',
+                      isLoading: _isLocating,
+                      enabled: !_isLocating,
+                      isActive: _followCurrentLocation,
+                      onPressed: _recenterToCurrentLocation,
+                    ),
+                    const SizedBox(height: 8),
+                    _MapControlButton(
+                      icon: _orientationLocked
+                          ? HugeIcons.strokeRoundedCompass01
+                          : HugeIcons.strokeRoundedCompass01,
+                      tooltip: _orientationLocked
+                          ? 'Unlock orientation'
+                          : 'Lock orientation',
+                      isActive: _orientationLocked,
+                      onPressed: _toggleOrientation,
+                    ),
+                    const SizedBox(height: 8),
+                    _MapControlButton(
+                      icon: HugeIcons.strokeRoundedLayers01,
+                      tooltip: 'Map provider, type & layers',
+                      onPressed: () => _showMapTypeSelector(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          if (!_showBottomActionBar)
+            Positioned(
+              right: 16,
+              bottom: widget.bottomInset + 16,
+              child: GestureDetector(
+                onTap: _toggleBottomActionBar,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.grey.shade200),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      HugeIcon(
+                        icon: HugeIcons.strokeRoundedFilterHorizontal,
+                        size: 16,
+                        color: Colors.grey.shade700,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        context.l10n.t('Tools'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -3498,12 +3542,18 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       segments: const [
                         ButtonSegment(
                           value: false,
-                          icon: Icon(Icons.map_outlined),
+                          icon: HugeIcon(
+                            size: 20,
+                            icon: HugeIcons.strokeRoundedMaps,
+                          ),
                           label: Text('Standard'),
                         ),
                         ButtonSegment(
                           value: true,
-                          icon: Icon(Icons.public),
+                          icon: HugeIcon(
+                            size: 20,
+                            icon: HugeIcons.strokeRoundedGlobe02,
+                          ),
                           label: Text('Google Maps'),
                         ),
                       ],
@@ -3578,14 +3628,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     children: [
                       _LayerOption(
                         label: l10n.t('Field'),
-                        icon: SvgPicture.asset(
-                          'lib/assets/icons/golf-hole.svg',
-                          width: 28,
-                          height: 28,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedSquare,
+                          color: Colors.white,
+                          size: 24,
                         ),
                         color: Colors.blue,
                         isSelected: _showFieldLayer,
@@ -3615,14 +3661,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       ),
                       _LayerOption(
                         label: l10n.t('Distance'),
-                        icon: SvgPicture.asset(
-                          'lib/assets/icons/map-location-track.svg',
-                          width: 28,
-                          height: 28,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedRoute01,
+                          color: Colors.white,
+                          size: 24,
                         ),
                         color: Colors.orange,
                         isSelected: _showDistanceLayer,
@@ -3656,14 +3698,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       ),
                       _LayerOption(
                         label: l10n.t('Marker'),
-                        icon: SvgPicture.asset(
-                          'lib/assets/icons/marker.svg',
-                          width: 28,
-                          height: 28,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
+                        icon: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedPinLocation02,
+                          color: Colors.white,
+                          size: 24,
                         ),
                         color: Colors.red,
                         isSelected: _showMarkerLayer,
@@ -3742,6 +3780,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
             builder: (sheetStateContext, setSheetState) {
               return Consumer(
                 builder: (context, ref, child) {
+                  ref.watch(workspaceProvider);
                   final l10n = context.l10n;
                   final mapState = ref.watch(landMapProvider);
                   final distanceUnit = ref.watch(distanceUnitProvider);
@@ -3772,10 +3811,10 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            fieldSheetIsError
-                                ? Icons.error_outline
-                                : Icons.check_circle_outline,
+                          HugeIcon(
+                            icon: fieldSheetIsError
+                                ? HugeIcons.strokeRoundedAlertCircle
+                                : HugeIcons.strokeRoundedCheckmarkCircle02,
                             color: fieldSheetIsError
                                 ? Colors.red.shade700
                                 : Colors.green.shade700,
@@ -3807,564 +3846,481 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     );
                   }
 
-                  return PopScope(
-                    canPop: true,
-                    onPopInvokedWithResult: (_, result) async {
-                      await _stopAutoFieldCapture();
-                    },
-                    child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          14,
-                          20,
-                          bottomInset + 20,
-                        ),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Center(
-                                child: Container(
-                                  width: 46,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
-                                    borderRadius: BorderRadius.circular(999),
+                  return Theme(
+                    data: Theme.of(context).copyWith(
+                      colorScheme: Theme.of(
+                        context,
+                      ).colorScheme.copyWith(primary: _workspaceAccent),
+                    ),
+                    child: PopScope(
+                      canPop: true,
+                      onPopInvokedWithResult: (_, result) async {
+                        await _stopAutoFieldCapture();
+                      },
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            20,
+                            14,
+                            20,
+                            bottomInset + 20,
+                          ),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Center(
+                                  child: Container(
+                                    width: 46,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade300,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 14),
-                              Text(
-                                mapState.activeFieldId != null
-                                    ? l10n.t('Update Area')
-                                    : l10n.t('Create Area'),
-                                style: GoogleFonts.inter(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF111827),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                l10n.t(
-                                  'Capture boundary points and save your land details.',
-                                ),
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              Text(
-                                l10n.t('Place *'),
-                                style: _sheetLabelStyle(),
-                              ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: _placeController,
-                                textInputAction: TextInputAction.next,
-                                decoration: _sheetInputDecoration(
-                                  hint: l10n.t('Enter place name'),
-                                  icon: Icons.place_outlined,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.t('Phone (optional)'),
-                                style: _sheetLabelStyle(),
-                              ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: _phoneController,
-                                keyboardType: TextInputType.phone,
-                                textInputAction: TextInputAction.next,
-                                decoration: _sheetInputDecoration(
-                                  hint: l10n.t('e.g. 0712345678'),
-                                  icon: Icons.phone_outlined,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.t('Description (optional)'),
-                                style: _sheetLabelStyle(),
-                              ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: _descriptionController,
-                                minLines: 2,
-                                maxLines: 3,
-                                textInputAction: TextInputAction.done,
-                                decoration: _sheetInputDecoration(
-                                  hint: l10n.t('Add notes about this land'),
-                                  icon: Icons.notes_outlined,
-                                ),
-                              ),
-                              if (WorkspaceContext.activeCompanyId != null) ...[
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 14),
                                 Text(
-                                  'Owner / claimant',
-                                  style: _sheetLabelStyle(),
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _claimantNameController,
-                                  decoration: _sheetInputDecoration(
-                                    hint: 'Name (optional)',
-                                    icon: Icons.person_outline,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text('Owner phone', style: _sheetLabelStyle()),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _claimantPhoneController,
-                                  keyboardType: TextInputType.phone,
-                                  decoration: _sheetInputDecoration(
-                                    hint: 'Phone (optional)',
-                                    icon: Icons.phone_outlined,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text('Plot number', style: _sheetLabelStyle()),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _plotNumberController,
-                                  decoration: _sheetInputDecoration(
-                                    hint: 'Plot number (optional)',
-                                    icon: Icons.tag,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text('Land use', style: _sheetLabelStyle()),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _landUseController,
-                                  decoration: _sheetInputDecoration(
-                                    hint: 'Land use (optional)',
-                                    icon: Icons.landscape_outlined,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 18),
-                              Text(
-                                l10n.t('Boundary capture'),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                l10n.t(
-                                  'Mark current Location while walking around the field boundary.',
-                                ),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                      onPressed: mapState.isSaving
-                                          ? null
-                                          : () async {
-                                              final err = await notifier
-                                                  .addPointFromCurrent();
-                                              if (!sheetStateContext.mounted) {
-                                                return;
-                                              }
-                                              setSheetState(() {
-                                                fieldSheetMessage =
-                                                    err ??
-                                                    l10n.t('Point added');
-                                                fieldSheetIsError = err != null;
-                                              });
-                                            },
-                                      icon: const Icon(Icons.my_location),
-                                      label: Text(
-                                        l10n.t('Mark Current Location'),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF001F3F,
-                                        ),
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          pointsCount == 0 || mapState.isSaving
-                                          ? null
-                                          : notifier.undoLastPoint,
-                                      icon: const Icon(Icons.undo),
-                                      label: Text(l10n.t('Undo Last')),
-                                      style: OutlinedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          pointsCount == 0 || mapState.isSaving
-                                          ? null
-                                          : notifier.clearPoints,
-                                      icon: const Icon(
-                                        Icons.delete_sweep_outlined,
-                                      ),
-                                      label: Text(l10n.t('Clear All')),
-                                      style: OutlinedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      l10n.t(
-                                        '{count} points captured',
-                                        params: {'count': '$pointsCount'},
-                                      ),
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      l10n.t(
-                                        'Perimeter: {distance}',
-                                        params: {
-                                          'distance': _formatDistance(
-                                            perimeter,
-                                            distanceUnit,
-                                          ),
-                                        },
-                                      ),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    PopupMenuButton<AreaDisplayUnit>(
-                                      tooltip: l10n.t(
-                                        'Choose area display unit',
-                                      ),
-                                      initialValue: areaDisplayUnit,
-                                      onSelected: (unit) => setSheetState(
-                                        () => areaDisplayUnit = unit,
-                                      ),
-                                      itemBuilder: (_) => [
-                                        for (final unit
-                                            in AreaDisplayUnit.values)
-                                          PopupMenuItem(
-                                            value: unit,
-                                            child: Text(l10n.t(unit.label)),
-                                          ),
-                                      ],
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 6,
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              l10n.t(
-                                                'Area: {area}',
-                                                params: {
-                                                  'area':
-                                                      MeasurementFormatter.areaIn(
-                                                        area,
-                                                        areaDisplayUnit,
-                                                        distanceUnit,
-                                                      ),
-                                                },
-                                              ),
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Color(0xFF001F3F),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            const Icon(
-                                              Icons.arrow_drop_down,
-                                              size: 18,
-                                              color: Color(0xFF001F3F),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (pointsCount > 0) ...[
-                                const SizedBox(height: 16),
-                                Text(
-                                  l10n.t('Point labels'),
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.grey.shade700,
+                                  mapState.activeFieldId != null
+                                      ? l10n.t('Update Area')
+                                      : l10n.t('Create Area'),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF111827),
                                   ),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   l10n.t(
-                                    'Optional. Rename boundary points for reference.',
+                                    'Capture boundary points and save your land details.',
                                   ),
-                                  style: TextStyle(
-                                    fontSize: 12,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
                                     color: Colors.grey.shade600,
                                   ),
                                 ),
-                                const SizedBox(height: 10),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.grey.shade200,
+                                const SizedBox(height: 20),
+                                Text(
+                                  l10n.t('Place *'),
+                                  style: _sheetLabelStyle(),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _placeController,
+                                  textInputAction: TextInputAction.next,
+                                  decoration: _sheetInputDecoration(
+                                    hint: l10n.t('Enter place name'),
+                                    icon: HugeIcons.strokeRoundedLocation01,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  l10n.t('Phone (optional)'),
+                                  style: _sheetLabelStyle(),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  textInputAction: TextInputAction.next,
+                                  decoration: _sheetInputDecoration(
+                                    hint: l10n.t('e.g. 0712345678'),
+                                    icon: HugeIcons.strokeRoundedCall,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  l10n.t('Description (optional)'),
+                                  style: _sheetLabelStyle(),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _descriptionController,
+                                  minLines: 2,
+                                  maxLines: 3,
+                                  textInputAction: TextInputAction.done,
+                                  decoration: _sheetInputDecoration(
+                                    hint: l10n.t('Add notes about this land'),
+                                    icon: HugeIcons.strokeRoundedNote01,
+                                  ),
+                                ),
+                                if (WorkspaceContext.activeCompanyId !=
+                                    null) ...[
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Owner / claimant',
+                                    style: _sheetLabelStyle(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _claimantNameController,
+                                    decoration: _sheetInputDecoration(
+                                      hint: 'Name (optional)',
+                                      icon: HugeIcons.strokeRoundedUser,
                                     ),
                                   ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Owner phone',
+                                    style: _sheetLabelStyle(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _claimantPhoneController,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: _sheetInputDecoration(
+                                      hint: 'Phone (optional)',
+                                      icon: HugeIcons.strokeRoundedCall,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Plot number',
+                                    style: _sheetLabelStyle(),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _plotNumberController,
+                                    decoration: _sheetInputDecoration(
+                                      hint: 'Plot number (optional)',
+                                      icon: HugeIcons.strokeRoundedTag01,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text('Land use', style: _sheetLabelStyle()),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _landUseController,
+                                    decoration: _sheetInputDecoration(
+                                      hint: 'Land use (optional)',
+                                      icon: HugeIcons.strokeRoundedMountain,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 18),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                   child: Column(
-                                    children: List.generate(pointsCount, (
-                                      index,
-                                    ) {
-                                      return Padding(
-                                        padding: EdgeInsets.only(
-                                          bottom: index == pointsCount - 1
-                                              ? 0
-                                              : 10,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        l10n.t(
+                                          '{count} points captured',
+                                          params: {'count': '$pointsCount'},
                                         ),
-                                        child: Row(
-                                          children: [
-                                            SizedBox(
-                                              width: 72,
-                                              child: Text(
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        l10n.t(
+                                          'Perimeter: {distance}',
+                                          params: {
+                                            'distance': _formatDistance(
+                                              perimeter,
+                                              distanceUnit,
+                                            ),
+                                          },
+                                        ),
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      PopupMenuButton<AreaDisplayUnit>(
+                                        tooltip: l10n.t(
+                                          'Choose area display unit',
+                                        ),
+                                        initialValue: areaDisplayUnit,
+                                        onSelected: (unit) => setSheetState(
+                                          () => areaDisplayUnit = unit,
+                                        ),
+                                        itemBuilder: (_) => [
+                                          for (final unit
+                                              in AreaDisplayUnit.values)
+                                            PopupMenuItem(
+                                              value: unit,
+                                              child: Text(l10n.t(unit.label)),
+                                            ),
+                                        ],
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 6,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
                                                 l10n.t(
-                                                  'Point {number}',
+                                                  'Area: {area}',
                                                   params: {
-                                                    'number': '${index + 1}',
+                                                    'area':
+                                                        MeasurementFormatter.areaIn(
+                                                          area,
+                                                          areaDisplayUnit,
+                                                          distanceUnit,
+                                                        ),
                                                   },
                                                 ),
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w600,
-                                                  color: Colors.grey.shade700,
+                                                  color: _workspaceAccent,
                                                 ),
                                               ),
-                                            ),
-                                            Expanded(
-                                              child: TextField(
-                                                controller:
-                                                    labelControllers[index],
-                                                textInputAction:
-                                                    index == pointsCount - 1
-                                                    ? TextInputAction.done
-                                                    : TextInputAction.next,
-                                                decoration:
-                                                    _pointLabelDecoration(
-                                                      hint: l10n.t('Label'),
-                                                    ),
+                                              const SizedBox(width: 4),
+                                              HugeIcon(
+                                                icon: HugeIcons
+                                                    .strokeRoundedArrowDown01,
+                                                size: 18,
+                                                color: _workspaceAccent,
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
-                                      );
-                                    }),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                              if (feedbackBanner != null) ...[
-                                const SizedBox(height: 12),
-                                feedbackBanner,
-                              ],
-                              const SizedBox(height: 18),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextButton(
-                                      onPressed: mapState.isSaving
-                                          ? null
-                                          : () async {
-                                              await _stopAutoFieldCapture();
-                                              if (mapState.activeFieldId ==
-                                                  null) {
-                                                notifier.clearPoints();
-                                              }
-                                              if (sheetContext.mounted) {
-                                                Navigator.pop(sheetContext);
-                                              }
-                                            },
-                                      child: Text(context.l10n.t('Cancel')),
+                                if (pointsCount > 0) ...[
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    l10n.t('Point labels'),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey.shade700,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: SizedBox(
-                                      height: 52,
-                                      child: ElevatedButton(
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    l10n.t(
+                                      'Optional. Rename boundary points for reference.',
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.grey.shade200,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      children: List.generate(pointsCount, (
+                                        index,
+                                      ) {
+                                        return Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom: index == pointsCount - 1
+                                                ? 0
+                                                : 10,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              SizedBox(
+                                                width: 72,
+                                                child: Text(
+                                                  l10n.t(
+                                                    'Point {number}',
+                                                    params: {
+                                                      'number': '${index + 1}',
+                                                    },
+                                                  ),
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: TextField(
+                                                  controller:
+                                                      labelControllers[index],
+                                                  textInputAction:
+                                                      index == pointsCount - 1
+                                                      ? TextInputAction.done
+                                                      : TextInputAction.next,
+                                                  decoration:
+                                                      _pointLabelDecoration(
+                                                        hint: l10n.t('Label'),
+                                                      ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                  ),
+                                ],
+                                if (feedbackBanner != null) ...[
+                                  const SizedBox(height: 12),
+                                  feedbackBanner,
+                                ],
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextButton(
                                         onPressed: mapState.isSaving
                                             ? null
                                             : () async {
-                                                final enteredPlace =
-                                                    _placeController.text
-                                                        .trim();
-                                                final enteredPhone =
-                                                    _phoneController.text
-                                                        .trim();
-                                                final enteredDescription =
-                                                    _descriptionController.text
-                                                        .trim();
-                                                final pointLabels =
-                                                    _normalizePointLabels(
-                                                      labelControllers,
-                                                      pointsCount,
-                                                    );
+                                                await _stopAutoFieldCapture();
+                                                if (mapState.activeFieldId ==
+                                                    null) {
+                                                  notifier.clearPoints();
+                                                }
+                                                if (sheetContext.mounted) {
+                                                  Navigator.pop(sheetContext);
+                                                }
+                                              },
+                                        child: Text(context.l10n.t('Cancel')),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: SizedBox(
+                                        height: 52,
+                                        child: ElevatedButton(
+                                          onPressed: mapState.isSaving
+                                              ? null
+                                              : () async {
+                                                  final enteredPlace =
+                                                      _placeController.text
+                                                          .trim();
+                                                  final enteredPhone =
+                                                      _phoneController.text
+                                                          .trim();
+                                                  final enteredDescription =
+                                                      _descriptionController
+                                                          .text
+                                                          .trim();
+                                                  final pointLabels =
+                                                      _normalizePointLabels(
+                                                        labelControllers,
+                                                        pointsCount,
+                                                      );
 
-                                                if (enteredPlace.isEmpty) {
+                                                  if (enteredPlace.isEmpty) {
+                                                    if (!sheetStateContext
+                                                        .mounted) {
+                                                      return;
+                                                    }
+                                                    setSheetState(() {
+                                                      fieldSheetMessage = l10n.t(
+                                                        'Place is required.',
+                                                      );
+                                                      fieldSheetIsError = true;
+                                                    });
+                                                    return;
+                                                  }
+
+                                                  final effectiveName =
+                                                      enteredPlace;
+
+                                                  final err = await notifier
+                                                      .saveOffline(
+                                                        name: effectiveName,
+                                                        place: enteredPlace,
+                                                        phone: enteredPhone,
+                                                        description:
+                                                            enteredDescription,
+                                                        claimantName:
+                                                            _claimantNameController
+                                                                .text,
+                                                        claimantPhone:
+                                                            _claimantPhoneController
+                                                                .text,
+                                                        plotNumber:
+                                                            _plotNumberController
+                                                                .text,
+                                                        landUse:
+                                                            _landUseController
+                                                                .text,
+                                                        pointLabels:
+                                                            pointLabels,
+                                                      );
                                                   if (!sheetStateContext
                                                       .mounted) {
                                                     return;
                                                   }
-                                                  setSheetState(() {
-                                                    fieldSheetMessage = l10n.t(
-                                                      'Place is required.',
-                                                    );
-                                                    fieldSheetIsError = true;
-                                                  });
-                                                  return;
-                                                }
 
-                                                final effectiveName =
-                                                    enteredPlace;
-
-                                                final err = await notifier
-                                                    .saveOffline(
-                                                      name: effectiveName,
-                                                      place: enteredPlace,
-                                                      phone: enteredPhone,
-                                                      description:
-                                                          enteredDescription,
-                                                      claimantName:
-                                                          _claimantNameController
-                                                              .text,
-                                                      claimantPhone:
-                                                          _claimantPhoneController
-                                                              .text,
-                                                      plotNumber:
-                                                          _plotNumberController
-                                                              .text,
-                                                      landUse:
-                                                          _landUseController
-                                                              .text,
-                                                      pointLabels: pointLabels,
-                                                    );
-                                                if (!sheetStateContext
-                                                    .mounted) {
-                                                  return;
-                                                }
-
-                                                if (err != null) {
-                                                  setSheetState(() {
-                                                    fieldSheetMessage = err;
-                                                    fieldSheetIsError = true;
-                                                  });
-                                                } else {
-                                                  if (sheetContext.mounted) {
-                                                    Navigator.of(
-                                                      sheetContext,
-                                                    ).pop(
-                                                      mapState.activeFieldId !=
-                                                              null
-                                                          ? l10n.t(
-                                                              'Field updated offline successfully. Sync queued.',
-                                                            )
-                                                          : l10n.t(
-                                                              'Field saved offline successfully. Sync queued.',
-                                                            ),
-                                                    );
+                                                  if (err != null) {
+                                                    setSheetState(() {
+                                                      fieldSheetMessage = err;
+                                                      fieldSheetIsError = true;
+                                                    });
+                                                  } else {
+                                                    if (sheetContext.mounted) {
+                                                      Navigator.of(
+                                                        sheetContext,
+                                                      ).pop(
+                                                        mapState.activeFieldId !=
+                                                                null
+                                                            ? l10n.t(
+                                                                'Field updated offline successfully. Sync queued.',
+                                                              )
+                                                            : l10n.t(
+                                                                'Field saved offline successfully. Sync queued.',
+                                                              ),
+                                                      );
+                                                    }
                                                   }
-                                                }
-                                              },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(
-                                            0xFF001F3F,
-                                          ),
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              14,
+                                                },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: _workspaceAccent,
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
                                             ),
+                                            elevation: mapState.isSaving
+                                                ? 0
+                                                : 2,
                                           ),
-                                          elevation: mapState.isSaving ? 0 : 2,
-                                        ),
-                                        child: mapState.isSaving
-                                            ? const SizedBox(
-                                                width: 22,
-                                                height: 22,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2.5,
-                                                      color: Colors.white,
-                                                    ),
-                                              )
-                                            : Text(
-                                                mapState.activeFieldId != null
-                                                    ? l10n.t('Update Area')
-                                                    : l10n.t('Save Area'),
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w700,
-                                                  letterSpacing: 0.3,
+                                          child: mapState.isSaving
+                                              ? const SizedBox(
+                                                  width: 22,
+                                                  height: 22,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2.5,
+                                                        color: Colors.white,
+                                                      ),
+                                                )
+                                              : Text(
+                                                  mapState.activeFieldId != null
+                                                      ? l10n.t('Update Area')
+                                                      : l10n.t('Save Area'),
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: 0.3,
+                                                  ),
                                                 ),
-                                              ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -4453,7 +4409,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     controller: _placeController,
                     decoration: _sheetInputDecoration(
                       hint: l10n.t('Distance name or place'),
-                      icon: Icons.place_outlined,
+                      icon: HugeIcons.strokeRoundedLocation01,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -4464,7 +4420,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     keyboardType: TextInputType.phone,
                     decoration: _sheetInputDecoration(
                       hint: l10n.t('Contact phone'),
-                      icon: Icons.phone_outlined,
+                      icon: HugeIcons.strokeRoundedCall,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -4475,7 +4431,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                     maxLines: 3,
                     decoration: _sheetInputDecoration(
                       hint: l10n.t('Notes about this distance'),
-                      icon: Icons.notes_outlined,
+                      icon: HugeIcons.strokeRoundedNote01,
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -4646,7 +4602,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 // Helper Widgets
 class _MapControlButton extends StatelessWidget {
   final String? tooltip;
-  final IconData icon;
+  final dynamic icon;
   final VoidCallback onPressed;
   final bool enabled;
   final bool isLoading;
@@ -4663,17 +4619,19 @@ class _MapControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final foreground = isActive
+        ? Colors.white
+        : (enabled ? accent : Colors.grey);
     return Container(
       decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFE8F1F7) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isActive ? const Color(0xFF709BB8) : const Color(0xFFE8ECF0),
-        ),
+        color: isActive ? accent : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isActive ? accent : const Color(0xFFE8ECF0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -4682,14 +4640,17 @@ class _MapControlButton extends StatelessWidget {
         tooltip: tooltip,
         isSelected: isActive,
         icon: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: foreground,
+                ),
               )
-            : Icon(icon),
+            : HugeIcon(icon: icon, size: 20, color: foreground),
         onPressed: enabled ? onPressed : null,
-        color: enabled ? const Color(0xFF001F3F) : Colors.grey,
+        color: foreground,
         iconSize: 22,
       ),
     );
@@ -4875,14 +4836,15 @@ class _LayerOption extends StatelessWidget {
 
 class _PointMarker extends StatelessWidget {
   final int index;
-  const _PointMarker({required this.index});
+  final Color color;
+  const _PointMarker({required this.index, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF001F3F).withValues(alpha: 0.9),
+        color: color.withValues(alpha: 0.9),
         border: Border.all(color: Colors.white, width: 2),
       ),
       child: Center(
@@ -4976,7 +4938,11 @@ class _SavedMarkerPin extends StatelessWidget {
         ],
       ),
       child: markerLabel.isEmpty
-          ? const Icon(Icons.push_pin, color: Colors.white, size: 20)
+          ? const HugeIcon(
+              icon: HugeIcons.strokeRoundedPinLocation02,
+              color: Colors.white,
+              size: 20,
+            )
           : Center(
               child: Text(
                 markerLabel,
@@ -5011,7 +4977,13 @@ class _NavigationDestinationMarker extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(Icons.flag_rounded, color: Colors.white, size: 18),
+      child: const Center(
+        child: HugeIcon(
+          icon: HugeIcons.strokeRoundedFlag01,
+          color: Colors.white,
+          size: 18,
+        ),
+      ),
     );
   }
 }
@@ -5115,7 +5087,13 @@ class _NavigationTargetMarker extends StatelessWidget {
               ),
             ],
           ),
-          child: const Icon(Icons.near_me, color: Colors.white, size: 14),
+          child: const Center(
+            child: HugeIcon(
+              icon: HugeIcons.strokeRoundedNavigation01,
+              color: Colors.white,
+              size: 14,
+            ),
+          ),
         ),
       ],
     );
@@ -5539,7 +5517,11 @@ class _BottomActionBarState extends State<_BottomActionBar>
                 ListTile(
                   title: Text(sheetContext.l10n.t(unit.label)),
                   trailing: unit == _areaDisplayUnit
-                      ? const Icon(Icons.check, color: Color(0xFF001F3F))
+                      ? const HugeIcon(
+                          size: 20,
+                          icon: HugeIcons.strokeRoundedTick02,
+                          color: Color(0xFF001F3F),
+                        )
                       : null,
                   onTap: () => Navigator.of(sheetContext).pop(unit),
                 ),
@@ -5618,10 +5600,12 @@ class _BottomActionBarState extends State<_BottomActionBar>
                                 color: Colors.grey.shade100,
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(
-                                Icons.close_rounded,
-                                size: 16,
-                                color: Colors.grey.shade600,
+                              child: Center(
+                                child: HugeIcon(
+                                  icon: HugeIcons.strokeRoundedCancel01,
+                                  size: 16,
+                                  color: Colors.grey.shade600,
+                                ),
                               ),
                             ),
                           ),
@@ -5639,7 +5623,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                   children: [
                     _TabButton(
                       label: l10n.t('Area'),
-                      icon: Icons.crop_square_rounded,
+                      icon: HugeIcons.strokeRoundedSquare,
                       isActive: widget.activeTool == _MapTool.none,
                       hasData: widget.fieldPoints.isNotEmpty,
                       onTap: () => _selectTool(_MapTool.none),
@@ -5647,7 +5631,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                     const SizedBox(width: 6),
                     _TabButton(
                       label: l10n.t('Distance'),
-                      icon: Icons.straighten_rounded,
+                      icon: HugeIcons.strokeRoundedRuler,
                       isActive: widget.activeTool == _MapTool.distance,
                       hasData: widget.distancePoints.isNotEmpty,
                       onTap: () => _selectTool(
@@ -5659,7 +5643,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
                     const SizedBox(width: 6),
                     _TabButton(
                       label: l10n.t('Marker'),
-                      icon: Icons.push_pin_outlined,
+                      icon: HugeIcons.strokeRoundedPinLocation02,
                       isActive: widget.activeTool == _MapTool.marker,
                       hasData: false,
                       onTap: () => _selectTool(
@@ -5791,7 +5775,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             child: ElevatedButton(
               onPressed: widget.onSaveDistance,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF001F3F),
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
@@ -5886,7 +5870,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
             child: ElevatedButton(
               onPressed: widget.onSaveField,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF001F3F),
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
@@ -5925,10 +5909,12 @@ class _BottomActionBarState extends State<_BottomActionBar>
                   color: const Color(0xFF001F3F).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
-                  Icons.touch_app_outlined,
-                  color: Color(0xFF001F3F),
-                  size: 18,
+                child: const Center(
+                  child: HugeIcon(
+                    icon: HugeIcons.strokeRoundedTouch01,
+                    color: Color(0xFF001F3F),
+                    size: 18,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -5963,7 +5949,7 @@ class _BottomActionBarState extends State<_BottomActionBar>
 
 class _TabButton extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final dynamic icon;
   final bool isActive;
   final bool hasData;
   final VoidCallback onTap;
@@ -5985,14 +5971,16 @@ class _TabButton extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF001F3F) : Colors.grey.shade100,
+            color: isActive
+                ? Theme.of(context).colorScheme.primary
+                : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
+              HugeIcon(
+                icon: icon,
                 size: 14,
                 color: isActive ? Colors.white : Colors.grey.shade600,
               ),
@@ -6062,8 +6050,8 @@ class _StatChip extends StatelessWidget {
                       ),
                     ),
                     if (onTap != null)
-                      const Icon(
-                        Icons.arrow_drop_down,
+                      const HugeIcon(
+                        icon: HugeIcons.strokeRoundedArrowDown01,
                         size: 14,
                         color: Color(0xFF001F3F),
                       ),
@@ -6114,7 +6102,9 @@ class _ActionBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isPrimary
-              ? (isEnabled ? const Color(0xFF001F3F) : Colors.grey.shade200)
+              ? (isEnabled
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey.shade200)
               : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: isPrimary
@@ -6143,7 +6133,7 @@ class _ActionBtn extends StatelessWidget {
                     color: isPrimary
                         ? (isEnabled ? Colors.white : Colors.grey.shade500)
                         : (isEnabled
-                              ? const Color(0xFF001F3F)
+                              ? Theme.of(context).colorScheme.primary
                               : Colors.grey.shade400),
                   ),
                 ),

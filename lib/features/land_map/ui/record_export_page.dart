@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
+import '../../widget/library_record_style.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -6,7 +8,6 @@ import '../../subscriptions/entitlement_provider.dart';
 import '../../subscriptions/subscription_provider.dart';
 import '../../subscriptions/plans_access_page.dart';
 import '../../workspaces/workspace_provider.dart';
-import '../../workspaces/workspace_page_style.dart';
 import '../services/record_export_service.dart';
 
 String? recordExportBlock(
@@ -141,9 +142,18 @@ class _RecordExportPageState extends ConsumerState<RecordExportPage> {
     final block = recordExportBlock(format, access);
     return PopScope(
       canPop: !busy,
-      child: WorkspaceScaffold(
+      child: LibraryRecordScaffold(
         company: widget.company != null,
         appBar: AppBar(
+          leading: IconButton(
+            tooltip: 'Back',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowLeft01,
+              size: 22,
+            ),
+          ),
+          centerTitle: true,
           title: const Text('Export record'),
           actions: [
             IconButton(
@@ -151,7 +161,10 @@ class _RecordExportPageState extends ConsumerState<RecordExportPage> {
               onPressed: available && !busy
                   ? () => ref.invalidate(workspaceAccessSnapshotProvider)
                   : null,
-              icon: const Icon(Icons.refresh),
+              icon: const HugeIcon(
+                size: 20,
+                icon: HugeIcons.strokeRoundedRefresh,
+              ),
             ),
           ],
         ),
@@ -163,18 +176,13 @@ class _RecordExportPageState extends ConsumerState<RecordExportPage> {
                 ),
               )
             : ListView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                 children: [
-                  Text(
-                    widget.name,
-                    style: Theme.of(context).textTheme.titleMedium,
+                  LibraryRecordHeader(
+                    icon: HugeIcons.strokeRoundedFileExport,
+                    title: widget.name,
+                    subtitle: workspace.label,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    workspace.label,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 20),
                   RadioGroup<RecordExportFormat>(
                     groupValue: format,
                     onChanged: (value) {
@@ -191,7 +199,10 @@ class _RecordExportPageState extends ConsumerState<RecordExportPage> {
                       children: [
                         for (final option in RecordExportFormat.values)
                           RadioListTile<RecordExportFormat>(
-                            contentPadding: EdgeInsets.zero,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 6,
+                            ),
                             value: option,
                             enabled:
                                 !busy &&
@@ -205,7 +216,10 @@ class _RecordExportPageState extends ConsumerState<RecordExportPage> {
                             ),
                             secondary: recordExportBlock(option, access) == null
                                 ? null
-                                : const Icon(Icons.lock_outline, size: 20),
+                                : const HugeIcon(
+                                    icon: HugeIcons.strokeRoundedLockKey,
+                                    size: 20,
+                                  ),
                           ),
                       ],
                     ),
@@ -256,7 +270,10 @@ class _RecordExportPageState extends ConsumerState<RecordExportPage> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.ios_share, size: 18),
+                          : const HugeIcon(
+                              icon: HugeIcons.strokeRoundedShare01,
+                              size: 18,
+                            ),
                       label: Text(
                         busy
                             ? 'Preparing...'

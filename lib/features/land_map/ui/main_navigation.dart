@@ -506,7 +506,10 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
       if (isSelectionMode) {
         return [
           IconButton(
-            icon: const HugeIcon(icon: HugeIcons.strokeRoundedFolder01, color: Colors.black87),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedFolder01,
+              color: Colors.black87,
+            ),
             tooltip: context.l10n.t('Set group'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
@@ -515,7 +518,10 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 : null,
           ),
           IconButton(
-            icon: const HugeIcon(icon: HugeIcons.strokeRoundedShare01, color: Colors.black87),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedShare01,
+              color: Colors.black87,
+            ),
             tooltip: context.l10n.t('Share selected'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
@@ -524,7 +530,10 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 : null,
           ),
           IconButton(
-            icon: const HugeIcon(icon: HugeIcons.strokeRoundedTrash, color: Colors.black87),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedTrash,
+              color: Colors.black87,
+            ),
             tooltip: context.l10n.t('Delete selected'),
             onPressed: canActOnSelection
                 ? () => _savedLocationsToolbarController.dispatch(
@@ -533,7 +542,10 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
                 : null,
           ),
           IconButton(
-            icon: const HugeIcon(icon: HugeIcons.strokeRoundedMultiplicationSign, color: Colors.black87),
+            icon: const HugeIcon(
+              icon: HugeIcons.strokeRoundedMultiplicationSign,
+              color: Colors.black87,
+            ),
             tooltip: context.l10n.t('Exit selection'),
             onPressed: () => _savedLocationsToolbarController.dispatch(
               SavedLocationsToolbarAction.exitSelection,
@@ -544,7 +556,10 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
 
       return [
         IconButton(
-          icon: const HugeIcon(icon: HugeIcons.strokeRoundedMore, color: Colors.black87),
+          icon: const HugeIcon(
+            icon: HugeIcons.strokeRoundedMore,
+            color: Colors.black87,
+          ),
           tooltip: context.l10n.t('More'),
           onPressed: () => _savedLocationsToolbarController.dispatch(
             SavedLocationsToolbarAction.menu,
@@ -576,16 +591,19 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
         onRefresh: _refreshMyLocation,
         onMenuAction: _handleMyLocationMenu,
       ),
-      SavedLocationsPage(
-        isActive: _currentIndex == 2,
-        toolbarController: _savedLocationsToolbarController,
-        onOpenMapRequested: () => _navigateToPage(0),
-        onToolbarStateChanged: () {
-          if (mounted && _currentIndex == 2) {
-            setState(() {});
-          }
-        },
-        showEmbeddedToolbar: false,
+      SafeArea(
+        bottom: false,
+        child: SavedLocationsPage(
+          isActive: _currentIndex == 2,
+          toolbarController: _savedLocationsToolbarController,
+          onOpenMapRequested: () => _navigateToPage(0),
+          onToolbarStateChanged: () {
+            if (mounted && _currentIndex == 2) {
+              setState(() {});
+            }
+          },
+          showEmbeddedToolbar: true,
+        ),
       ),
       const SafeArea(bottom: false, child: ProfilePage()),
       const SettingsPage(),
@@ -593,24 +611,28 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: (_currentIndex == 2 || _currentIndex == 4)
-      ? AppBar(
-          automaticallyImplyLeading: false,
-          title: Text(
-            _currentIndex == 2 ?
-            companyWorkspace ? 'Company library' : 'My library' : 
-            companyWorkspace ? 'Company settings' : 'Settings',
-            style: const TextStyle(
-              color: Colors.black87,
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
-            ),
-          ),
-          actions: _buildAppBarActions(),
-          backgroundColor: Colors.white,
-          elevation: 0,
-        )
-      : null,
+      appBar: _currentIndex == 4
+          ? AppBar(
+              automaticallyImplyLeading: false,
+              title: Text(
+                _currentIndex == 2
+                    ? companyWorkspace
+                          ? 'Company library'
+                          : 'My library'
+                    : companyWorkspace
+                    ? 'Company settings'
+                    : 'Settings',
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                ),
+              ),
+              actions: _buildAppBarActions(),
+              backgroundColor: Colors.white,
+              elevation: 0,
+            )
+          : null,
       body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
@@ -716,20 +738,20 @@ class _BottomNavItem extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 TweenAnimationBuilder<Color?>(
-                duration: const Duration(milliseconds: 180),
-                tween: ColorTween(
-                  end: isSelected ? selectedColor : unselectedColor,
-                ),
-                builder: (context, color, _) => SizedBox(
-                  width: 25,
-                  height: 30,
-                  child: HugeIcon(
-                    icon: icon,
-                    size: 20,
-                    color: color ?? unselectedColor,
+                  duration: const Duration(milliseconds: 180),
+                  tween: ColorTween(
+                    end: isSelected ? selectedColor : unselectedColor,
+                  ),
+                  builder: (context, color, _) => SizedBox(
+                    width: 25,
+                    height: 30,
+                    child: HugeIcon(
+                      icon: icon,
+                      size: 20,
+                      color: color ?? unselectedColor,
+                    ),
                   ),
                 ),
-              ),
 
                 const SizedBox(height: 3),
                 AnimatedDefaultTextStyle(
