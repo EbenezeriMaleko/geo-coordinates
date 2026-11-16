@@ -2448,7 +2448,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
 
   Color get _workspaceAccent =>
       ref.read(workspaceProvider).activeCompanyId != null
-      ? const Color(0xFF197568)
+      ? const Color(0xFF245B83)
       : const Color(0xFF001F3F);
 
   InputDecoration _sheetInputDecoration({
@@ -2566,7 +2566,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       if (decisions != null) _applyMapAccess(decisions);
     });
     final accent = ref.watch(workspaceProvider).activeCompanyId != null
-        ? const Color(0xFF197568)
+        ? const Color(0xFF245B83)
         : const Color(0xFF001F3F);
     final baseTheme = Theme.of(context);
     final st = ref.watch(landMapProvider);

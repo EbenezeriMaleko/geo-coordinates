@@ -17,7 +17,7 @@ class LibraryRecordScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = Theme.of(context);
-    final accent = company ? const Color(0xFF197568) : const Color(0xFF001F3F);
+    final accent = company ? const Color(0xFF245B83) : const Color(0xFF001F3F);
     const border = Color(0xFFE8ECF0);
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(14),

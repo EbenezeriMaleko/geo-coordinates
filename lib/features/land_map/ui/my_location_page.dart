@@ -1265,7 +1265,7 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
     final l10n = context.l10n;
     final baseTheme = Theme.of(context);
     final accent = ref.watch(workspaceProvider).activeCompanyId != null
-        ? const Color(0xFF197568)
+        ? const Color(0xFF245B83)
         : const Color(0xFF001F3F);
     final theme = baseTheme.copyWith(
       colorScheme: baseTheme.colorScheme.copyWith(primary: accent),

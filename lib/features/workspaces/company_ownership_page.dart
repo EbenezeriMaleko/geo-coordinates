@@ -9,7 +9,7 @@ import 'company_invite_form.dart';
 import 'workspace_provider.dart';
 import 'workspace_page_style.dart';
 
-const Color _accent = Color(0xFF197568); // company accent
+const Color _accent = Color(0xFF245B83); // company accent
 const Color _pageBackground = Color(0xFFF7F7F8);
 const Color _cardBorder = Color(0xFFE8ECF0);
 const Color _fieldFill = Color(0xFFF7F7F8);

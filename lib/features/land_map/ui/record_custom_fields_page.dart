@@ -202,7 +202,7 @@ class _RecordCustomFieldsPageState
   }
 
   Color get accent => widget.company != null
-      ? const Color(0xFF197568)
+      ? const Color(0xFF245B83)
       : const Color(0xFF001F3F);
 
   InputDecoration fieldDecoration(int index) {

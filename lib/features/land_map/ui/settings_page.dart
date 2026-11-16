@@ -41,7 +41,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   static const Color _personalAccent = Color(0xFF001F3F);
-  static const Color _companyAccent = Color(0xFF197568);
+  static const Color _companyAccent = Color(0xFF245B83);
   static const Color _pageBackground = Color(0xFFF7F7F8);
   static const Color _green = Color(0xFF1B7F4B);
   static const Color _greenSoft = Color(0xFFE6F5EC);
