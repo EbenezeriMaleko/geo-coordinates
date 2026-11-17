@@ -1,3 +1,4 @@
+import '../widget/plan_access_lock.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -215,32 +216,51 @@ class _CompanyMemberEditorState extends ConsumerState<CompanyMemberEditor> {
                       ),
                       child: const Text('Unable to load roles. Retry'),
                     ),
-                  DropdownButtonFormField<String>(
-                    key: ValueKey(currentRole),
-                    initialValue: currentRole,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Company role',
+                  PlanAccessLock(
+                    locked:
+                        !busy &&
+                        access
+                                ?.asData
+                                ?.value['company.employee_management']
+                                ?.allowed ==
+                            false,
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey(currentRole),
+                      initialValue: currentRole,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Company role',
+                      ),
+                      items: [
+                        for (final value in choices)
+                          DropdownMenuItem(
+                            value: value,
+                            child: Text(companyRoleLabel(value)),
+                          ),
+                      ],
+                      onChanged: canExpand && !busy && options?.hasValue == true
+                          ? (value) => setState(() => role = value)
+                          : null,
                     ),
-                    items: [
-                      for (final value in choices)
-                        DropdownMenuItem(
-                          value: value,
-                          child: Text(companyRoleLabel(value)),
-                        ),
-                    ],
-                    onChanged: canExpand && !busy && options?.hasValue == true
-                        ? (value) => setState(() => role = value)
-                        : null,
                   ),
                   const SizedBox(height: 12),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Active access'),
-                    value: active,
-                    onChanged: !busy && (wasActive || canExpand)
-                        ? (value) => setState(() => active = value)
-                        : null,
+                  PlanAccessLock(
+                    locked:
+                        !busy &&
+                        !wasActive &&
+                        access
+                                ?.asData
+                                ?.value['company.employee_management']
+                                ?.allowed ==
+                            false,
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Active access'),
+                      value: active,
+                      onChanged: !busy && (wasActive || canExpand)
+                          ? (value) => setState(() => active = value)
+                          : null,
+                    ),
                   ),
                   if (!canExpand) ...[
                     Text(

@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'dart:async';
 import '../../subscriptions/plans_access_page.dart';
 import 'dart:math';
@@ -626,23 +627,26 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       ),
                     ),
                     if (canUseCloud)
-                      IconButton(
-                        tooltip: l10n.t('Sync pending records'),
-                        onPressed: _isManuallySyncing
-                            ? null
-                            : _syncPendingRecords,
-                        icon: _isManuallySyncing
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                      FeatureAccessLock(
+                        features: ['land.sync'],
+                        child: IconButton(
+                          tooltip: l10n.t('Sync pending records'),
+                          onPressed: _isManuallySyncing
+                              ? null
+                              : _syncPendingRecords,
+                          icon: _isManuallySyncing
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedCloud,
+                                  size: 21,
                                 ),
-                              )
-                            : const HugeIcon(
-                                icon: HugeIcons.strokeRoundedCloud,
-                                size: 21,
-                              ),
+                        ),
                       ),
                     IconButton(
                       tooltip: l10n.t('Filter'),
@@ -992,19 +996,22 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            heroTag: 'manual_coords_fab',
-            onPressed: _showManualCoordinateEntry,
-            backgroundColor: _accent,
-            icon: const HugeIcon(
-              icon: HugeIcons.strokeRoundedLocationAdd01,
-              color: Colors.white,
-            ),
-            label: Text(
-              l10n.t('Add manually'),
-              style: const TextStyle(
+          floatingActionButton: FeatureAccessLock(
+            features: ['land.create_and_save'],
+            child: FloatingActionButton.extended(
+              heroTag: 'manual_coords_fab',
+              onPressed: _showManualCoordinateEntry,
+              backgroundColor: _accent,
+              icon: const HugeIcon(
+                icon: HugeIcons.strokeRoundedLocationAdd01,
                 color: Colors.white,
-                fontWeight: FontWeight.w700,
+              ),
+              label: Text(
+                l10n.t('Add manually'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -1503,7 +1510,7 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
       useSafeArea: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) => Theme(
         data: Theme.of(context).copyWith(
@@ -1515,14 +1522,14 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
           title: context.l10n.t('More'),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (ref.read(authSessionProvider).isLoggedIn &&
                   ref.read(authSessionProvider).isVerified)
-                ListTile(
-                  leading: const HugeIcon(
-                    icon: HugeIcons.strokeRoundedDelete02,
-                  ),
-                  title: const Text('Recycle bin'),
+                SavedActionRow(
+                  accent: _accent,
+                  icon: HugeIcons.strokeRoundedRestoreBin,
+                  label: context.l10n.t('Recycle bin'),
                   onTap: () {
                     final company = ref.read(workspaceProvider).activeCompanyId;
                     Navigator.pop(sheetContext);
@@ -1536,19 +1543,19 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     );
                   },
                 ),
-              ListTile(
-                leading: const HugeIcon(icon: HugeIcons.strokeRoundedTask01),
-                title: Text(sheetContext.l10n.t('Select multiple')),
+              SavedActionRow(
+                accent: _accent,
+                icon: HugeIcons.strokeRoundedTask01,
+                label: sheetContext.l10n.t('Select multiple'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   setState(() => _selectionMode = true);
                 },
               ),
-              ListTile(
-                leading: const HugeIcon(
-                  icon: HugeIcons.strokeRoundedFilterHorizontal,
-                ),
-                title: Text(sheetContext.l10n.t('Reset filters/sort/group')),
+              SavedActionRow(
+                accent: _accent,
+                icon: HugeIcons.strokeRoundedFilterHorizontal,
+                label: sheetContext.l10n.t('Reset filters/sort/group'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   setState(() {
@@ -1558,17 +1565,23 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   });
                 },
               ),
-              ListTile(
-                leading: const HugeIcon(
-                  icon: HugeIcons.strokeRoundedDelete02,
-                  color: Colors.red,
-                ),
-                title: Text(sheetContext.l10n.t('Delete all saved lands')),
-                textColor: Colors.red,
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Divider(height: 1, color: Color(0xFFE8ECF0)),
+              ),
+              SavedActionRow(
+                accent: _accent,
+                icon: HugeIcons.strokeRoundedDelete02,
+                label: sheetContext.l10n.t('Delete all saved lands'),
+                destructive: true,
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _confirmDeleteAll();
                 },
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(sheetContext),
+                child: Text(sheetContext.l10n.t('Cancel')),
               ),
             ],
           ),
@@ -1874,26 +1887,27 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(
+              context,
+            ).colorScheme.copyWith(primary: _accent),
+          ),
+          child: SheetFrame(
+            accent: _accent,
+            icon: HugeIcons.strokeRoundedLocation01,
+            title:
+                item['name']?.toString() ??
+                item['place']?.toString() ??
+                context.l10n.t('Saved location'),
+            subtitle: context.l10n.t('Saved location'),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                _ActionTile(
-                  icon: Icons.navigation_outlined,
+                SavedActionRow(
+                  accent: _accent,
+                  icon: HugeIcons.strokeRoundedNavigation01,
                   label: sheetContext.l10n.t('Go to'),
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -1917,8 +1931,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     }
                   },
                 ),
-                _ActionTile(
-                  icon: Icons.remove_red_eye_outlined,
+                SavedActionRow(
+                  accent: _accent,
+                  icon: HugeIcons.strokeRoundedView,
                   label: sheetContext.l10n.t('View on map'),
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -1942,12 +1957,16 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                 ),
                 if (item['canManage'] == false)
                   const ListTile(
-                    leading: Icon(Icons.lock_outline),
+                    leading: HugeIcon(
+                      icon: HugeIcons.strokeRoundedLockKey,
+                      size: 20,
+                    ),
                     title: Text('Read-only record'),
                   ),
                 if (item['canManage'] != false)
-                  _ActionTile(
-                    icon: Icons.edit,
+                  SavedActionRow(
+                    accent: _accent,
+                    icon: HugeIcons.strokeRoundedEdit02,
                     label: sheetContext.l10n.t('Rename'),
                     onTap: () {
                       Navigator.pop(sheetContext);
@@ -1962,8 +1981,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                       }
                     },
                   ),
-                _ActionTile(
-                  icon: Icons.copy,
+                SavedActionRow(
+                  accent: _accent,
+                  icon: HugeIcons.strokeRoundedCopy01,
                   label: sheetContext.l10n.t('Copy coordinates'),
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -1974,8 +1994,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     );
                   },
                 ),
-                _ActionTile(
-                  icon: Icons.share,
+                SavedActionRow(
+                  accent: _accent,
+                  icon: HugeIcons.strokeRoundedShare01,
                   label: sheetContext.l10n.t('Share'),
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -1986,8 +2007,9 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                     );
                   },
                 ),
-                _ActionTile(
-                  icon: Icons.folder_outlined,
+                SavedActionRow(
+                  accent: _accent,
+                  icon: HugeIcons.strokeRoundedFolder01,
                   label: sheetContext.l10n.t('Set group'),
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -2003,15 +2025,25 @@ class _SavedLocationsPageState extends ConsumerState<SavedLocationsPage> {
                   },
                 ),
                 if (item['canManage'] != false)
-                  _ActionTile(
-                    icon: Icons.delete_outline,
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Divider(height: 1, color: Color(0xFFE8ECF0)),
+                  ),
+                if (item['canManage'] != false)
+                  SavedActionRow(
+                    accent: _accent,
+                    icon: HugeIcons.strokeRoundedDelete02,
                     label: sheetContext.l10n.t('Delete'),
-                    isDestructive: true,
+                    destructive: true,
                     onTap: () {
                       Navigator.pop(sheetContext);
                       _deleteItem(context, id, item: item, isRemote: isRemote);
                     },
                   ),
+                TextButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  child: Text(sheetContext.l10n.t('Cancel')),
+                ),
               ],
             ),
           ),
@@ -3776,72 +3808,6 @@ class _EditRemoteLandSheetState extends ConsumerState<_EditRemoteLandSheet> {
   }
 }
 
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isDestructive;
-  final VoidCallback onTap;
-
-  const _ActionTile({
-    required this.icon,
-    required this.label,
-    this.isDestructive = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isDestructive ? Colors.red : Colors.black87;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFFE8ECF0)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: color, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: color.withValues(alpha: 0.5),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _FilterTile extends StatelessWidget {
   final String title;
   final bool selected;
@@ -4067,11 +4033,11 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
   Color _typeBadgeColor(String type) {
     switch (type.toLowerCase()) {
       case 'polygon':
-        return const Color(0xFF0074D9);
+        return const Color(0xFF001F3F);
       case 'polyline':
         return const Color(0xFFF59E0B);
       case 'point':
-        return const Color(0xFF16A34A);
+        return const Color(0xFF001F3F);
       default:
         return Colors.grey;
     }
@@ -4149,11 +4115,33 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: badgeColor.withValues(alpha: .1),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: HugeIcon(
+                        icon: switch (type.toLowerCase()) {
+                          'polygon' => HugeIcons.strokeRoundedSquare,
+                          'polyline' => HugeIcons.strokeRoundedRoute01,
+                          _ => HugeIcons.strokeRoundedLocation01,
+                        },
+                        size: 22,
+                        color: badgeColor,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -4189,6 +4177,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                           const SizedBox(height: 6),
                           Text(
                             name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w800,
                               color: Colors.black87,
@@ -4199,8 +4189,11 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                       ),
                     ),
                     IconButton(
+                      tooltip: context.l10n.t('Cancel'),
                       icon: const HugeIcon(
                         icon: HugeIcons.strokeRoundedCancel01,
+                        size: 20,
+                        color: Colors.black45,
                       ),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
@@ -4217,8 +4210,8 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              Icons.error_outline,
+                            const HugeIcon(
+                              icon: HugeIcons.strokeRoundedAlertCircle,
                               color: Colors.red,
                               size: 36,
                             ),
@@ -4234,79 +4227,85 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                           ],
                         ),
                       )
-                    : ListView(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                        children: [
-                          // Map card
-                          if (points.isNotEmpty)
-                            _buildMapCard(context, points, type),
-                          const SizedBox(height: 12),
-                          // Info card
-                          _buildInfoCard(
-                            context,
-                            place: place,
-                            phone: phone,
-                            description: description,
-                            claimantName: _companyAtOpen == null
-                                ? null
-                                : (widget.isCloud
-                                      ? (_cloudDetail?.claimantName ??
-                                            widget.cloudItem!.claimantName)
-                                      : widget.localItem!['claimant_name']
-                                            ?.toString()),
-                            claimantPhone: _companyAtOpen == null
-                                ? null
-                                : (widget.isCloud
-                                      ? (_cloudDetail?.claimantPhone ??
-                                            widget.cloudItem!.claimantPhone)
-                                      : widget.localItem!['claimant_phone']
-                                            ?.toString()),
-                            claimantIdMasked: _companyAtOpen == null
-                                ? null
-                                : (widget.isCloud
-                                      ? (_cloudDetail?.claimantIdMasked ??
-                                            widget.cloudItem!.claimantIdMasked)
-                                      : widget.localItem!['claimant_id_masked']
-                                            ?.toString()),
-                            plotNumber: _companyAtOpen == null
-                                ? null
-                                : (widget.isCloud
-                                      ? (_cloudDetail?.plotNumber ??
-                                            widget.cloudItem!.plotNumber)
-                                      : widget.localItem!['plot_number']
-                                            ?.toString()),
-                            landUse: _companyAtOpen == null
-                                ? null
-                                : (widget.isCloud
-                                      ? (_cloudDetail?.landUse ??
-                                            widget.cloudItem!.landUse)
-                                      : widget.localItem!['land_use']
-                                            ?.toString()),
-                            createdAt: createdAt,
-                            updatedAt: updatedAt,
-                            type: type,
-                            points: points,
-                          ),
-                          const SizedBox(height: 12),
-                          // Points card
-                          if (_companyAtOpen != null && isCloudSynced)
-                            RecordOrganizationSection(
-                              company: _companyAtOpen,
-                              record: widget.isCloud
-                                  ? widget.cloudItem!.id
-                                  : widget.localItem!['cloudId'].toString(),
-                              canManage: widget.isCloud
-                                  ? (_cloudDetail?.canManage ?? false)
-                                  : widget.localItem!['canManage'] != false,
-                              onChanged: widget.onRemoteChanged,
+                    : ColoredBox(
+                        color: const Color(0xFFF7F7F8),
+                        child: ListView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                          children: [
+                            // Map card
+                            if (points.isNotEmpty)
+                              _buildMapCard(context, points, type),
+                            const SizedBox(height: 12),
+                            // Info card
+                            _buildInfoCard(
+                              context,
+                              place: place,
+                              phone: phone,
+                              description: description,
+                              claimantName: _companyAtOpen == null
+                                  ? null
+                                  : (widget.isCloud
+                                        ? (_cloudDetail?.claimantName ??
+                                              widget.cloudItem!.claimantName)
+                                        : widget.localItem!['claimant_name']
+                                              ?.toString()),
+                              claimantPhone: _companyAtOpen == null
+                                  ? null
+                                  : (widget.isCloud
+                                        ? (_cloudDetail?.claimantPhone ??
+                                              widget.cloudItem!.claimantPhone)
+                                        : widget.localItem!['claimant_phone']
+                                              ?.toString()),
+                              claimantIdMasked: _companyAtOpen == null
+                                  ? null
+                                  : (widget.isCloud
+                                        ? (_cloudDetail?.claimantIdMasked ??
+                                              widget
+                                                  .cloudItem!
+                                                  .claimantIdMasked)
+                                        : widget
+                                              .localItem!['claimant_id_masked']
+                                              ?.toString()),
+                              plotNumber: _companyAtOpen == null
+                                  ? null
+                                  : (widget.isCloud
+                                        ? (_cloudDetail?.plotNumber ??
+                                              widget.cloudItem!.plotNumber)
+                                        : widget.localItem!['plot_number']
+                                              ?.toString()),
+                              landUse: _companyAtOpen == null
+                                  ? null
+                                  : (widget.isCloud
+                                        ? (_cloudDetail?.landUse ??
+                                              widget.cloudItem!.landUse)
+                                        : widget.localItem!['land_use']
+                                              ?.toString()),
+                              createdAt: createdAt,
+                              updatedAt: updatedAt,
+                              type: type,
+                              points: points,
                             ),
-                          if (points.isNotEmpty)
-                            _buildPointsCard(context, points),
-                          const SizedBox(height: 12),
-                          // Actions card
-                          _buildActionsCard(context),
-                        ],
+                            const SizedBox(height: 12),
+                            // Points card
+                            if (_companyAtOpen != null && isCloudSynced)
+                              RecordOrganizationSection(
+                                company: _companyAtOpen,
+                                record: widget.isCloud
+                                    ? widget.cloudItem!.id
+                                    : widget.localItem!['cloudId'].toString(),
+                                canManage: widget.isCloud
+                                    ? (_cloudDetail?.canManage ?? false)
+                                    : widget.localItem!['canManage'] != false,
+                                onChanged: widget.onRemoteChanged,
+                              ),
+                            if (points.isNotEmpty)
+                              _buildPointsCard(context, points),
+                            const SizedBox(height: 12),
+                            // Actions card
+                            _buildActionsCard(context),
+                          ],
+                        ),
                       ),
               ),
             ],
@@ -4319,16 +4318,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
   Widget _buildMapCard(BuildContext context, List<LatLng> points, String type) {
     final color = _typeBadgeColor(type);
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: SizedBox(
@@ -4337,11 +4327,15 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             options: MapOptions(
               initialCenter: points.first,
               initialZoom: 15,
+              initialCameraFit: points.any((p) => p != points.first)
+                  ? CameraFit.bounds(
+                      bounds: LatLngBounds.fromPoints(points),
+                      padding: const EdgeInsets.all(28),
+                      maxZoom: 18,
+                    )
+                  : null,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.none,
-              ),
-              cameraConstraint: CameraConstraint.contain(
-                bounds: LatLngBounds.fromPoints(points),
               ),
             ),
             children: [
@@ -4443,20 +4437,17 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE8ECF0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.grey.shade500),
+              HugeIcon(
+                icon: HugeIcons.strokeRoundedInformationCircle,
+                size: 16,
+                color: Colors.grey.shade500,
+              ),
               const SizedBox(width: 6),
               Text(
                 context.l10n.t('Details'),
@@ -4580,14 +4571,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFE8ECF0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4653,13 +4637,6 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
                       color: dotColor,
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: dotColor.withValues(alpha: 0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
                     ),
                     child: Center(
                       child: Text(
@@ -4751,22 +4728,16 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFE8ECF0)),
       ),
       child: Column(
         children: [
+          SheetSectionLabel(context.l10n.t('Actions')),
           // Go to map — always shown
           if (widget.isCloud ||
               (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
             _ActionRow(
-              icon: Icons.list_alt_outlined,
+              icon: HugeIcons.strokeRoundedNote01,
               label: 'Custom fields',
               color: theme.colorScheme.primary,
               onTap: () => Navigator.of(context).push(
@@ -4783,7 +4754,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           if (widget.isCloud ||
               (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
             _ActionRow(
-              icon: Icons.picture_as_pdf_outlined,
+              icon: HugeIcons.strokeRoundedPdf01,
               label: context.l10n.t('Parcel PDF'),
               color: theme.colorScheme.primary,
               onTap: () => Navigator.of(context).push(
@@ -4804,7 +4775,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           if (widget.isCloud ||
               (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
             _ActionRow(
-              icon: Icons.link,
+              icon: HugeIcons.strokeRoundedLink01,
               label: 'Share link',
               color: theme.colorScheme.primary,
               onTap: () => Navigator.of(context).push(
@@ -4821,7 +4792,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           if (widget.isCloud ||
               (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
             _ActionRow(
-              icon: Icons.file_download_outlined,
+              icon: HugeIcons.strokeRoundedFileExport,
               label: context.l10n.t('Export file'),
               color: theme.colorScheme.primary,
               onTap: () {
@@ -4845,7 +4816,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           if (widget.isCloud ||
               (widget.localItem?['cloudId']?.toString().isNotEmpty ?? false))
             _ActionRow(
-              icon: Icons.history,
+              icon: HugeIcons.strokeRoundedClock01,
               label: context.l10n.t('Record history'),
               color: theme.colorScheme.primary,
               onTap: () async {
@@ -4872,7 +4843,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
               },
             ),
           _ActionRow(
-            icon: Icons.navigation_outlined,
+            icon: HugeIcons.strokeRoundedNavigation01,
             label: context.l10n.t('Go to map'),
             color: theme.colorScheme.primary,
             onTap: () {
@@ -4943,7 +4914,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           const Divider(height: 1, indent: 56),
           // View on map — loads points without navigation
           _ActionRow(
-            icon: Icons.remove_red_eye_outlined,
+            icon: HugeIcons.strokeRoundedView,
             label: context.l10n.t('View on map'),
             onTap: () async {
               final points = widget.isCloud ? _cloudPoints : _localPoints;
@@ -4973,7 +4944,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
           const Divider(height: 1, indent: 56),
           if (widget.isCloud && _cloudDetail?.canManage == false)
             const ListTile(
-              leading: Icon(Icons.lock_outline),
+              leading: HugeIcon(icon: HugeIcons.strokeRoundedLockKey),
               title: Text('Read-only record'),
               subtitle: Text(
                 'Viewing, navigation and coordinate sharing remain available.',
@@ -4981,7 +4952,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ),
           if (widget.isCloud && _cloudDetail?.canManage != false) ...[
             _ActionRow(
-              icon: Icons.edit_outlined,
+              icon: HugeIcons.strokeRoundedEdit02,
               label: context.l10n.t('Edit metadata'),
               onTap: () async {
                 final detail = _cloudDetail;
@@ -5003,7 +4974,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ),
             const Divider(height: 1, indent: 56),
             _ActionRow(
-              icon: Icons.refresh,
+              icon: HugeIcons.strokeRoundedRefresh,
               label: context.l10n.t('Refresh'),
               onTap: () => ref.invalidate(
                 remoteLandDetailProvider(widget.cloudItem!.id),
@@ -5011,7 +4982,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ),
             const Divider(height: 1, indent: 56),
             _ActionRow(
-              icon: Icons.delete_outline,
+              icon: HugeIcons.strokeRoundedDelete02,
               label: _isDeleting
                   ? context.l10n.t('Deleting...')
                   : context.l10n.t('Delete land'),
@@ -5020,7 +4991,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ),
           ] else ...[
             _ActionRow(
-              icon: Icons.edit_outlined,
+              icon: HugeIcons.strokeRoundedEdit02,
               label: context.l10n.t('Rename'),
               onTap: () {
                 Navigator.of(context).pop();
@@ -5029,7 +5000,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ),
             const Divider(height: 1, indent: 56),
             _ActionRow(
-              icon: Icons.copy_outlined,
+              icon: HugeIcons.strokeRoundedCopy01,
               label: context.l10n.t('Copy coordinates'),
               onTap: () async {
                 final pts = (widget.localItem!['points'] as List?) ?? [];
@@ -5045,7 +5016,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
             ),
             const Divider(height: 1, indent: 56),
             _ActionRow(
-              icon: Icons.delete_outline,
+              icon: HugeIcons.strokeRoundedDelete02,
               label: context.l10n.t('Delete'),
               color: Colors.red,
               onTap: () => _deleteLocalItem(context),
@@ -5142,7 +5113,7 @@ class _LandDetailSheetState extends ConsumerState<_LandDetailSheet> {
 }
 
 class _ActionRow extends StatelessWidget {
-  final IconData icon;
+  final dynamic icon;
   final String label;
   final Color? color;
   final VoidCallback? onTap;
@@ -5156,7 +5127,7 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Colors.black87;
+    final c = color ?? Theme.of(context).colorScheme.primary;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -5165,27 +5136,32 @@ class _ActionRow extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: c.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 18, color: c),
+              alignment: Alignment.center,
+              child: HugeIcon(icon: icon, size: 20, color: c),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.w600,
                   color: c,
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowRight01,
+              size: 18,
+              color: Colors.grey.shade400,
+            ),
           ],
         ),
       ),
@@ -6098,34 +6074,37 @@ class _ManualCoordinateEntrySheetState
                       SizedBox(
                         width: double.infinity,
                         height: 52,
-                        child: ElevatedButton(
-                          onPressed: _isSaving ? null : _save,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                        child: FeatureAccessLock(
+                          features: const ['land.create_and_save'],
+                          child: ElevatedButton(
+                            onPressed: _isSaving ? null : _save,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
                             ),
-                            elevation: 0,
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    l10n.t('Save location'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
-                          child: _isSaving
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  l10n.t('Save location'),
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
                         ),
                       ),
                     ],

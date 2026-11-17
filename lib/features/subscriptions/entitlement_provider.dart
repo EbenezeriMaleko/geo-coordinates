@@ -6,6 +6,7 @@ import '../../core/network/api_client.dart';
 import '../auth/providers/auth_provider.dart';
 import '../workspaces/workspace_provider.dart';
 import 'plans_access_page.dart';
+import 'access_navigation.dart';
 
 class FeatureDecision {
   const FeatureDecision({
@@ -100,8 +101,9 @@ final workspacePermissionsProvider =
 Future<bool> checkFeatureAccess(
   BuildContext context,
   WidgetRef ref,
-  String key,
-) async {
+  String key, {
+  bool openPlansOnDenied = true,
+}) async {
   final company = ref.read(workspaceProvider).activeCompanyId;
   final token = ref.read(authSessionProvider).token;
   ref.invalidate(entitlementProvider);
@@ -128,6 +130,11 @@ Future<bool> checkFeatureAccess(
   }
   final decision = features[key];
   if (decision?.allowed == true) return true;
+  final session = ref.read(authSessionProvider);
+  if (!session.isLoggedIn || openPlansOnDenied) {
+    await openAccessRequirement(context, session);
+    return false;
+  }
   if (decision == null) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

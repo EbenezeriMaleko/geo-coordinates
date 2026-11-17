@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'dart:async';
 import '../../subscriptions/entitlement_provider.dart';
 import 'dart:math';
@@ -1404,6 +1405,7 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       type == MapType.normal
           ? 'map.standard_basemap'
           : 'map.satellite_and_hybrid',
+      openPlansOnDenied: true,
     );
     if (!mounted || !allowed) return;
     setState(() {
@@ -1426,7 +1428,12 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
     Navigator.pop(sheetContext);
     if (useGoogle == _useGoogleMap) return;
     if (useGoogle) {
-      final allowed = await checkFeatureAccess(context, ref, 'map.google_maps');
+      final allowed = await checkFeatureAccess(
+        context,
+        ref,
+        'map.google_maps',
+        openPlansOnDenied: true,
+      );
       if (!mounted || !allowed) return;
       try {
         _providerCenter = _mapController.camera.center;
@@ -3586,221 +3593,287 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, modalSetState) => ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-          ),
-          child: SingleChildScrollView(
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    l10n.t('Map Type'),
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  if (!kIsWeb &&
-                      (defaultTargetPlatform == TargetPlatform.android ||
-                          defaultTargetPlatform == TargetPlatform.iOS))
-                    SegmentedButton<bool>(
-                      direction:
-                          MediaQuery.sizeOf(context).width < 360 ||
-                              MediaQuery.textScalerOf(context).scale(14) > 19
-                          ? Axis.vertical
-                          : Axis.horizontal,
-                      segments: const [
-                        ButtonSegment(
-                          value: false,
-                          icon: HugeIcon(
-                            size: 20,
-                            icon: HugeIcons.strokeRoundedMaps,
-                          ),
-                          label: Text('Standard'),
-                        ),
-                        ButtonSegment(
-                          value: true,
-                          icon: HugeIcon(
-                            size: 20,
-                            icon: HugeIcons.strokeRoundedGlobe02,
-                          ),
-                          label: Text('Google Maps'),
-                        ),
-                      ],
-                      selected: {_useGoogleMap},
-                      onSelectionChanged: (selection) =>
-                          _changeMapProvider(selection.first, context),
-                    ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 18,
-                    runSpacing: 16,
+      builder: (context) => Consumer(
+        builder: (context, accessRef, _) {
+          final access = accessRef.watch(entitlementProvider);
+          final features = access.asData?.value;
+          bool locked(String key) =>
+              features != null && features[key]?.allowed != true;
+          void openPlans() {
+            Navigator.pop(context);
+            openPlansAccess(this.context);
+          }
+
+          void selectType(MapType type) {
+            final key = type == MapType.normal
+                ? 'map.standard_basemap'
+                : 'map.satellite_and_hybrid';
+            if (locked(key)) {
+              openPlans();
+              return;
+            }
+            _changeMapType(type, context);
+          }
+
+          return StatefulBuilder(
+            builder: (context, modalSetState) => ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+              ),
+              child: SingleChildScrollView(
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _MapTypeOption(
-                        label: l10n.t('Normal'),
-                        preview: Image.asset(
-                          'lib/assets/mapsImages/Normal.jpg',
-                          fit: BoxFit.cover,
+                      Text(
+                        l10n.t('Map Type'),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        isSelected: _currentMapType == MapType.normal,
-                        onTap: () {
-                          _changeMapType(MapType.normal, context);
-                        },
                       ),
-                      _MapTypeOption(
-                        label: l10n.t('Satellite'),
-                        preview: Image.asset(
-                          'lib/assets/mapsImages/satellite.png',
-                          fit: BoxFit.cover,
+                      const SizedBox(height: 16),
+                      if (access.isLoading)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: LinearProgressIndicator(),
                         ),
-                        isSelected: _currentMapType == MapType.satellite,
-                        onTap: () {
-                          _changeMapType(MapType.satellite, context);
-                        },
+                      if (access.hasError)
+                        TextButton.icon(
+                          onPressed: () => accessRef.invalidate(
+                            workspaceAccessSnapshotProvider,
+                          ),
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedRefresh,
+                            size: 18,
+                          ),
+                          label: const Text('Unable to verify access. Retry'),
+                        ),
+                      if (!kIsWeb &&
+                          (defaultTargetPlatform == TargetPlatform.android ||
+                              defaultTargetPlatform == TargetPlatform.iOS))
+                        SegmentedButton<bool>(
+                          direction:
+                              MediaQuery.sizeOf(context).width < 360 ||
+                                  MediaQuery.textScalerOf(context).scale(14) >
+                                      19
+                              ? Axis.vertical
+                              : Axis.horizontal,
+                          segments: [
+                            ButtonSegment(
+                              value: false,
+                              icon: HugeIcon(
+                                size: 20,
+                                icon: locked('map.standard_basemap')
+                                    ? HugeIcons.strokeRoundedLockKey
+                                    : HugeIcons.strokeRoundedMaps,
+                              ),
+                              label: Text('Standard'),
+                            ),
+                            ButtonSegment(
+                              value: true,
+                              icon: HugeIcon(
+                                size: 20,
+                                icon: locked('map.google_maps')
+                                    ? HugeIcons.strokeRoundedLockKey
+                                    : HugeIcons.strokeRoundedGlobe02,
+                              ),
+                              label: Text('Google Maps'),
+                            ),
+                          ],
+                          selected: {_useGoogleMap},
+                          onSelectionChanged: (selection) {
+                            final key = selection.first
+                                ? 'map.google_maps'
+                                : 'map.standard_basemap';
+                            if (locked(key)) {
+                              openPlans();
+                              return;
+                            }
+                            _changeMapProvider(selection.first, context);
+                          },
+                        ),
+                      const SizedBox(height: 20),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _MapTypeOption(
+                              label: l10n.t('Normal'),
+                              preview: Image.asset(
+                                'lib/assets/mapsImages/Normal.jpg',
+                                fit: BoxFit.cover,
+                              ),
+                              isSelected: _currentMapType == MapType.normal,
+                              isLocked: locked('map.standard_basemap'),
+                              onTap: () {
+                                selectType(MapType.normal);
+                              },
+                            ),
+                            const SizedBox(width: 18),
+                            _MapTypeOption(
+                              label: l10n.t('Satellite'),
+                              preview: Image.asset(
+                                'lib/assets/mapsImages/satellite.png',
+                                fit: BoxFit.cover,
+                              ),
+                              isSelected: _currentMapType == MapType.satellite,
+                              isLocked: locked('map.satellite_and_hybrid'),
+                              onTap: () {
+                                selectType(MapType.satellite);
+                              },
+                            ),
+                            const SizedBox(width: 18),
+                            _MapTypeOption(
+                              label: l10n.t('Terrain'),
+                              preview: Image.asset(
+                                'lib/assets/mapsImages/terrain.jpg',
+                                fit: BoxFit.cover,
+                              ),
+                              isSelected: _currentMapType == MapType.terrain,
+                              isLocked: locked('map.satellite_and_hybrid'),
+                              onTap: () {
+                                selectType(MapType.terrain);
+                              },
+                            ),
+                            const SizedBox(width: 18),
+                            _MapTypeOption(
+                              label: l10n.t('Hybrid'),
+                              preview: Image.asset(
+                                'lib/assets/mapsImages/satellite.png',
+                                fit: BoxFit.cover,
+                              ),
+                              isSelected: _currentMapType == MapType.hybrid,
+                              isLocked: locked('map.satellite_and_hybrid'),
+                              onTap: () {
+                                selectType(MapType.hybrid);
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                      _MapTypeOption(
-                        label: l10n.t('Terrain'),
-                        preview: Image.asset(
-                          'lib/assets/mapsImages/terrain.jpg',
-                          fit: BoxFit.cover,
+                      const SizedBox(height: 24),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      Text(
+                        l10n.t('Layers'),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        isSelected: _currentMapType == MapType.terrain,
-                        onTap: () {
-                          _changeMapType(MapType.terrain, context);
-                        },
                       ),
-                      _MapTypeOption(
-                        label: l10n.t('Hybrid'),
-                        preview: Image.asset(
-                          'lib/assets/mapsImages/satellite.png',
-                          fit: BoxFit.cover,
-                        ),
-                        isSelected: _currentMapType == MapType.hybrid,
-                        onTap: () {
-                          _changeMapType(MapType.hybrid, context);
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.t('Layers'),
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 24,
-                    runSpacing: 16,
-                    children: [
-                      _LayerOption(
-                        label: l10n.t('Field'),
-                        icon: const HugeIcon(
-                          icon: HugeIcons.strokeRoundedSquare,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        color: Colors.blue,
-                        isSelected: _showFieldLayer,
-                        count: ref.read(landMapProvider).points.length,
-                        onClear: ref.read(landMapProvider).points.isNotEmpty
-                            ? () {
-                                ref
-                                    .read(landMapProvider.notifier)
-                                    .clearPoints();
-                                ref
-                                    .read(landMapProvider.notifier)
-                                    .exitEditingMode();
-                                setState(() {});
-                                modalSetState(() {});
-                              }
-                            : null,
-                        onTap: () {
-                          setState(() {
-                            _showFieldLayer = !_showFieldLayer;
-                          });
-                          _saveLayerPreference(
-                            _layerFieldPrefKey,
-                            _showFieldLayer,
-                          );
-                          modalSetState(() {});
-                        },
-                      ),
-                      _LayerOption(
-                        label: l10n.t('Distance'),
-                        icon: const HugeIcon(
-                          icon: HugeIcons.strokeRoundedRoute01,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        color: Colors.orange,
-                        isSelected: _showDistanceLayer,
-                        count: _distancePoints.length,
-                        onClear: _distancePoints.isNotEmpty
-                            ? () {
-                                setState(() {
-                                  _distancePoints = const [];
-                                  _distanceLabels = const [];
-                                  if (_activeTool == _MapTool.distance) {
-                                    _activeTool = _MapTool.none;
+                      const SizedBox(height: 16),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 24,
+                        runSpacing: 16,
+                        children: [
+                          _LayerOption(
+                            label: l10n.t('Field'),
+                            icon: const HugeIcon(
+                              icon: HugeIcons.strokeRoundedSquare,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            color: Colors.blue,
+                            isSelected: _showFieldLayer,
+                            count: ref.read(landMapProvider).points.length,
+                            onClear: ref.read(landMapProvider).points.isNotEmpty
+                                ? () {
+                                    ref
+                                        .read(landMapProvider.notifier)
+                                        .clearPoints();
+                                    ref
+                                        .read(landMapProvider.notifier)
+                                        .exitEditingMode();
+                                    setState(() {});
+                                    modalSetState(() {});
                                   }
-                                });
-                                modalSetState(() {});
-                              }
-                            : null,
-                        onTap: () {
-                          setState(() {
-                            _showDistanceLayer = !_showDistanceLayer;
-                            if (!_showDistanceLayer &&
-                                _activeTool == _MapTool.distance) {
-                              _activeTool = _MapTool.none;
-                            }
-                          });
-                          _saveLayerPreference(
-                            _layerDistancePrefKey,
-                            _showDistanceLayer,
-                          );
-                          modalSetState(() {});
-                        },
+                                : null,
+                            onTap: () {
+                              setState(() {
+                                _showFieldLayer = !_showFieldLayer;
+                              });
+                              _saveLayerPreference(
+                                _layerFieldPrefKey,
+                                _showFieldLayer,
+                              );
+                              modalSetState(() {});
+                            },
+                          ),
+                          _LayerOption(
+                            label: l10n.t('Distance'),
+                            icon: const HugeIcon(
+                              icon: HugeIcons.strokeRoundedRoute01,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            color: Colors.orange,
+                            isSelected: _showDistanceLayer,
+                            count: _distancePoints.length,
+                            onClear: _distancePoints.isNotEmpty
+                                ? () {
+                                    setState(() {
+                                      _distancePoints = const [];
+                                      _distanceLabels = const [];
+                                      if (_activeTool == _MapTool.distance) {
+                                        _activeTool = _MapTool.none;
+                                      }
+                                    });
+                                    modalSetState(() {});
+                                  }
+                                : null,
+                            onTap: () {
+                              setState(() {
+                                _showDistanceLayer = !_showDistanceLayer;
+                                if (!_showDistanceLayer &&
+                                    _activeTool == _MapTool.distance) {
+                                  _activeTool = _MapTool.none;
+                                }
+                              });
+                              _saveLayerPreference(
+                                _layerDistancePrefKey,
+                                _showDistanceLayer,
+                              );
+                              modalSetState(() {});
+                            },
+                          ),
+                          _LayerOption(
+                            label: l10n.t('Marker'),
+                            icon: const HugeIcon(
+                              icon: HugeIcons.strokeRoundedPinLocation02,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            color: Colors.red,
+                            isSelected: _showMarkerLayer,
+                            count: _savedMarkers.length,
+                            onTap: () {
+                              setState(() {
+                                _showMarkerLayer = !_showMarkerLayer;
+                                if (!_showMarkerLayer &&
+                                    _activeTool == _MapTool.marker) {
+                                  _activeTool = _MapTool.none;
+                                }
+                              });
+                              _saveLayerPreference(
+                                _layerMarkerPrefKey,
+                                _showMarkerLayer,
+                              );
+                              modalSetState(() {});
+                            },
+                          ),
+                        ],
                       ),
-                      _LayerOption(
-                        label: l10n.t('Marker'),
-                        icon: const HugeIcon(
-                          icon: HugeIcons.strokeRoundedPinLocation02,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        color: Colors.red,
-                        isSelected: _showMarkerLayer,
-                        count: _savedMarkers.length,
-                        onTap: () {
-                          setState(() {
-                            _showMarkerLayer = !_showMarkerLayer;
-                            if (!_showMarkerLayer &&
-                                _activeTool == _MapTool.marker) {
-                              _activeTool = _MapTool.none;
-                            }
-                          });
-                          _saveLayerPreference(
-                            _layerMarkerPrefKey,
-                            _showMarkerLayer,
-                          );
-                          modalSetState(() {});
-                        },
-                      ),
+                      const SizedBox(height: 20),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -4269,123 +4342,131 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                                     Expanded(
                                       child: SizedBox(
                                         height: 52,
-                                        child: ElevatedButton(
-                                          onPressed: mapState.isSaving
-                                              ? null
-                                              : () async {
-                                                  final enteredPlace =
-                                                      _placeController.text
-                                                          .trim();
-                                                  final enteredPhone =
-                                                      _phoneController.text
-                                                          .trim();
-                                                  final enteredDescription =
-                                                      _descriptionController
-                                                          .text
-                                                          .trim();
-                                                  final pointLabels =
-                                                      _normalizePointLabels(
-                                                        labelControllers,
-                                                        pointsCount,
-                                                      );
+                                        child: FeatureAccessLock(
+                                          features: const [
+                                            'land.create_and_save',
+                                          ],
+                                          child: ElevatedButton(
+                                            onPressed: mapState.isSaving
+                                                ? null
+                                                : () async {
+                                                    final enteredPlace =
+                                                        _placeController.text
+                                                            .trim();
+                                                    final enteredPhone =
+                                                        _phoneController.text
+                                                            .trim();
+                                                    final enteredDescription =
+                                                        _descriptionController
+                                                            .text
+                                                            .trim();
+                                                    final pointLabels =
+                                                        _normalizePointLabels(
+                                                          labelControllers,
+                                                          pointsCount,
+                                                        );
 
-                                                  if (enteredPlace.isEmpty) {
+                                                    if (enteredPlace.isEmpty) {
+                                                      if (!sheetStateContext
+                                                          .mounted) {
+                                                        return;
+                                                      }
+                                                      setSheetState(() {
+                                                        fieldSheetMessage = l10n.t(
+                                                          'Place is required.',
+                                                        );
+                                                        fieldSheetIsError =
+                                                            true;
+                                                      });
+                                                      return;
+                                                    }
+
+                                                    final effectiveName =
+                                                        enteredPlace;
+
+                                                    final err = await notifier.saveOffline(
+                                                      name: effectiveName,
+                                                      place: enteredPlace,
+                                                      phone: enteredPhone,
+                                                      description:
+                                                          enteredDescription,
+                                                      claimantName:
+                                                          _claimantNameController
+                                                              .text,
+                                                      claimantPhone:
+                                                          _claimantPhoneController
+                                                              .text,
+                                                      plotNumber:
+                                                          _plotNumberController
+                                                              .text,
+                                                      landUse:
+                                                          _landUseController
+                                                              .text,
+                                                      pointLabels: pointLabels,
+                                                    );
                                                     if (!sheetStateContext
                                                         .mounted) {
                                                       return;
                                                     }
-                                                    setSheetState(() {
-                                                      fieldSheetMessage = l10n.t(
-                                                        'Place is required.',
-                                                      );
-                                                      fieldSheetIsError = true;
-                                                    });
-                                                    return;
-                                                  }
 
-                                                  final effectiveName =
-                                                      enteredPlace;
-
-                                                  final err = await notifier
-                                                      .saveOffline(
-                                                        name: effectiveName,
-                                                        place: enteredPlace,
-                                                        phone: enteredPhone,
-                                                        description:
-                                                            enteredDescription,
-                                                        claimantName:
-                                                            _claimantNameController
-                                                                .text,
-                                                        claimantPhone:
-                                                            _claimantPhoneController
-                                                                .text,
-                                                        plotNumber:
-                                                            _plotNumberController
-                                                                .text,
-                                                        landUse:
-                                                            _landUseController
-                                                                .text,
-                                                        pointLabels:
-                                                            pointLabels,
-                                                      );
-                                                  if (!sheetStateContext
-                                                      .mounted) {
-                                                    return;
-                                                  }
-
-                                                  if (err != null) {
-                                                    setSheetState(() {
-                                                      fieldSheetMessage = err;
-                                                      fieldSheetIsError = true;
-                                                    });
-                                                  } else {
-                                                    if (sheetContext.mounted) {
-                                                      Navigator.of(
-                                                        sheetContext,
-                                                      ).pop(
-                                                        mapState.activeFieldId !=
-                                                                null
-                                                            ? l10n.t(
-                                                                'Field updated offline successfully. Sync queued.',
-                                                              )
-                                                            : l10n.t(
-                                                                'Field saved offline successfully. Sync queued.',
-                                                              ),
-                                                      );
+                                                    if (err != null) {
+                                                      setSheetState(() {
+                                                        fieldSheetMessage = err;
+                                                        fieldSheetIsError =
+                                                            true;
+                                                      });
+                                                    } else {
+                                                      if (sheetContext
+                                                          .mounted) {
+                                                        Navigator.of(
+                                                          sheetContext,
+                                                        ).pop(
+                                                          mapState.activeFieldId !=
+                                                                  null
+                                                              ? l10n.t(
+                                                                  'Field updated offline successfully. Sync queued.',
+                                                                )
+                                                              : l10n.t(
+                                                                  'Field saved offline successfully. Sync queued.',
+                                                                ),
+                                                        );
+                                                      }
                                                     }
-                                                  }
-                                                },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: _workspaceAccent,
-                                            foregroundColor: Colors.white,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
+                                                  },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: _workspaceAccent,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                              ),
+                                              elevation: mapState.isSaving
+                                                  ? 0
+                                                  : 2,
                                             ),
-                                            elevation: mapState.isSaving
-                                                ? 0
-                                                : 2,
-                                          ),
-                                          child: mapState.isSaving
-                                              ? const SizedBox(
-                                                  width: 22,
-                                                  height: 22,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2.5,
-                                                        color: Colors.white,
-                                                      ),
-                                                )
-                                              : Text(
-                                                  mapState.activeFieldId != null
-                                                      ? l10n.t('Update Area')
-                                                      : l10n.t('Save Area'),
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w700,
-                                                    letterSpacing: 0.3,
+                                            child: mapState.isSaving
+                                                ? const SizedBox(
+                                                    width: 22,
+                                                    height: 22,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2.5,
+                                                          color: Colors.white,
+                                                        ),
+                                                  )
+                                                : Text(
+                                                    mapState.activeFieldId !=
+                                                            null
+                                                        ? l10n.t('Update Area')
+                                                        : l10n.t('Save Area'),
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      letterSpacing: 0.3,
+                                                    ),
                                                   ),
-                                                ),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -4634,31 +4715,34 @@ class _LandMapPageState extends ConsumerState<LandMapPage>
                   SizedBox(
                     width: double.infinity,
                     height: 52,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        final place = _placeController.text.trim();
-                        if (place.isEmpty) {
-                          ScaffoldMessenger.of(sheetContext).showSnackBar(
-                            SnackBar(
-                              content: Text(l10n.t('Place is required.')),
-                            ),
-                          );
-                          return;
-                        }
+                    child: FeatureAccessLock(
+                      features: const ['land.create_and_save'],
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final place = _placeController.text.trim();
+                          if (place.isEmpty) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              SnackBar(
+                                content: Text(l10n.t('Place is required.')),
+                              ),
+                            );
+                            return;
+                          }
 
-                        await _saveDistanceRecord(
-                          name: place,
-                          place: place,
-                          phone: _phoneController.text.trim(),
-                          description: _descriptionController.text.trim(),
-                        );
-                        if (!sheetContext.mounted) return;
-                        _placeController.clear();
-                        _phoneController.clear();
-                        _descriptionController.clear();
-                        Navigator.pop(sheetContext);
-                      },
-                      child: Text(l10n.t('Save distance')),
+                          await _saveDistanceRecord(
+                            name: place,
+                            place: place,
+                            phone: _phoneController.text.trim(),
+                            description: _descriptionController.text.trim(),
+                          );
+                          if (!sheetContext.mounted) return;
+                          _placeController.clear();
+                          _phoneController.clear();
+                          _descriptionController.clear();
+                          Navigator.pop(sheetContext);
+                        },
+                        child: Text(l10n.t('Save distance')),
+                      ),
                     ),
                   ),
                 ],
@@ -4734,12 +4818,14 @@ class _MapTypeOption extends StatelessWidget {
   final Widget preview;
   final bool isSelected;
   final VoidCallback onTap;
+  final bool isLocked;
 
   const _MapTypeOption({
     required this.label,
     required this.preview,
     required this.isSelected,
     required this.onTap,
+    this.isLocked = false,
   });
 
   @override
@@ -4747,7 +4833,7 @@ class _MapTypeOption extends StatelessWidget {
     return Semantics(
       button: true,
       selected: isSelected,
-      label: label,
+      label: isLocked ? '$label, locked' : label,
       child: GestureDetector(
         onTap: onTap,
         child: SizedBox(
@@ -4779,6 +4865,16 @@ class _MapTypeOption extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     preview,
+                    if (isLocked)
+                      Container(
+                        color: Colors.black.withValues(alpha: .28),
+                        alignment: Alignment.center,
+                        child: const HugeIcon(
+                          icon: HugeIcons.strokeRoundedLockKey,
+                          size: 22,
+                          color: Colors.white,
+                        ),
+                      ),
                     if (isSelected)
                       Container(
                         color: const Color(0xFF0EA5E9).withValues(alpha: 0.18),
@@ -5849,20 +5945,23 @@ class _BottomActionBarState extends State<_BottomActionBar>
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: widget.onSaveDistance,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            child: FeatureAccessLock(
+              features: ['land.create_and_save'],
+              child: ElevatedButton(
+                onPressed: widget.onSaveDistance,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
                 ),
-                elevation: 0,
-              ),
-              child: Text(
-                l10n.t('Save distance'),
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                child: Text(
+                  l10n.t('Save distance'),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
               ),
             ),
           ),
@@ -5944,20 +6043,23 @@ class _BottomActionBarState extends State<_BottomActionBar>
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: widget.onSaveField,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            child: FeatureAccessLock(
+              features: ['land.create_and_save'],
+              child: ElevatedButton(
+                onPressed: widget.onSaveField,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
                 ),
-                elevation: 0,
-              ),
-              child: Text(
-                l10n.t('Save area'),
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                child: Text(
+                  l10n.t('Save area'),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
               ),
             ),
           ),
@@ -6011,12 +6113,15 @@ class _BottomActionBarState extends State<_BottomActionBar>
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
-          child: _ActionBtn(
-            label: l10n.t('+ GPS'),
-            isLoading: widget.isLocating || widget.isMarkerSaving,
-            enabled: !widget.isLocating && !widget.isMarkerSaving,
-            isPrimary: true,
-            onTap: widget.onAddMarkerAtGps,
+          child: FeatureAccessLock(
+            features: ['land.create_and_save'],
+            child: _ActionBtn(
+              label: l10n.t('+ GPS'),
+              isLoading: widget.isLocating || widget.isMarkerSaving,
+              enabled: !widget.isLocating && !widget.isMarkerSaving,
+              isPrimary: true,
+              onTap: widget.onAddMarkerAtGps,
+            ),
           ),
         ),
       ],

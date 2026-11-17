@@ -1,3 +1,4 @@
+import '../widget/plan_access_lock.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -905,41 +906,52 @@ class _CompanyInviteFormState extends ConsumerState<CompanyInviteForm> {
                                   ),
                                 SizedBox(
                                   width: double.infinity,
-                                  child: FilledButton.icon(
-                                    onPressed: canSend
-                                        ? () => send(roles, selectedRole)
-                                        : null,
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: _accent,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                    ),
-                                    icon: busy
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : HugeIcon(
-                                            icon: HugeIcons
-                                                .strokeRoundedUserAdd01,
-                                            color: canSend
-                                                ? Colors.white
-                                                : Colors.black38,
-                                            size: 18,
+                                  child: PlanAccessLock(
+                                    locked:
+                                        !busy &&
+                                        access
+                                                .asData
+                                                ?.value['company.employee_management']
+                                                ?.allowed ==
+                                            false,
+                                    child: FilledButton.icon(
+                                      onPressed: canSend
+                                          ? () => send(roles, selectedRole)
+                                          : null,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: _accent,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
                                           ),
-                                    label: Text(
-                                      busy ? 'Sending...' : 'Send invitation',
-                                      style: const TextStyle(
-                                        fontSize: 14.5,
-                                        fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      icon: busy
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : HugeIcon(
+                                              icon: HugeIcons
+                                                  .strokeRoundedUserAdd01,
+                                              color: canSend
+                                                  ? Colors.white
+                                                  : Colors.black38,
+                                              size: 18,
+                                            ),
+                                      label: Text(
+                                        busy ? 'Sending...' : 'Send invitation',
+                                        style: const TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
                                   ),

@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../../widget/library_record_style.dart';
@@ -175,116 +176,329 @@ class _RecordExportPageState extends ConsumerState<RecordExportPage> {
                   child: Text('Workspace or account changed. Reopen export.'),
                 ),
               )
-            : ListView(
+            : SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                children: [
-                  LibraryRecordHeader(
-                    icon: HugeIcons.strokeRoundedFileExport,
-                    title: widget.name,
-                    subtitle: workspace.label,
-                  ),
-                  RadioGroup<RecordExportFormat>(
-                    groupValue: format,
-                    onChanged: (value) {
-                      if (!busy && value != null) {
-                        setState(() {
-                          format = value;
-                          file = null;
-                          error = null;
-                          message = null;
-                        });
-                      }
-                    },
-                    child: Column(
-                      children: [
-                        for (final option in RecordExportFormat.values)
-                          RadioListTile<RecordExportFormat>(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 6,
-                            ),
-                            value: option,
-                            enabled:
-                                !busy &&
-                                recordExportBlock(option, access) == null,
-                            title: Text(option.label),
-                            subtitle: Text(
-                              recordExportBlock(option, access) ??
-                                  (option == RecordExportFormat.csv
-                                      ? 'Individual CSV access remains available.'
-                                      : 'Included in current export access.'),
-                            ),
-                            secondary: recordExportBlock(option, access) == null
-                                ? null
-                                : const HugeIcon(
-                                    icon: HugeIcons.strokeRoundedLockKey,
-                                    size: 20,
-                                  ),
-                          ),
-                      ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    LibraryRecordHeader(
+                      icon: HugeIcons.strokeRoundedFileExport,
+                      title: widget.name,
+                      subtitle: workspace.label,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Exports use the saved cloud record. Non-CSV downloads may count toward the monthly export allowance.',
-                  ),
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const PlansAccessPage(),
-                            ),
-                          ),
-                    child: const Text('Plans & Access'),
-                  ),
-                  if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
                       child: Text(
-                        error!,
+                        'CHOOSE FILE FORMAT',
                         style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                          color: Colors.black45,
                         ),
                       ),
                     ),
-                  if (message != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(message!),
-                    ),
-                  if (file != null)
-                    Text(
-                      file!.name,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  const SizedBox(height: 20),
-                  Builder(
-                    builder: (buttonContext) => FilledButton.icon(
-                      onPressed: busy || block != null
-                          ? null
-                          : () => export(buttonContext),
-                      icon: busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const HugeIcon(
-                              icon: HugeIcons.strokeRoundedShare01,
-                              size: 18,
+                    RadioGroup<RecordExportFormat>(
+                      groupValue: format,
+                      onChanged: (value) {
+                        if (!busy && value != null) {
+                          setState(() {
+                            format = value;
+                            file = null;
+                            error = null;
+                            message = null;
+                          });
+                        }
+                      },
+                      child: Column(
+                        children: [
+                          for (final option in RecordExportFormat.values)
+                            PlanAccessLock(
+                              locked:
+                                  access.asData != null &&
+                                  recordExportBlock(option, access) != null,
+                              child: _ExportFormatOption(
+                                option: option,
+                                selected: format == option,
+                                enabled:
+                                    !busy &&
+                                    recordExportBlock(option, access) == null,
+                                block: recordExportBlock(option, access),
+                              ),
                             ),
-                      label: Text(
-                        busy
-                            ? 'Preparing...'
-                            : file == null
-                            ? 'Export file'
-                            : 'Share file',
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE8ECF0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              HugeIcon(
+                                icon: HugeIcons.strokeRoundedInformationCircle,
+                                size: 18,
+                                color: Color(0xFF001F3F),
+                              ),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'About this export',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Exports use the saved cloud record. Non-CSV downloads may count toward the monthly export allowance.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.5,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          TextButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => const PlansAccessPage(),
+                                    ),
+                                  ),
+                            icon: const HugeIcon(
+                              icon: HugeIcons.strokeRoundedArrowRight01,
+                              size: 16,
+                            ),
+                            label: const Text('Plans & Access'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (error != null)
+                      _ExportNotice(text: error!, isError: true),
+                    if (message != null) _ExportNotice(text: message!),
+                    if (file != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE8ECF0)),
+                          ),
+                          child: Row(
+                            children: [
+                              const HugeIcon(
+                                icon: HugeIcons.strokeRoundedFileExport,
+                                size: 20,
+                                color: Color(0xFF001F3F),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'File ready',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      file!.name,
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    Builder(
+                      builder: (buttonContext) => PlanAccessLock(
+                        locked: access.asData != null && block != null && !busy,
+                        child: FilledButton.icon(
+                          onPressed: busy || block != null
+                              ? null
+                              : () => export(buttonContext),
+                          icon: busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedShare01,
+                                  size: 18,
+                                ),
+                          label: Text(
+                            busy
+                                ? 'Preparing...'
+                                : file == null
+                                ? 'Export file'
+                                : 'Share file',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+      ),
+    );
+  }
+}
+
+class _ExportFormatOption extends StatelessWidget {
+  const _ExportFormatOption({
+    required this.option,
+    required this.selected,
+    required this.enabled,
+    required this.block,
+  });
+  final RecordExportFormat option;
+  final bool selected;
+  final bool enabled;
+  final String? block;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: selected
+            ? Color.alphaBlend(accent.withValues(alpha: .06), Colors.white)
+            : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: selected ? accent : const Color(0xFFE8ECF0),
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: RadioListTile<RecordExportFormat>(
+          value: option,
+          enabled: enabled,
+          selected: selected,
+          shape: const RoundedRectangleBorder(),
+          tileColor: Colors.transparent,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 10,
+          ),
+          title: Text(
+            option.label,
+            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              block ??
+                  switch (option) {
+                    RecordExportFormat.csv =>
+                      'Coordinates in a spreadsheet-friendly table.',
+                    RecordExportFormat.kml =>
+                      'Geometry for compatible map and GIS tools.',
+                    RecordExportFormat.geojson =>
+                      'Geometry for GIS and mapping applications.',
+                  },
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: Colors.black54,
+                height: 1.4,
+              ),
+            ),
+          ),
+          secondary: block != null
+              ? const HugeIcon(
+                  icon: HugeIcons.strokeRoundedLockKey,
+                  size: 20,
+                  color: Colors.black38,
+                )
+              : Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .1),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: HugeIcon(
+                    icon: switch (option) {
+                      RecordExportFormat.csv =>
+                        HugeIcons.strokeRoundedFileExport,
+                      RecordExportFormat.kml => HugeIcons.strokeRoundedGlobe02,
+                      RecordExportFormat.geojson => HugeIcons.strokeRoundedMaps,
+                    },
+                    size: 20,
+                    color: accent,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportNotice extends StatelessWidget {
+  const _ExportNotice({required this.text, this.isError = false});
+  final String text;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isError ? const Color(0xFFB42318) : const Color(0xFF001F3F);
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: .15)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          HugeIcon(
+            icon: isError
+                ? HugeIcons.strokeRoundedAlertCircle
+                : HugeIcons.strokeRoundedInformationCircle,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12.5, height: 1.4, color: color),
+            ),
+          ),
+        ],
       ),
     );
   }

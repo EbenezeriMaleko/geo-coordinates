@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../../widget/library_record_style.dart';
@@ -285,10 +286,13 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                         return Column(
                           children: [
                             if (history && policy['enabled'] != true)
-                              const Padding(
-                                padding: EdgeInsets.all(20),
-                                child: Text(
-                                  'History is not available under the current workspace plan.',
+                              PlanAccessLock(
+                                locked: policy['enabled'] == false,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: Text(
+                                    'History is not available under the current workspace plan.',
+                                  ),
                                 ),
                               ),
                             Expanded(
@@ -297,12 +301,16 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                                 child: ListView.separated(
                                   physics:
                                       const AlwaysScrollableScrollPhysics(),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    16,
+                                    16,
                                   ),
                                   itemCount: items.isEmpty ? 1 : items.length,
-                                  separatorBuilder: (_, _) =>
-                                      const Divider(height: 1),
+                                  separatorBuilder: (_, _) => history
+                                      ? const SizedBox(height: 10)
+                                      : const Divider(height: 1),
                                   itemBuilder: (context, index) {
                                     if (items.isEmpty) {
                                       return Padding(
@@ -318,24 +326,20 @@ class _RecordRecoveryPageState extends ConsumerState<RecordRecoveryPage> {
                                     }
                                     final item = items[index];
                                     if (history) {
-                                      return ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        leading: const HugeIcon(
-                                          size: 20,
-                                          icon: HugeIcons.strokeRoundedClock01,
+                                      return _HistoryVersionCard(
+                                        name:
+                                            item['record_name']?.toString() ??
+                                            'Saved version',
+                                        date: recoveryDate(
+                                          context,
+                                          item['created_at'],
                                         ),
-                                        title: Text(
-                                          item['record_name']?.toString() ??
-                                              'Saved version',
-                                        ),
-                                        subtitle: Text(
-                                          '${recoveryDate(context, item['created_at'])}\n${item['actor'] is Map ? item['actor']['name'] ?? 'Unavailable account' : 'Unavailable account'} - ${item['point_count'] ?? 0} points',
-                                        ),
-                                        trailing: const HugeIcon(
-                                          size: 20,
-                                          icon: HugeIcons
-                                              .strokeRoundedArrowRight01,
-                                        ),
+                                        author: item['actor'] is Map
+                                            ? item['actor']['name']
+                                                      ?.toString() ??
+                                                  'Unavailable account'
+                                            : 'Unavailable account',
+                                        points: '${item['point_count'] ?? 0}',
                                         onTap: busy
                                             ? null
                                             : () {
@@ -578,6 +582,20 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
     );
     final result = available ? ref.watch(recoveryVersionProvider(query)) : null;
     final writable = recoveryWriteAccess(ref, widget.company, trash: false);
+    final restoreLocked =
+        !widget.canRestore ||
+        ref
+                .watch(entitlementProvider)
+                .asData
+                ?.value['land.view_and_edit']
+                ?.allowed ==
+            false ||
+        (widget.company != null &&
+            ref
+                    .watch(workspacePermissionsProvider)
+                    .asData
+                    ?.value['records.write'] ==
+                false);
     return PopScope(
       canPop: !busy,
       child: LibraryRecordScaffold(
@@ -591,6 +609,7 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
               size: 22,
             ),
           ),
+          centerTitle: true,
           title: const Text('Saved version'),
         ),
         body: !available
@@ -617,132 +636,353 @@ class _RecordVersionPageState extends ConsumerState<RecordVersionPage> {
                       .whereType<Map>()
                       .toList();
                   final last = ((points.length + 19) ~/ 20).clamp(1, 1000000);
-                  return ListView(
-                    padding: const EdgeInsets.all(20),
-                    children: [
-                      LibraryRecordHeader(
-                        icon: HugeIcons.strokeRoundedClock01,
-                        title: attributes['name']?.toString() ?? 'Saved record',
-                        subtitle:
-                            'Saved ${recoveryDate(context, data['created_at'])}',
-                      ),
-                      const Divider(height: 32),
-                      for (final entry in const {
-                        'type': 'Geometry',
-                        'place': 'Place',
-                        'phone': 'Phone',
-                        'description': 'Description',
-                        'reference_ellipsoid': 'Reference ellipsoid',
-                        'area': 'Area (m2)',
-                        'perimeter': 'Perimeter (m)',
-                      }.entries)
-                        if (attributes[entry.key] != null)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Text(
-                              '${entry.value}: ${attributes[entry.key]}',
-                            ),
-                          ),
-                      const SizedBox(height: 20),
-                      Text(
-                        '${points.length} saved points',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('Point')),
-                            DataColumn(label: Text('Latitude (y)')),
-                            DataColumn(label: Text('Longitude (x)')),
-                          ],
-                          rows: [
-                            for (final point
-                                in points.skip((pointsPage - 1) * 20).take(20))
-                              DataRow(
-                                cells: [
-                                  DataCell(
-                                    Text(
-                                      '${point['label'] ?? point['point_order'] ?? ''}',
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        LibraryRecordHeader(
+                          icon: HugeIcons.strokeRoundedClock01,
+                          title:
+                              attributes['name']?.toString() ?? 'Saved record',
+                          subtitle:
+                              'Saved ${recoveryDate(context, data['created_at'])}',
+                        ),
+                        _HistorySection(
+                          title: 'Saved record details',
+                          icon: HugeIcons.strokeRoundedNote01,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final entry in const {
+                                'type': 'Geometry',
+                                'place': 'Place',
+                                'phone': 'Phone',
+                                'description': 'Description',
+                                'reference_ellipsoid': 'Reference ellipsoid',
+                                'area': 'Area (m2)',
+                                'perimeter': 'Perimeter (m)',
+                              }.entries)
+                                if (attributes[entry.key] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 14),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          entry.value,
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            color: Colors.black45,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${attributes[entry.key]}',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.black87,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  DataCell(Text('${point['y'] ?? ''}')),
-                                  DataCell(Text('${point['x'] ?? ''}')),
+                            ],
+                          ),
+                        ),
+                        _HistorySection(
+                          title: '${points.length} saved points',
+                          icon: HugeIcons.strokeRoundedLocation01,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Point')),
+                                    DataColumn(label: Text('Latitude (y)')),
+                                    DataColumn(label: Text('Longitude (x)')),
+                                  ],
+                                  rows: [
+                                    for (final point
+                                        in points
+                                            .skip((pointsPage - 1) * 20)
+                                            .take(20))
+                                      DataRow(
+                                        cells: [
+                                          DataCell(
+                                            Text(
+                                              '${point['label'] ?? point['point_order'] ?? ''}',
+                                            ),
+                                          ),
+                                          DataCell(Text('${point['y'] ?? ''}')),
+                                          DataCell(Text('${point['x'] ?? ''}')),
+                                        ],
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Previous points page',
+                                    onPressed: pointsPage > 1
+                                        ? () => setState(() => pointsPage--)
+                                        : null,
+                                    icon: const HugeIcon(
+                                      size: 20,
+                                      icon: HugeIcons.strokeRoundedArrowLeft01,
+                                    ),
+                                  ),
+                                  Flexible(
+                                    child: Text('Page $pointsPage of $last'),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Next points page',
+                                    onPressed: pointsPage < last
+                                        ? () => setState(() => pointsPage++)
+                                        : null,
+                                    icon: const HugeIcon(
+                                      size: 20,
+                                      icon: HugeIcons.strokeRoundedArrowRight01,
+                                    ),
+                                  ),
                                 ],
                               ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            tooltip: 'Previous points page',
-                            onPressed: pointsPage > 1
-                                ? () => setState(() => pointsPage--)
-                                : null,
+                        if (error != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Text(
+                              error!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        if (error != null)
+                          TextButton.icon(
+                            onPressed: busy
+                                ? null
+                                : () {
+                                    ref.invalidate(recoveryListProvider);
+                                    Navigator.pop(context);
+                                  },
                             icon: const HugeIcon(
-                              size: 20,
-                              icon: HugeIcons.strokeRoundedArrowLeft01,
+                              icon: HugeIcons.strokeRoundedRefresh,
+                              size: 18,
+                            ),
+                            label: const Text('Reload history'),
+                          ),
+                        if (((widget.canRestore && writable) ||
+                                restoreLocked) &&
+                            RegExp(
+                              r'^[a-f0-9]{64}$',
+                            ).hasMatch(widget.revision ?? ''))
+                          PlanAccessLock(
+                            locked: restoreLocked && !busy,
+                            child: FilledButton.icon(
+                              onPressed: busy || !writable || !widget.canRestore
+                                  ? null
+                                  : restore,
+                              icon: const HugeIcon(
+                                icon: HugeIcons.strokeRoundedRestoreBin,
+                                size: 18,
+                              ),
+                              label: Text(
+                                busy ? 'Restoring...' : 'Restore version',
+                              ),
                             ),
                           ),
-                          Flexible(child: Text('Page $pointsPage of $last')),
-                          IconButton(
-                            tooltip: 'Next points page',
-                            onPressed: pointsPage < last
-                                ? () => setState(() => pointsPage++)
-                                : null,
-                            icon: const HugeIcon(
-                              size: 20,
-                              icon: HugeIcons.strokeRoundedArrowRight01,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (error != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: Text(
-                            error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      if (error != null)
-                        TextButton.icon(
-                          onPressed: busy
-                              ? null
-                              : () {
-                                  ref.invalidate(recoveryListProvider);
-                                  Navigator.pop(context);
-                                },
-                          icon: const HugeIcon(
-                            icon: HugeIcons.strokeRoundedRefresh,
-                            size: 18,
-                          ),
-                          label: const Text('Reload history'),
-                        ),
-                      if (widget.canRestore &&
-                          writable &&
-                          RegExp(
-                            r'^[a-f0-9]{64}$',
-                          ).hasMatch(widget.revision ?? ''))
-                        FilledButton.icon(
-                          onPressed: busy ? null : restore,
-                          icon: const HugeIcon(
-                            icon: HugeIcons.strokeRoundedRestoreBin,
-                            size: 18,
-                          ),
-                          label: Text(
-                            busy ? 'Restoring...' : 'Restore version',
-                          ),
-                        ),
-                    ],
+                      ],
+                    ),
                   );
                 },
               ),
       ),
     );
   }
+}
+
+class _HistoryVersionCard extends StatelessWidget {
+  const _HistoryVersionCard({
+    required this.name,
+    required this.date,
+    required this.author,
+    required this.points,
+    required this.onTap,
+  });
+  final String name;
+  final String date;
+  final String author;
+  final String points;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFE8ECF0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: HugeIcon(
+                  icon: HugeIcons.strokeRoundedClock01,
+                  size: 20,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Saved $date',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.black54,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: HugeIcon(
+                            icon: HugeIcons.strokeRoundedUser,
+                            size: 14,
+                            color: Colors.black45,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            author,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F4F7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$points points',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF526579),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: HugeIcon(
+                  icon: HugeIcons.strokeRoundedArrowRight01,
+                  size: 18,
+                  color: accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistorySection extends StatelessWidget {
+  const _HistorySection({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+  final String title;
+  final dynamic icon;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE8ECF0)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            HugeIcon(
+              icon: icon,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        child,
+      ],
+    ),
+  );
 }

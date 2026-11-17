@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../../widget/library_record_style.dart';
@@ -215,256 +216,471 @@ class _RecordSharingPageState extends ConsumerState<RecordSharingPage> {
           ? const Center(
               child: Text('Workspace or account changed. Reopen sharing.'),
             )
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                const LibraryRecordHeader(
-                  icon: HugeIcons.strokeRoundedLink01,
-                  title: 'Share this record',
-                  subtitle: 'Manage link expiry, passwords, and access.',
-                ),
-                if (busy && data == null)
-                  const Center(child: CircularProgressIndicator()),
-                if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const LibraryRecordHeader(
+                    icon: HugeIcons.strokeRoundedLink01,
+                    title: 'Share this record',
+                    subtitle: 'Manage link expiry, passwords, and access.',
+                  ),
+                  if (busy && data == null)
+                    const Center(child: CircularProgressIndicator()),
+                  if (error != null)
+                    _SharingNotice(text: error!, isError: true),
+                  if (pending)
+                    const _SharingNotice(
+                      text:
+                          'Sync or resolve pending local edits before creating or sharing a link.',
+                    ),
+                  if (data != null && data!['can_manage'] != true)
+                    PlanAccessLock(
+                      locked: true,
+                      child: _SharingNotice(
+                        text:
+                            'Only the record owner or a company owner or administrator can manage links.',
                       ),
                     ),
-                  ),
-                if (pending)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'Sync or resolve pending local edits before creating or sharing a link.',
-                    ),
-                  ),
-                if (data != null && data!['can_manage'] != true)
-                  const Text(
-                    'Only the record owner or a company owner or administrator can manage links.',
-                  ),
-                if (data != null && data!['can_manage'] == true) ...[
-                  if (policy['available'] != true)
-                    const Text('Shared links are unavailable.'),
-                  if (policy['available'] == true) ...[
-                    if (policy['workspace_enabled'] == false)
-                      const Text(
-                        'Public sharing is disabled for this workspace. Contact a company administrator.',
-                      ),
-                    if (policy['workspace_enabled'] != false &&
-                        policy['allowed'] != true)
-                      const Text(
-                        'The shared-link allowance has been reached. Revoke an existing link or request a different plan.',
-                      ),
-                    DropdownButtonFormField<int>(
-                      initialValue: days,
-                      decoration: const InputDecoration(
-                        labelText: 'Expires in',
-                        prefixIcon: SizedBox(
-                          width: 48,
-                          child: Center(
-                            widthFactor: 1,
-                            heightFactor: 1,
-                            child: HugeIcon(
-                              icon: HugeIcons.strokeRoundedClock01,
-                              size: 20,
-                            ),
-                          ),
+                  if (data != null && data!['can_manage'] == true) ...[
+                    if (policy['available'] != true)
+                      PlanAccessLock(
+                        locked: true,
+                        child: _SharingNotice(
+                          text: 'Shared links are unavailable.',
                         ),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 1, child: Text('1 day')),
-                        DropdownMenuItem(value: 7, child: Text('7 days')),
-                        DropdownMenuItem(value: 30, child: Text('30 days')),
-                        DropdownMenuItem(value: 90, child: Text('90 days')),
-                        DropdownMenuItem(value: 365, child: Text('1 year')),
-                      ],
-                      onChanged: busy
-                          ? null
-                          : (value) => setState(() => days = value ?? 30),
+                    if (policy['available'] == true) ...[
+                      if (policy['workspace_enabled'] == false)
+                        const _SharingNotice(
+                          text:
+                              'Public sharing is disabled for this workspace. Contact a company administrator.',
+                        ),
+                      if (policy['workspace_enabled'] != false &&
+                          policy['allowed'] != true)
+                        const _SharingNotice(
+                          text:
+                              'The shared-link allowance has been reached. Revoke an existing link or request a different plan.',
+                        ),
+                      _SharingCard(
+                        title: 'Create a sharing link',
+                        icon: HugeIcons.strokeRoundedLink01,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            DropdownButtonFormField<int>(
+                              initialValue: days,
+                              decoration: const InputDecoration(
+                                labelText: 'Expires in',
+                                prefixIcon: SizedBox(
+                                  width: 48,
+                                  child: Center(
+                                    widthFactor: 1,
+                                    heightFactor: 1,
+                                    child: HugeIcon(
+                                      icon: HugeIcons.strokeRoundedClock01,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 1,
+                                  child: Text('1 day'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 7,
+                                  child: Text('7 days'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 30,
+                                  child: Text('30 days'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 90,
+                                  child: Text('90 days'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 365,
+                                  child: Text('1 year'),
+                                ),
+                              ],
+                              onChanged: busy
+                                  ? null
+                                  : (value) =>
+                                        setState(() => days = value ?? 30),
+                            ),
+                            const SizedBox(height: 16),
+                            PlanAccessLock(
+                              locked:
+                                  !busy && policy['password_allowed'] != true,
+                              child: TextField(
+                                controller: password,
+                                enabled:
+                                    !busy && policy['password_allowed'] == true,
+                                obscureText: true,
+                                maxLength: 128,
+                                decoration: InputDecoration(
+                                  labelText: 'Password (optional)',
+                                  helperMaxLines: 3,
+                                  prefixIcon: const SizedBox(
+                                    width: 48,
+                                    child: Center(
+                                      widthFactor: 1,
+                                      heightFactor: 1,
+                                      child: HugeIcon(
+                                        icon: HugeIcons.strokeRoundedLockKey,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                  helperText: policy['password_allowed'] == true
+                                      ? 'At least 8 characters'
+                                      : 'Not included in this plan',
+                                ),
+                              ),
+                            ),
+                            if (widget.company != null)
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                shape: const RoundedRectangleBorder(),
+                                tileColor: Colors.transparent,
+                                value: includeClaimant,
+                                onChanged: busy
+                                    ? null
+                                    : (value) => setState(
+                                        () => includeClaimant = value,
+                                      ),
+                                title: const Text('Include claimant details'),
+                                subtitle: const Text(
+                                  'Name, phone, plot number and land use may be visible. ID is never shared.',
+                                ),
+                              ),
+                            const SizedBox(height: 16),
+                            PlanAccessLock(
+                              locked:
+                                  !busy &&
+                                  (policy['allowed'] != true ||
+                                      policy['workspace_enabled'] == false),
+                              child: FilledButton.icon(
+                                onPressed:
+                                    busy || pending || policy['allowed'] != true
+                                    ? null
+                                    : createLink,
+                                icon: const HugeIcon(
+                                  size: 20,
+                                  icon: HugeIcons.strokeRoundedLink01,
+                                ),
+                                label: const Text('Create link'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'ACTIVE LINKS',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: Colors.black45,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: password,
-                      enabled: !busy && policy['password_allowed'] == true,
-                      obscureText: true,
-                      maxLength: 128,
-                      decoration: InputDecoration(
-                        labelText: 'Password (optional)',
-                        prefixIcon: const SizedBox(
-                          width: 48,
-                          child: Center(
-                            widthFactor: 1,
-                            heightFactor: 1,
-                            child: HugeIcon(
-                              icon: HugeIcons.strokeRoundedLockKey,
+                    if (links.isEmpty)
+                      const _SharingNotice(text: 'No unexpired links.'),
+                    for (final link in links)
+                      Builder(
+                        builder: (context) {
+                          final id = int.tryParse(link['id']?.toString() ?? '');
+                          final url = link['url']?.toString() ?? '';
+                          final safe =
+                              !pending &&
+                              link['active'] == true &&
+                              link['include_claimant_details'] is bool &&
+                              RecordShareService.safeUrl(url);
+                          return _SharingCard(
+                            title: 'Link #${id ?? '?'}',
+                            icon: HugeIcons.strokeRoundedLink01,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _LinkBadge(
+                                      text: link['active'] == true
+                                          ? 'Active'
+                                          : 'Unavailable',
+                                    ),
+                                    if (link['password_protected'] == true)
+                                      const _LinkBadge(
+                                        text: 'Password protected',
+                                      ),
+                                    if (link['include_claimant_details'] ==
+                                        true)
+                                      const _LinkBadge(
+                                        text: 'Claimant details included',
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Expires ${link['expires_at'] ?? 'unknown'}',
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: Colors.black54,
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  children: [
+                                    TextButton.icon(
+                                      label: const Text('Copy'),
+                                      onPressed: !safe || busy
+                                          ? null
+                                          : () async {
+                                              if (!current ||
+                                                  RecordRecoveryService()
+                                                      .pending(widget.record)) {
+                                                return;
+                                              }
+                                              await Clipboard.setData(
+                                                ClipboardData(text: url),
+                                              );
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Link copied.',
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                      icon: const HugeIcon(
+                                        size: 20,
+                                        icon: HugeIcons.strokeRoundedCopy01,
+                                      ),
+                                    ),
+                                    TextButton.icon(
+                                      label: const Text('Share'),
+                                      onPressed: !safe || busy
+                                          ? null
+                                          : () {
+                                              if (!current ||
+                                                  RecordRecoveryService()
+                                                      .pending(widget.record)) {
+                                                return;
+                                              }
+                                              final box = context
+                                                  .findRenderObject();
+                                              final origin =
+                                                  box is RenderBox &&
+                                                      box.hasSize
+                                                  ? box.localToGlobal(
+                                                          Offset.zero,
+                                                        ) &
+                                                        box.size
+                                                  : const Rect.fromLTWH(
+                                                      0,
+                                                      0,
+                                                      1,
+                                                      1,
+                                                    );
+                                              SharePlus.instance.share(
+                                                ShareParams(
+                                                  text: url,
+                                                  sharePositionOrigin: origin,
+                                                ),
+                                              );
+                                            },
+                                      icon: const HugeIcon(
+                                        size: 20,
+                                        icon: HugeIcons.strokeRoundedShare01,
+                                      ),
+                                    ),
+                                    TextButton.icon(
+                                      label: const Text('Revoke'),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: const Color(
+                                          0xFFB42318,
+                                        ),
+                                      ),
+                                      onPressed: id == null || busy
+                                          ? null
+                                          : () => revoke(id),
+                                      icon: const HugeIcon(
+                                        size: 20,
+                                        icon: HugeIcons.strokeRoundedUnlink01,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    if (lastPage > 1)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                            tooltip: 'Previous page',
+                            onPressed: busy || page <= 1
+                                ? null
+                                : () => refresh(targetPage: page - 1),
+                            icon: const HugeIcon(
                               size: 20,
+                              icon: HugeIcons.strokeRoundedArrowLeft01,
                             ),
                           ),
-                        ),
-                        helperText: policy['password_allowed'] == true
-                            ? 'At least 8 characters'
-                            : 'Not included in this plan',
+                          Text('Page $page of $lastPage'),
+                          IconButton(
+                            tooltip: 'Next page',
+                            onPressed: busy || page >= lastPage
+                                ? null
+                                : () => refresh(targetPage: page + 1),
+                            icon: const HugeIcon(
+                              size: 20,
+                              icon: HugeIcons.strokeRoundedArrowRight01,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    if (widget.company != null)
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: includeClaimant,
-                        onChanged: busy
-                            ? null
-                            : (value) =>
-                                  setState(() => includeClaimant = value),
-                        title: const Text('Include claimant details'),
-                        subtitle: const Text(
-                          'Name, phone, plot number and land use may be visible. ID is never shared.',
-                        ),
-                      ),
-                    FilledButton.icon(
-                      onPressed: busy || pending || policy['allowed'] != true
-                          ? null
-                          : createLink,
-                      icon: const HugeIcon(
-                        size: 20,
-                        icon: HugeIcons.strokeRoundedLink01,
-                      ),
-                      label: const Text('Create link'),
-                    ),
                   ],
-                  const Divider(height: 32),
-                  Text(
-                    'Active links',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  if (links.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Text('No unexpired links.'),
-                    ),
-                  for (final link in links)
-                    Builder(
-                      builder: (context) {
-                        final id = int.tryParse(link['id']?.toString() ?? '');
-                        final url = link['url']?.toString() ?? '';
-                        final safe =
-                            !pending &&
-                            link['active'] == true &&
-                            link['include_claimant_details'] is bool &&
-                            RecordShareService.safeUrl(url);
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text('Link #${id ?? '?'}'),
-                          subtitle: Text(
-                            '${link['active'] == true ? 'Active' : 'Unavailable'} · ${link['password_protected'] == true ? 'Password protected · ' : ''}${link['include_claimant_details'] == true ? 'Claimant details included · ' : ''}Expires ${link['expires_at'] ?? 'unknown'}',
-                          ),
-                          trailing: Wrap(
-                            children: [
-                              IconButton(
-                                tooltip: 'Copy link',
-                                onPressed: !safe || busy
-                                    ? null
-                                    : () async {
-                                        if (!current ||
-                                            RecordRecoveryService().pending(
-                                              widget.record,
-                                            )) {
-                                          return;
-                                        }
-                                        await Clipboard.setData(
-                                          ClipboardData(text: url),
-                                        );
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Link copied.'),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                icon: const HugeIcon(
-                                  size: 20,
-                                  icon: HugeIcons.strokeRoundedCopy01,
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Share link',
-                                onPressed: !safe || busy
-                                    ? null
-                                    : () {
-                                        if (!current ||
-                                            RecordRecoveryService().pending(
-                                              widget.record,
-                                            )) {
-                                          return;
-                                        }
-                                        final box = context.findRenderObject();
-                                        final origin =
-                                            box is RenderBox && box.hasSize
-                                            ? box.localToGlobal(Offset.zero) &
-                                                  box.size
-                                            : const Rect.fromLTWH(0, 0, 1, 1);
-                                        SharePlus.instance.share(
-                                          ShareParams(
-                                            text: url,
-                                            sharePositionOrigin: origin,
-                                          ),
-                                        );
-                                      },
-                                icon: const HugeIcon(
-                                  size: 20,
-                                  icon: HugeIcons.strokeRoundedShare01,
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Revoke link',
-                                onPressed: id == null || busy
-                                    ? null
-                                    : () => revoke(id),
-                                icon: const HugeIcon(
-                                  size: 20,
-                                  icon: HugeIcons.strokeRoundedUnlink01,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  if (lastPage > 1)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          tooltip: 'Previous page',
-                          onPressed: busy || page <= 1
-                              ? null
-                              : () => refresh(targetPage: page - 1),
-                          icon: const HugeIcon(
-                            size: 20,
-                            icon: HugeIcons.strokeRoundedArrowLeft01,
-                          ),
-                        ),
-                        Text('Page $page of $lastPage'),
-                        IconButton(
-                          tooltip: 'Next page',
-                          onPressed: busy || page >= lastPage
-                              ? null
-                              : () => refresh(targetPage: page + 1),
-                          icon: const HugeIcon(
-                            size: 20,
-                            icon: HugeIcons.strokeRoundedArrowRight01,
-                          ),
-                        ),
-                      ],
-                    ),
                 ],
-              ],
+              ),
             ),
     );
   }
+}
+
+class _SharingCard extends StatelessWidget {
+  const _SharingCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+  final String title;
+  final dynamic icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: HugeIcon(icon: icon, size: 20, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SharingNotice extends StatelessWidget {
+  const _SharingNotice({required this.text, this.isError = false});
+  final String text;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isError
+        ? const Color(0xFFB42318)
+        : Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          HugeIcon(
+            icon: isError
+                ? HugeIcons.strokeRoundedAlertCircle
+                : HugeIcons.strokeRoundedInformationCircle,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12.5, height: 1.45, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LinkBadge extends StatelessWidget {
+  const _LinkBadge({required this.text});
+  final String text;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF1F4F7),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11.5,
+        color: Color(0xFF526579),
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 }

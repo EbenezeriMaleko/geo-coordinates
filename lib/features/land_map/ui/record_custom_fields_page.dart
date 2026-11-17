@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
@@ -424,135 +425,147 @@ class _RecordCustomFieldsPageState
                       Padding(
                         padding: const EdgeInsets.only(bottom: 18),
                         child: fields[i]['type'] == 'boolean'
-                            ? DropdownButtonFormField<bool>(
-                                initialValue: fields[i]['value'] as bool?,
-                                decoration: fieldDecoration(i),
-                                items: const [
-                                  DropdownMenuItem<bool>(
-                                    value: null,
-                                    child: Text('Not set'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: true,
-                                    child: Text('Yes'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: false,
-                                    child: Text('No'),
-                                  ),
-                                ],
-                                onChanged: enabled
-                                    ? (value) => setState(() {
-                                        fields[i]['value'] = value;
-                                        changed = true;
-                                      })
-                                    : null,
-                              )
-                            : TextFormField(
-                                controller: controllers[i],
-                                enabled: enabled,
-                                maxLength: fields[i]['type'] == 'text'
-                                    ? 2000
-                                    : null,
-                                keyboardType: fields[i]['type'] == 'number'
-                                    ? const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                        signed: true,
-                                      )
-                                    : TextInputType.text,
-                                decoration: fieldDecoration(i).copyWith(
-                                  hintText: fields[i]['type'] == 'date'
-                                      ? 'YYYY-MM-DD'
-                                      : null,
-                                  suffixIcon: fields[i]['type'] == 'date'
-                                      ? IconButton(
-                                          tooltip: 'Choose date',
-                                          icon: HugeIcon(
-                                            icon: HugeIcons
-                                                .strokeRoundedCalendar03,
-                                            size: 20,
-                                            color: accent,
-                                          ),
-                                          onPressed: !enabled
-                                              ? null
-                                              : () async {
-                                                  final chosen =
-                                                      await showDatePicker(
-                                                        context: context,
-                                                        initialDate:
-                                                            DateTime.tryParse(
-                                                              controllers[i]
-                                                                  .text,
-                                                            ) ??
-                                                            DateTime.now(),
-                                                        firstDate: DateTime(1),
-                                                        lastDate: DateTime(
-                                                          9999,
-                                                          12,
-                                                          31,
-                                                        ),
-                                                      );
-                                                  if (chosen == null ||
-                                                      !current ||
-                                                      busy) {
-                                                    return;
-                                                  }
-                                                  setState(() {
-                                                    controllers[i].text = chosen
-                                                        .toIso8601String()
-                                                        .substring(0, 10);
-                                                    changed = true;
-                                                  });
-                                                },
-                                        )
+                            ? PlanAccessLock(
+                                locked: revision != null && !editable && !busy,
+                                child: DropdownButtonFormField<bool>(
+                                  initialValue: fields[i]['value'] as bool?,
+                                  decoration: fieldDecoration(i),
+                                  items: const [
+                                    DropdownMenuItem<bool>(
+                                      value: null,
+                                      child: Text('Not set'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: true,
+                                      child: Text('Yes'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: false,
+                                      child: Text('No'),
+                                    ),
+                                  ],
+                                  onChanged: enabled
+                                      ? (value) => setState(() {
+                                          fields[i]['value'] = value;
+                                          changed = true;
+                                        })
                                       : null,
                                 ),
-                                onChanged: (_) =>
-                                    setState(() => changed = true),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
+                              )
+                            : PlanAccessLock(
+                                locked: revision != null && !editable && !busy,
+                                child: TextFormField(
+                                  controller: controllers[i],
+                                  enabled: enabled,
+                                  maxLength: fields[i]['type'] == 'text'
+                                      ? 2000
+                                      : null,
+                                  keyboardType: fields[i]['type'] == 'number'
+                                      ? const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                          signed: true,
+                                        )
+                                      : TextInputType.text,
+                                  decoration: fieldDecoration(i).copyWith(
+                                    hintText: fields[i]['type'] == 'date'
+                                        ? 'YYYY-MM-DD'
+                                        : null,
+                                    suffixIcon: fields[i]['type'] == 'date'
+                                        ? IconButton(
+                                            tooltip: 'Choose date',
+                                            icon: HugeIcon(
+                                              icon: HugeIcons
+                                                  .strokeRoundedCalendar03,
+                                              size: 20,
+                                              color: accent,
+                                            ),
+                                            onPressed: !enabled
+                                                ? null
+                                                : () async {
+                                                    final chosen =
+                                                        await showDatePicker(
+                                                          context: context,
+                                                          initialDate:
+                                                              DateTime.tryParse(
+                                                                controllers[i]
+                                                                    .text,
+                                                              ) ??
+                                                              DateTime.now(),
+                                                          firstDate: DateTime(
+                                                            1,
+                                                          ),
+                                                          lastDate: DateTime(
+                                                            9999,
+                                                            12,
+                                                            31,
+                                                          ),
+                                                        );
+                                                    if (chosen == null ||
+                                                        !current ||
+                                                        busy) {
+                                                      return;
+                                                    }
+                                                    setState(() {
+                                                      controllers[i].text =
+                                                          chosen
+                                                              .toIso8601String()
+                                                              .substring(0, 10);
+                                                      changed = true;
+                                                    });
+                                                  },
+                                          )
+                                        : null,
+                                  ),
+                                  onChanged: (_) =>
+                                      setState(() => changed = true),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return null;
+                                    }
+                                    if (fields[i]['type'] == 'number') {
+                                      final number = num.tryParse(value.trim());
+                                      if (number == null ||
+                                          !number.isFinite ||
+                                          number.abs() > 999999999999999) {
+                                        return 'Enter a valid number.';
+                                      }
+                                    }
+                                    if (fields[i]['type'] == 'date') {
+                                      final date = DateTime.tryParse(value);
+                                      if (date == null ||
+                                          date.toIso8601String().substring(
+                                                0,
+                                                10,
+                                              ) !=
+                                              value) {
+                                        return 'Enter a valid date as YYYY-MM-DD.';
+                                      }
+                                    }
                                     return null;
-                                  }
-                                  if (fields[i]['type'] == 'number') {
-                                    final number = num.tryParse(value.trim());
-                                    if (number == null ||
-                                        !number.isFinite ||
-                                        number.abs() > 999999999999999) {
-                                      return 'Enter a valid number.';
-                                    }
-                                  }
-                                  if (fields[i]['type'] == 'date') {
-                                    final date = DateTime.tryParse(value);
-                                    if (date == null ||
-                                        date.toIso8601String().substring(
-                                              0,
-                                              10,
-                                            ) !=
-                                            value) {
-                                      return 'Enter a valid date as YYYY-MM-DD.';
-                                    }
-                                  }
-                                  return null;
-                                },
+                                  },
+                                ),
                               ),
                       ),
                     if (fields.isNotEmpty)
-                      FilledButton.icon(
-                        onPressed: enabled && changed
-                            ? () => load(save: true)
-                            : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: accent,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                      PlanAccessLock(
+                        locked: revision != null && !editable && !busy,
+                        child: FilledButton.icon(
+                          onPressed: enabled && changed
+                              ? () => load(save: true)
+                              : null,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accent,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
+                          icon: const HugeIcon(
+                            icon: HugeIcons.strokeRoundedFloppyDisk,
+                            size: 20,
+                          ),
+                          label: const Text('Save changes'),
                         ),
-                        icon: const HugeIcon(
-                          icon: HugeIcons.strokeRoundedFloppyDisk,
-                          size: 20,
-                        ),
-                        label: const Text('Save changes'),
                       ),
                   ],
                 ),

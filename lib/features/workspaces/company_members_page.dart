@@ -1,3 +1,4 @@
+import '../widget/plan_access_lock.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -558,13 +559,16 @@ class _CompanyMembersPageState extends ConsumerState<CompanyMembersPage> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
           actions: [
-            IconButton(
-              tooltip: 'Invite company member',
-              onPressed: available ? invite : null,
-              icon: HugeIcon(
-                icon: HugeIcons.strokeRoundedUserAdd01,
-                color: available ? Colors.black87 : Colors.black26,
-                size: 22,
+            FeatureAccessLock(
+              features: const ['company.employee_management'],
+              child: IconButton(
+                tooltip: 'Invite company member',
+                onPressed: available ? invite : null,
+                icon: HugeIcon(
+                  icon: HugeIcons.strokeRoundedUserAdd01,
+                  color: available ? Colors.black87 : Colors.black26,
+                  size: 22,
+                ),
               ),
             ),
             IconButton(

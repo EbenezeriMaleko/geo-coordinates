@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -20,6 +21,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 
 import '../../auth/providers/auth_provider.dart';
+import '../../subscriptions/entitlement_provider.dart';
 import '../../workspaces/workspace_provider.dart';
 import '../../auth/services/auth_service.dart';
 import '../models/coordinate_format.dart';
@@ -1360,8 +1362,19 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                                 color: Colors.white,
                               ),
                               color: Colors.white,
-                              onSelected: (action) =>
-                                  widget.onMenuAction!(action),
+                              onSelected: (action) {
+                                if (action == MyLocationAction.savePoint &&
+                                    ref
+                                            .read(entitlementProvider)
+                                            .asData
+                                            ?.value['land.create_and_save']
+                                            ?.allowed ==
+                                        false) {
+                                  openPlansAccess(context);
+                                  return;
+                                }
+                                widget.onMenuAction!(action);
+                              },
                               itemBuilder: (_) => [
                                 PopupMenuItem(
                                   value: MyLocationAction.copyBoth,
@@ -1373,7 +1386,10 @@ class _MyLocationPageState extends ConsumerState<MyLocationPage>
                                 ),
                                 PopupMenuItem(
                                   value: MyLocationAction.savePoint,
-                                  child: Text(l10n.t('Save location')),
+                                  child: FeatureAccessLock(
+                                    features: const ['land.create_and_save'],
+                                    child: Text(l10n.t('Save location')),
+                                  ),
                                 ),
                               ],
                             )

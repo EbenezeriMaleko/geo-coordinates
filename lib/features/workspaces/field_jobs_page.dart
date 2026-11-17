@@ -1,3 +1,4 @@
+import '../widget/plan_access_lock.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -909,45 +910,56 @@ class _FieldJobsPageState extends ConsumerState<FieldJobsPage> {
                                           ),
                                         ),
                                       ),
-                                      if (canCreate)
-                                        FilledButton.icon(
-                                          onPressed: () =>
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute<void>(
-                                                  builder: (_) => FieldJobForm(
-                                                    workspaceId: workspace
-                                                        .activeCompanyId!,
-                                                    onSaved: () =>
-                                                        ref.invalidate(
-                                                          fieldJobsProvider(
-                                                            query,
+                                      if (canCreate ||
+                                          ref
+                                                  .watch(
+                                                    workspacePermissionsProvider,
+                                                  )
+                                                  .asData
+                                                  ?.value['jobs.manage'] ==
+                                              false)
+                                        PlanAccessLock(
+                                          locked: !canCreate,
+                                          child: FilledButton.icon(
+                                            onPressed: () =>
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute<void>(
+                                                    builder: (_) => FieldJobForm(
+                                                      workspaceId: workspace
+                                                          .activeCompanyId!,
+                                                      onSaved: () =>
+                                                          ref.invalidate(
+                                                            fieldJobsProvider(
+                                                              query,
+                                                            ),
                                                           ),
-                                                        ),
+                                                    ),
                                                   ),
                                                 ),
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: _accent,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
+                                                  ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                               ),
-                                          style: FilledButton.styleFrom(
-                                            backgroundColor: _accent,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                              vertical: 10,
                                             ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
+                                            icon: const HugeIcon(
+                                              icon: HugeIcons
+                                                  .strokeRoundedAddCircle,
+                                              color: Colors.white,
+                                              size: 18,
                                             ),
-                                          ),
-                                          icon: const HugeIcon(
-                                            icon: HugeIcons
-                                                .strokeRoundedAddCircle,
-                                            color: Colors.white,
-                                            size: 18,
-                                          ),
-                                          label: const Text(
-                                            'New job',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
+                                            label: const Text(
+                                              'New job',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             ),
                                           ),
                                         ),

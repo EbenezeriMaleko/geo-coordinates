@@ -1,3 +1,4 @@
+import '../widget/plan_access_lock.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -186,9 +187,17 @@ class _RecordOrganizationSectionState
                             ? 'Team'
                             : 'Project',
                       ),
-                      onTap: writable && !busy ? () => change(team) : null,
-                      trailing: !writable
+                      onTap: busy
                           ? null
+                          : writable
+                          ? () => change(team)
+                          : features != null
+                          ? () => openPlansAccess(context)
+                          : null,
+                      trailing: !writable
+                          ? features == null
+                                ? null
+                                : const Icon(Icons.lock_outline, size: 20)
                           : Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [

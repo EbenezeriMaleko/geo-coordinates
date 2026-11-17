@@ -1,3 +1,4 @@
+import '../widget/plan_access_lock.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -267,6 +268,16 @@ class _JobReviewPageState extends ConsumerState<JobReviewPage> {
                     Text(data!['review_note'].toString()),
                     const SizedBox(height: 20),
                   ],
+                  if (access
+                          .asData
+                          ?.value['company.review_workflow']
+                          ?.allowed ==
+                      false)
+                    TextButton.icon(
+                      onPressed: () => openPlansAccess(context),
+                      icon: const Icon(Icons.lock_outline, size: 20),
+                      label: const Text('Review access — Plans & Access'),
+                    ),
                   if (access.hasError)
                     const Text(
                       'Feature access could not be verified. Refresh to retry.',

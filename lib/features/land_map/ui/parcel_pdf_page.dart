@@ -1,3 +1,4 @@
+import '../../widget/plan_access_lock.dart';
 import 'package:flutter/material.dart';
 import 'package:hugeicons/hugeicons.dart';
 import '../../widget/library_record_style.dart';
@@ -339,6 +340,7 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
               size: 22,
             ),
           ),
+          centerTitle: true,
           title: const Text('Parcel PDF'),
           actions: [
             IconButton(
@@ -362,192 +364,365 @@ class _ParcelPdfPageState extends ConsumerState<ParcelPdfPage> {
               )
             : loading
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  LibraryRecordHeader(
-                    icon: HugeIcons.strokeRoundedPdf01,
-                    title: widget.name,
-                    subtitle: workspace.label,
-                  ),
-                  Row(
-                    children: [
-                      HugeIcon(
-                        icon: HugeIcons.strokeRoundedPdf01,
-                        size: 24,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          report?.available == true
-                              ? 'Saved parcel report'
-                              : 'No saved PDF',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (date != null)
-                    Text(
-                      'Generated ${MaterialLocalizations.of(context).formatMediumDate(date)}',
-                      style: Theme.of(context).textTheme.bodySmall,
+            : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    LibraryRecordHeader(
+                      icon: HugeIcons.strokeRoundedLocation01,
+                      title: widget.name,
+                      subtitle: workspace.label,
                     ),
-                  if (stale) ...[
-                    const SizedBox(height: 16),
-                    const Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        HugeIcon(
-                          icon: HugeIcons.strokeRoundedAlertCircle,
-                          size: 20,
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'This PDF contains older record details. Generate an updated report for the latest version.',
+                    if (error != null)
+                      _PdfNotice(
+                        icon: HugeIcons.strokeRoundedAlertCircle,
+                        text: error!,
+                        color: const Color(0xFFB42318),
+                      ),
+                    if (message != null)
+                      _PdfNotice(
+                        icon: HugeIcons.strokeRoundedCheckmarkCircle02,
+                        text: message!,
+                        color: const Color(0xFF1B7F4B),
+                      ),
+                    _PdfSection(
+                      icon: HugeIcons.strokeRoundedPdf01,
+                      title: report?.available == true
+                          ? 'Saved parcel report'
+                          : 'No saved PDF',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (date != null) ...[
+                            Row(
+                              children: [
+                                const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedCalendar03,
+                                  size: 16,
+                                  color: Colors.black45,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Generated ${MaterialLocalizations.of(context).formatMediumDate(date)}',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (stale)
+                            const _PdfNotice(
+                              icon: HugeIcons.strokeRoundedAlertCircle,
+                              text:
+                                  'This PDF contains older record details. Generate an updated report for the latest version.',
+                              color: Color(0xFFB26A00),
+                            ),
+                          Text(
+                            report?.available == true
+                                ? 'Downloading this saved PDF does not generate a new report or use report-generation quota.'
+                                : error == null
+                                ? 'No report has been generated for this record yet.'
+                                : 'Saved report details could not be loaded.',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.5,
+                              color: Colors.black54,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Text(
-                    report?.available == true
-                        ? 'Downloading this saved PDF does not generate a new report or use report-generation quota.'
-                        : error == null
-                        ? 'No report has been generated for this record yet.'
-                        : 'Saved report details could not be loaded.',
-                  ),
-                  if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  if (message != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(message!),
-                    ),
-                  const SizedBox(height: 24),
-                  if (policyError != null)
-                    Text('Report settings unavailable: $policyError'),
-                  if (policy != null) ...[
-                    Text(
-                      'Reports used: ${policy!.used} / ${policy!.limit == null
-                          ? 'Not configured'
-                          : policy!.limit == -1
-                          ? 'Unlimited'
-                          : policy!.limit}',
-                    ),
-                    if (!policy!.available)
-                      const Text('Report generation is unavailable.'),
-                    if (policy!.available && !policy!.allowed)
-                      const Text(
-                        'Report allowance reached or unavailable for this workspace.',
-                      ),
-                    if (policy!.customLogo) ...[
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: busy ? null : chooseLogo,
-                        icon: const HugeIcon(
-                          size: 20,
-                          icon: HugeIcons.strokeRoundedImage01,
-                        ),
-                        label: Text(
-                          logoName == null
-                              ? 'Choose optional logo'
-                              : 'Change logo',
-                        ),
-                      ),
-                      if (logoName != null)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                logoName!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                          if (report?.available == true) ...[
+                            const SizedBox(height: 20),
+                            Builder(
+                              builder: (buttonContext) => FilledButton.icon(
+                                onPressed: busy
+                                    ? null
+                                    : () => share(buttonContext),
+                                icon: busy
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : HugeIcon(
+                                        icon: file == null
+                                            ? HugeIcons.strokeRoundedDownload01
+                                            : HugeIcons.strokeRoundedShare01,
+                                        size: 20,
+                                      ),
+                                label: Text(
+                                  busy
+                                      ? 'Preparing...'
+                                      : file == null
+                                      ? 'Download & share PDF'
+                                      : 'Share PDF',
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             ),
-                            IconButton(
-                              tooltip: 'Remove logo',
-                              onPressed: busy
-                                  ? null
-                                  : () => setState(() {
-                                      logo = null;
-                                      logoName = null;
-                                    }),
+                          ],
+                          if (error != null && report == null) ...[
+                            const SizedBox(height: 16),
+                            OutlinedButton.icon(
+                              onPressed: busy ? null : refresh,
                               icon: const HugeIcon(
-                                size: 20,
-                                icon: HugeIcons.strokeRoundedCancel01,
+                                icon: HugeIcons.strokeRoundedRefresh,
+                                size: 18,
+                              ),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (policyError != null)
+                      _PdfNotice(
+                        icon: HugeIcons.strokeRoundedAlertCircle,
+                        text: 'Report settings unavailable: $policyError',
+                        color: const Color(0xFFB26A00),
+                      ),
+                    if (policy != null)
+                      _PdfSection(
+                        icon: HugeIcons.strokeRoundedSettings01,
+                        title: 'Generate report',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF7F7F8),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Reports used: ${policy!.used} / ${policy!.limit == null
+                                    ? 'Not configured'
+                                    : policy!.limit == -1
+                                    ? 'Unlimited'
+                                    : policy!.limit}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (!policy!.available) ...[
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Report generation is unavailable.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black54,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                            if (policy!.available && !policy!.allowed) ...[
+                              const SizedBox(height: 12),
+                              const Text(
+                                'Report allowance reached or unavailable for this workspace.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black54,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                            ...[
+                              const SizedBox(height: 20),
+                              const Text(
+                                'REPORT LOGO',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  letterSpacing: 0.6,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black45,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              PlanAccessLock(
+                                locked: !busy && !policy!.customLogo,
+                                child: OutlinedButton.icon(
+                                  onPressed: busy ? null : chooseLogo,
+                                  icon: const HugeIcon(
+                                    icon: HugeIcons.strokeRoundedImage01,
+                                    size: 20,
+                                  ),
+                                  label: Text(
+                                    logoName == null
+                                        ? 'Choose optional logo'
+                                        : 'Change logo',
+                                  ),
+                                ),
+                              ),
+                              if (logoName != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Row(
+                                    children: [
+                                      const HugeIcon(
+                                        icon: HugeIcons.strokeRoundedImage01,
+                                        size: 16,
+                                        color: Colors.black45,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          logoName!,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 12.5,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Remove logo',
+                                        onPressed: busy
+                                            ? null
+                                            : () => setState(() {
+                                                logo = null;
+                                                logoName = null;
+                                              }),
+                                        icon: const HugeIcon(
+                                          icon: HugeIcons.strokeRoundedCancel01,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                            const SizedBox(height: 20),
+                            PlanAccessLock(
+                              locked:
+                                  !busy &&
+                                  (!policy!.available || !policy!.allowed),
+                              child: OutlinedButton.icon(
+                                onPressed:
+                                    busy ||
+                                        !policy!.available ||
+                                        !policy!.allowed
+                                    ? null
+                                    : generate,
+                                icon: const HugeIcon(
+                                  icon: HugeIcons.strokeRoundedPdf01,
+                                  size: 20,
+                                ),
+                                label: Text(
+                                  report?.available == true
+                                      ? 'Generate updated PDF'
+                                      : 'Generate PDF',
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                    ],
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: busy || !policy!.available || !policy!.allowed
-                          ? null
-                          : generate,
-                      icon: const HugeIcon(
-                        size: 20,
-                        icon: HugeIcons.strokeRoundedPdf01,
                       ),
-                      label: Text(
-                        report?.available == true
-                            ? 'Generate updated PDF'
-                            : 'Generate PDF',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                   ],
-                  if (report?.available == true)
-                    Builder(
-                      builder: (buttonContext) => FilledButton.icon(
-                        onPressed: busy ? null : () => share(buttonContext),
-                        icon: busy
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : HugeIcon(
-                                icon: file == null
-                                    ? HugeIcons.strokeRoundedDownload01
-                                    : HugeIcons.strokeRoundedShare01,
-                                size: 18,
-                              ),
-                        label: Text(
-                          busy
-                              ? 'Preparing...'
-                              : file == null
-                              ? 'Download & share PDF'
-                              : 'Share PDF',
-                        ),
-                      ),
-                    ),
-                  if (error != null && report == null)
-                    OutlinedButton.icon(
-                      onPressed: refresh,
-                      icon: const HugeIcon(
-                        icon: HugeIcons.strokeRoundedRefresh,
-                        size: 18,
-                      ),
-                      label: const Text('Retry'),
-                    ),
-                ],
+                ),
               ),
       ),
     );
   }
+}
+
+class _PdfSection extends StatelessWidget {
+  const _PdfSection({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+  final dynamic icon;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8ECF0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: HugeIcon(icon: icon, size: 20, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PdfNotice extends StatelessWidget {
+  const _PdfNotice({
+    required this.icon,
+    required this.text,
+    required this.color,
+  });
+  final dynamic icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: color.withValues(alpha: 0.18)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        HugeIcon(icon: icon, size: 18, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 12.5, color: color, height: 1.45),
+          ),
+        ),
+      ],
+    ),
+  );
 }

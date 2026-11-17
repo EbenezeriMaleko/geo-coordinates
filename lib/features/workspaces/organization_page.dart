@@ -1,3 +1,4 @@
+import '../widget/plan_access_lock.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -408,9 +409,10 @@ class _OrganizationPageState extends ConsumerState<OrganizationPage> {
                                   } catch (failure) {
                                     if (dialogContext.mounted) {
                                       update(() {
-                                        error = failure
-                                            .toString()
-                                            .replaceFirst('Exception: ', '');
+                                        error = failure.toString().replaceFirst(
+                                          'Exception: ',
+                                          '',
+                                        );
                                         busy = false;
                                       });
                                     }
@@ -1289,53 +1291,65 @@ class _OrganizationPageState extends ConsumerState<OrganizationPage> {
                                           ),
                                         ),
                                       ),
-                                      if (canWrite)
-                                        FilledButton.icon(
-                                          onPressed: widget.teamId != null
-                                              ? () => Navigator.of(context).push(
-                                                  MaterialPageRoute<void>(
-                                                    builder: (_) =>
-                                                        TeamMemberPicker(
-                                                          team: widget.teamId!,
-                                                          onAdded: () =>
-                                                              ref.invalidate(
-                                                                organizationPageProvider(
-                                                                  query,
+                                      if (canWrite ||
+                                          ref
+                                                  .watch(
+                                                    workspacePermissionsProvider,
+                                                  )
+                                                  .asData
+                                                  ?.value['organization.manage'] ==
+                                              false)
+                                        PlanAccessLock(
+                                          locked: !canWrite,
+                                          child: FilledButton.icon(
+                                            onPressed: widget.teamId != null
+                                                ? () => Navigator.of(context).push(
+                                                    MaterialPageRoute<void>(
+                                                      builder: (_) =>
+                                                          TeamMemberPicker(
+                                                            team:
+                                                                widget.teamId!,
+                                                            onAdded: () =>
+                                                                ref.invalidate(
+                                                                  organizationPageProvider(
+                                                                    query,
+                                                                  ),
                                                                 ),
-                                                              ),
-                                                        ),
+                                                          ),
+                                                    ),
+                                                  )
+                                                : () => editItem(query),
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: _accent,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
                                                   ),
-                                                )
-                                              : () => editItem(query),
-                                          style: FilledButton.styleFrom(
-                                            backgroundColor: _accent,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                              vertical: 10,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
                                             ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
+                                            icon: HugeIcon(
+                                              icon: widget.teamId != null
+                                                  ? HugeIcons
+                                                        .strokeRoundedUserAdd01
+                                                  : HugeIcons
+                                                        .strokeRoundedAddCircle,
+                                              color: Colors.white,
+                                              size: 18,
                                             ),
-                                          ),
-                                          icon: HugeIcon(
-                                            icon: widget.teamId != null
-                                                ? HugeIcons
-                                                      .strokeRoundedUserAdd01
-                                                : HugeIcons
-                                                      .strokeRoundedAddCircle,
-                                            color: Colors.white,
-                                            size: 18,
-                                          ),
-                                          label: Text(
-                                            widget.teamId != null
-                                                ? 'Add member'
-                                                : kind == 'projects'
-                                                ? 'New project'
-                                                : 'New team',
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
+                                            label: Text(
+                                              widget.teamId != null
+                                                  ? 'Add member'
+                                                  : kind == 'projects'
+                                                  ? 'New project'
+                                                  : 'New team',
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             ),
                                           ),
                                         ),
