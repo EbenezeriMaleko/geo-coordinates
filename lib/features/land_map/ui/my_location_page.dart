@@ -4022,16 +4022,16 @@ class _CameraBottomControls extends StatelessWidget {
                 GestureDetector(
                   onTap: onCapture,
                   child: Container(
-                    width: 92,
-                    height: 92,
+                    width: 72,
+                    height: 72,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4),
+                      border: Border.all(color: Colors.white, width: 3),
                     ),
                     child: Center(
                       child: Container(
-                        width: 72,
-                        height: 72,
+                        width: 54,
+                        height: 54,
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
@@ -4045,7 +4045,7 @@ class _CameraBottomControls extends StatelessWidget {
                         ),
                         child: isTakingPhoto
                             ? const Padding(
-                                padding: EdgeInsets.all(20),
+                                padding: EdgeInsets.all(14),
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2.5,
                                 ),
@@ -4053,8 +4053,8 @@ class _CameraBottomControls extends StatelessWidget {
                             : isRecordingVideo
                             ? Center(
                                 child: Container(
-                                  width: 26,
-                                  height: 26,
+                                  width: 22,
+                                  height: 22,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFC94835),
                                     borderRadius: BorderRadius.circular(6),
@@ -4068,7 +4068,7 @@ class _CameraBottomControls extends StatelessWidget {
                                 color: videoMode
                                     ? const Color(0xFFC94835)
                                     : Colors.black87,
-                                size: 30,
+                                size: 24,
                               ),
                       ),
                     ),

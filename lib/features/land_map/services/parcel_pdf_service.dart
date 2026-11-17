@@ -259,7 +259,8 @@ class ParcelPdfService {
         ..remove('X-Company-Id')
         ..remove('Content-Type');
       if (company != null) headers['X-Company-Id'] = '$company';
-      headers['Accept'] = 'application/pdf';
+      // Successful responses remain PDF; Laravel errors should be JSON.
+      headers['Accept'] = 'application/json';
       final request = http.MultipartRequest('POST', uri)
         ..followRedirects = false
         ..headers.addAll(headers);
@@ -299,6 +300,14 @@ class ParcelPdfService {
           final body = jsonDecode(utf8.decode(payload));
           if (body is Map && body['message'] is String) {
             message = body['message'];
+          }
+          if (body is Map && body['errors'] is Map) {
+            for (final errors in (body['errors'] as Map).values) {
+              if (errors is List && errors.isNotEmpty && errors.first is String) {
+                message = errors.first as String;
+                break;
+              }
+            }
           }
         } catch (_) {}
         throw Exception(message);
